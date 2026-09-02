@@ -1,0 +1,92 @@
+# =============================================================================
+# infra-kubernetes validation — pull requests and pushes to main
+# =============================================================================
+
+name: Validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  markdown:
+    name: Markdown
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Setup Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22
+      - name: markdownlint
+        run: npx --yes markdownlint-cli2 "**/*.md"
+      - name: Markdown links
+        run: |
+          npx --yes markdown-link-check -c .github/markdown-link-check.json README.md
+          npx --yes markdown-link-check -c .github/markdown-link-check.json .github/CONTRIBUTING.md
+
+  yaml:
+    name: YAML and Shell
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.x"
+      - name: Install yamllint
+        run: python -m pip install --disable-pip-version-check yamllint
+      - name: yamllint
+        run: yamllint -c .yamllint.yaml .
+      - name: Shell syntax
+        run: bash -n bootstrap/*.sh
+
+  kubernetes:
+    name: Kubernetes and Helm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Setup Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5
+      - name: Install kubeconform (pinned, verified)
+        run: |
+          KUBECONFORM_VERSION="v0.8.0"
+          KUBECONFORM_SHA256="9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883"
+          curl -fsSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
+            -o /tmp/kubeconform.tar.gz
+          printf '%s  %s\n' "${KUBECONFORM_SHA256}" /tmp/kubeconform.tar.gz | sha256sum -c -
+          tar -xzf /tmp/kubeconform.tar.gz -C /tmp kubeconform
+          sudo install -m 0755 /tmp/kubeconform /usr/local/bin/kubeconform
+      - name: Validate static manifests
+        run: |
+          set -euo pipefail
+          if ls infrastructure/*/manifests/*.yaml >/dev/null 2>&1; then
+            kubeconform -strict -ignore-missing-schemas infrastructure/*/manifests/*.yaml
+          else
+            echo "No infrastructure/ manifests yet; activates with Phase 1."
+          fi
+      - name: Validate rendered service template
+        run: |
+          set -euo pipefail
+          mkdir -p .generated
+          helm template service-template charts/service-template \
+            --values charts/service-template/values.yaml > .generated/service-template.yaml
+          kubeconform -strict -ignore-missing-schemas .generated/service-template.yaml
+      - name: Helm lint service template when present
+        run: |
+          if [ -d charts/service-template ]; then
+            helm lint charts/service-template
+          else
+            echo "No service template yet; helm lint activates with Phase 6."
+          fi

@@ -1,0 +1,63 @@
+# Lean local ArgoCD profile. Production overrides belong in envs/prod.
+notifications:
+  enabled: false
+
+dex:
+  enabled: false
+
+redis-ha:
+  enabled: false
+
+controller:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  metrics:
+    enabled: true
+
+server:
+  replicas: 1
+  service:
+    type: ClusterIP
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+repoServer:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 768Mi
+  metrics:
+    enabled: true
+
+applicationSet:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 150m
+      memory: 128Mi
+
+configs:
+  params:
+    server.insecure: "false"
+    reposerver.parallelism.limit: "20"
+    reposerver.git.request.timeout: "120s"
+  cm:
+    timeout.reconciliation: 180s

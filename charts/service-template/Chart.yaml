@@ -1,0 +1,12 @@
+apiVersion: v2
+name: service-template
+description: Standard Helm umbrella chart for sca-* microservices on Kubernetes
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - sca
+  - service-template
+  - microservice
+maintainers:
+  - name: sca-platform

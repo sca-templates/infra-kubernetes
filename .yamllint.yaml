@@ -1,0 +1,17 @@
+# yamllint configuration — relaxed line length, strict structure
+extends: default
+
+rules:
+  line-length:
+    max: 160
+  comments:
+    min-spaces-from-content: 1
+  document-start:
+    present: false
+  truthy:
+    check-keys: false
+  indentation:
+    spaces: 2
+
+ignore: |
+  charts/**/templates/**

@@ -1,0 +1,59 @@
+### dotenv ###
+# .env holds environment overrides — never commit cluster-specific state
+.env
+
+### Linux ###
+*~
+
+# temporary files which can be created if a process still has a handle open of a deleted file
+.fuse_hidden*
+
+# KDE directory preferences
+.directory
+
+# Linux trash folder which might appear on any partition or disk
+.Trash-*
+
+# .nfs files are created when an open file is removed but is still being accessed
+.nfs*
+
+### Secrets ###
+# kubeconfig / credentials material — never commit
+.secrets/
+
+### Obsidian ###
+# Obsidian vault configuration and internal metadata
+.obsidian/
+
+# Local cache and temporary files managed by Obsidian
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache/
+.obsidian/workspace-old.json
+
+# Obsidian plugins and local data
+.obsidian/plugins/
+.obsidian/themes/
+.obsidian/workspace
+
+### Vault bootstrap material — never commit ###
+.secrets/init-keys.json
+.secrets/unseal-keys*
+.secrets/root-token
+
+### Cluster credentials & dumps ###
+kubeconfig-*.yaml
+*.kubeconfig
+kind-export-*/
+*-dump/
+
+### Rendered / debugging artifacts ###
+.generated/
+*.tgz
+
+### Custom ###
+# Tooling deps and user-managed notes
+0.Project_info
+context/structure.txt
+node_modules/
+.codegraph/

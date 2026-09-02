@@ -1,0 +1,52 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: platform-prod
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-20"
+spec:
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error
+  generators:
+    - list:
+        elements: []
+  template:
+    metadata:
+      name: '{{.name}}-prod'
+      namespace: argocd
+      annotations:
+        argocd.argoproj.io/sync-wave: '{{.wave}}'
+    spec:
+      project: default
+      sources:
+        - repoURL: '{{.chartRepo}}'
+          chart: '{{.chart}}'
+          targetRevision: '{{.targetRevision}}'
+          helm:
+            releaseName: '{{.name}}'
+            valueFiles:
+              - '$values/infrastructure/{{.name}}/values-base.yaml'
+              - '$values/envs/prod/{{.name}}.yaml'
+        - repoURL: "{{GIT_REPO_URL}}"
+          targetRevision: main
+          ref: values
+        - repoURL: "{{GIT_REPO_URL}}"
+          targetRevision: main
+          path: infrastructure/{{.path}}
+          directory:
+            recurse: true
+      ignoreDifferences:
+        - group: apiextensions.k8s.io
+          kind: CustomResourceDefinition
+          jqPathExpressions:
+            - .spec.versions[].schema
+            - .status
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{.namespace}}'
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true
+          - ApplyOutOfSyncOnly=true

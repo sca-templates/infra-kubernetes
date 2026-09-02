@@ -1,0 +1,9 @@
+{
+  "ignorePatterns": [
+    { "pattern": "^\\.\\./" },
+    { "pattern": "^#" }
+  ],
+  "retryOn429": true,
+  "retryCount": 3,
+  "aliveStatusCodes": [200, 203, 206]
+}

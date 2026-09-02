@@ -1,0 +1,128 @@
+# Default values for service-template
+# Override per-environment in envs/<env>/<service>.yaml
+
+# -- Application name (used as release name and label prefix)
+nameOverride: ""
+fullnameOverride: ""
+
+# -- Container image
+image:
+  repository: ""  # e.g. ghcr.io/org/service
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+podAnnotations: {}
+
+# -- Linkerd sidecar injection (set false for init jobs, etc.)
+linkerdInject: true
+
+# -- Pod security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+# -- Container security context
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# -- Resource requests and limits
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 256Mi
+
+# -- Liveness probe
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 15
+
+# -- Readiness probe
+readinessProbe:
+  httpGet:
+    path: /readyz
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+# -- Service
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: http
+
+# -- Ingress (Kong gateway class, JWT plugin placeholder)
+ingress:
+  enabled: false
+  className: kong
+  annotations: {}
+  # konghq.com/plugins: jwt-auth
+  hosts: []
+  # - host: service.local
+  #   paths:
+  #     - path: /
+  #       pathType: Prefix
+  tls: []
+
+# -- HorizontalPodAutoscaler (optional)
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# -- PodDisruptionBudget
+pdb:
+  enabled: false
+  minAvailable: 1
+
+# -- ConfigMap mounted as env or volume
+configMap:
+  enabled: false
+  data: {}
+
+# -- ExternalSecret from Vault (path convention: secret/<service>/<env>)
+externalSecret:
+  enabled: false
+  secretStoreRef:
+    name: vault
+    kind: ClusterSecretStore
+  # Vault path relative to secret/ mount
+  vaultPath: ""
+  # Map of Vault keys → K8s Secret keys
+  data: []
+  # - secretKey: DB_PASSWORD
+  #   remoteRef:
+  #     key: secret/my-service/local
+  #     property: password
+
+# -- ServiceMonitor for Prometheus scraping
+serviceMonitor:
+  enabled: false
+  path: /metrics
+  port: http
+  interval: 30s
+  scrapeTimeout: 10s
+
+# -- Extra environment variables
+env: []
+
+# -- Extra volumes
+extraVolumes: []
+
+# -- Extra volume mounts
+extraVolumeMounts: []
