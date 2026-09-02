@@ -1,0 +1,22 @@
+# Normalize line endings: text files use LF everywhere (no CRLF noise on any OS).
+* text=auto eol=lf
+
+# Explicit LF for shell scripts (they must remain LF to be executable-ish on
+# any checkout and are validated by `bash -n`).
+*.sh eol=lf
+
+# Binary files are never treated as text / normalized.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.pdf binary
+*.gz binary
+*.tgz binary
+
+# Documentation and config normalization (LF picked up via `text=auto` above).
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.jsonc text eol=lf
