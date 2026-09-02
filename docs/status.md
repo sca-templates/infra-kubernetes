@@ -23,7 +23,7 @@ for everything deployed in Phases 1–18 and beyond.
 | Deployed components | ArgoCD only (bootstrap) |
 | `platform-root-local` | present, `OutOfSync` (accepted — no live repo yet) |
 | `platform-local` ApplicationSet | present, empty `elements: []` (0 generated apps) |
-| Observability / smoke CI | not yet shipped (see [ci-cd.md](ci-cd.md)) |
+| Observability / smoke CI | cluster smoke `pr-cluster.yml` not shipped yet — **returns at Phase 1** (profile `local`; see [ci-cd.md](ci-cd.md)) |
 | dev / qa / prod clusters | pending (provisioned by terraform/ansible, outside this repo) |
 
 ## Known accepted limitations
@@ -31,7 +31,7 @@ for everything deployed in Phases 1–18 and beyond.
 | # | Limitation | Current behavior | To close |
 | --- | --- | --- | --- |
 | 1 | **Root app OutOfSync** | `platform-root-local` shows `OutOfSync`; auto-sync disabled live because the `GIT_REPO_URL` placeholder is a public repo with legacy content | Publish this repo, swap `GIT_REPO_URL`, re-enable file-state (auto + prune) |
-| 2 | **Cluster smoke CI absent** | `pr-cluster.yml` is deliberately not shipped yet | Rebuilt from scratch in later phases: selective smoke of the touched component, no trim hacks, no self-heal disabling |
+| 2 | **Cluster smoke CI absent (until Phase 1)** | `pr-cluster.yml` is not shipped yet — the merge gate is static validation + human review | Returns at **Phase 1** with cert-manager: selective smoke of the touched component on an ephemeral `kind` cluster, profile `local` (1 replica, auto-sync + prune), no trim hacks, no self-heal disabling; informative until stable on 2–3 components (see [ci-cd.md](ci-cd.md)) |
 | 3 | **dev / qa / prod clusters pending** | Not provisioned (terraform/ansible outside this repo) | Provision per env; promote via `promote-test` (see [workflow.md](workflow.md)) |
 | 4 | **Nothing seeded in Vault** | Vault seed script ships (`bootstrap/seed-vault.sh`) but is never run — no Vault yet | Runs at Phase 2; short ESO `refreshInterval` in local prevents the previous wedge |
 
