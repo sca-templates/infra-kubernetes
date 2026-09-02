@@ -1,3 +1,5 @@
+# Copyright (c) 2026 sca-templates contributors
+# SPDX-License-Identifier: MIT
 # =============================================================================
 # OpenSSF Scorecard — supply-chain security score, results published to OSSF
 # and uploaded as code-scanning SARIF.

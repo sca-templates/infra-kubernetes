@@ -29,16 +29,16 @@ repository where the flaw lives; the maintainers triage across the ecosystem.
 - Reproduce and assess severity, then fix through a normal PR that must pass
   `Validate`, `Security` and the smoke checks before merging to `main`. (The
   cluster-smoke workflow returns in later phases; until then the merge gate is
-  static validation + human review — see [docs/ci-cd.md](docs/ci-cd.md).)
+  static validation + human review — see [docs/ci-cd.md](../docs/ci-cd.md).)
 - If the report involves a leaked credential (Vault token, unseal key, S3
   key, …) the secret is considered **compromised**: rotated at the source and
   in Vault, never just removed from git. Containment steps are documented in
-  [docs/security.md](docs/security.md).
+  [docs/security.md](../docs/security.md).
 
 ## Automated posture
 
 The repository enforces, from `main`, the checks described in
-[docs/security.md](docs/security.md): gitleaks secret scanning, checkov
+[docs/security.md](../docs/security.md): gitleaks secret scanning, checkov
 infrastructure posture (baseline re-examined before enforcement), image/version
 pinning guards, CodeQL on the GitHub Actions files and an OpenSSF Scorecard.
 Secrets must never be committed — the CI blocks pushes that leak them.
@@ -89,3 +89,24 @@ security policy of their own upstream projects and of the
   re-examined before enforcement to avoid hiding real findings.
 - **Unsigned commits**: DCO sign-off is required per CONTRIBUTING.md; the
   maintainer signs release tags.
+
+## Security review
+
+A security review was performed on **2026-09-02** by the project maintainer.
+It considered the security requirements and trust boundaries documented in the
+[Security assurance case](#security-assurance-case) above: the git repository
+and CI pipeline are the primary trust boundaries, and the mitigation evidence
+there (gitleaks, osv-scanner, pin guards, checkov, kube-linter, DCO, signed
+tags) is the countermeasure set weighed against the threat model.
+
+Scope and result:
+
+- Reviewed automated posture (secrets, dependency, IaC, pin), the assurance
+  case, and the DCO/governance controls.
+- No critical or high-severity open findings at review time.
+- Residual gaps are tracked in [docs/status.md](../docs/status.md)
+  (silver/gold badge contributors, `two_person_review`) and, for known
+  unfixable dependency advisories, in `osv-scanner.toml`.
+
+Reviews are repeated whenever the trust boundary changes materially and at
+least every 5 years.

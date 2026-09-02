@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 sca-templates contributors
+# SPDX-License-Identifier: MIT
 # seed-vault.sh — Initialize, unseal and seed the local Vault instance.
 #   1. Saves init material only under .secrets/
 #   2. Configures KV-v2 and Kubernetes auth for External Secrets Operator

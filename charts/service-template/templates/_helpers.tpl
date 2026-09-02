@@ -1,4 +1,7 @@
 {{/*
+Copyright (c) 2026 sca-templates contributors
+SPDX-License-Identifier: MIT
+
 Expand the name of the chart.
 */}}
 {{- define "service-template.name" -}}

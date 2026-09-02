@@ -53,6 +53,17 @@ continue. The following are in place:
   must be an independent contributor (not the same person under another
   account) to satisfy the OpenSSF Best Practices silver badge.
 
+## Access and authentication
+
+- **Two-factor authentication (2FA) is mandatory** for anyone who can change
+  this central repository or access sensitive project data (including private
+  vulnerability reports). This is enforced at the organization level on
+  GitHub.
+- 2FA **should** use a cryptographic mechanism (TOTP authenticator app or
+  hardware security key) to prevent impersonation; SMS-based 2FA alone does
+  not meet this bar and is discouraged.
+- No shared accounts. Every human with access has their own account with 2FA.
+
 ## Changes to this document
 
 Changes to governance require the same approval as any other change: a PR

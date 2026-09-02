@@ -1,3 +1,5 @@
+# Copyright (c) 2026 sca-templates contributors
+# SPDX-License-Identifier: MIT
 # =============================================================================
 # infra-kubernetes validation — pull requests and pushes to main
 # =============================================================================

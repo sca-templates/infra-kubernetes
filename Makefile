@@ -1,3 +1,5 @@
+# Copyright (c) 2026 sca-templates contributors
+# SPDX-License-Identifier: MIT
 SHELL := /bin/bash
 .ONESHELL:
 .SHELLFLAGS := -euo pipefail -c

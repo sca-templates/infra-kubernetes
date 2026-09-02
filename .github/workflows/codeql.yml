@@ -1,3 +1,5 @@
+# Copyright (c) 2026 sca-templates contributors
+# SPDX-License-Identifier: MIT
 # =============================================================================
 # CodeQL — static analysis of GitHub Actions workflow files (the only code in
 # this repo); alerts land in the Security tab.
