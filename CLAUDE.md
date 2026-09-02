@@ -18,6 +18,10 @@ CodeGraph — the user opts in.
 
 ## Working here
 
+- **The user commits and pushes — never execute `git commit`, `git push`, or
+  any other git write on your own.** Draft commits/messages freely, but do not
+  stage, reset, amend or otherwise mutate git history without explicit,
+  current authorization from the user.
 - This repo is **GitOps source of truth for the `sca` platform**. It is a
   template: no external local paths, sibling knowledge is an external link.
 - From Phase 1, `docs/` **is the source of truth**: read

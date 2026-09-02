@@ -124,6 +124,9 @@ exclusively via `git push` → ArgoCD.
 - **One component = one commit = one PR = one review.** A blocked component
   rolls back; no `fix` chains, no ad-hoc `ignoreDifferences`/SSA patches.
 - Changes land through PRs (initial population excepted, straight to `main`).
+- **Git writes are the user's**: do not `git commit`/`git push`/reset/amend or
+  stage anything on your own. Draft commits/messages only; ask before any git
+  mutation. The user commits and pushes.
 - **Never commit** `.env`, `.secrets/`, kubeconfigs, unseal keys, tokens,
   dumps. Vault is the secrets SSOT; `.secrets/` lives only on disk.
 - Shared values changed must be mirrored across all `envs/<env>/<c>.yaml`.
