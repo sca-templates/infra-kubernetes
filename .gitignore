@@ -51,6 +51,15 @@ kind-export-*/
 .generated/
 *.tgz
 
+### Logs (whole directory) ###
+# This repo never commits app logs; logs are CI/tool artifacts. Ignore the
+# whole folder; if a future component genuinely needs committed samples, add
+# a carve-out here, e.g.:
+# !logs/keep/
+logs/
+*.log
+*.log.*
+
 ### Custom ###
 # Tooling deps and user-managed notes
 0.Project_info
