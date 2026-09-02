@@ -1,0 +1,63 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "platform: bootstrap",
+      "type": "shell",
+      "command": "make prereqs && make cluster-up && make bootstrap",
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "platform: status",
+      "type": "shell",
+      "command": "make status",
+      "problemMatcher": [],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "platform: validate",
+      "type": "shell",
+      "command": "make validate",
+      "problemMatcher": [],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "platform: validate-static",
+      "type": "shell",
+      "command": "make validate-static",
+      "problemMatcher": [],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "shellcheck: bootstrap",
+      "type": "shell",
+      "command": "shellcheck bootstrap/*.sh",
+      "problemMatcher": ["$shellcheck"],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    }
+  ]
+}

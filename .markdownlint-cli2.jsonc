@@ -8,6 +8,7 @@
     "MD060": false
   },
   "ignores": [
+    "0.Project_info/**",
     "**/node_modules/**"
   ]
 }

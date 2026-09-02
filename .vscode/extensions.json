@@ -1,0 +1,23 @@
+{
+  "recommendations": [
+    "editorconfig.editorconfig",
+    "redhat.vscode-yaml",
+    "ms-kubernetes-tools.vscode-kubernetes-tools",
+    "ms-kubernetes-tools.kind-vscode",
+    "ms-azuretools.vscode-docker",
+    "github.vscode-github-actions",
+    "timonwong.shellcheck",
+    "foxundermoon.shell-format",
+    "ventura.prom",
+    "davidanson.vscode-markdownlint",
+    "bierner.markdown-mermaid",
+    "yzhang.markdown-all-in-one",
+    "mikestead.dotenv",
+    "streetsidesoftware.code-spell-checker",
+    "eamodio.gitlens",
+    "mhutchie.git-graph",
+    "esbenp.prettier-vscode",
+    "pkief.material-icon-theme",
+    "usernamehw.errorlens"
+  ]
+}
