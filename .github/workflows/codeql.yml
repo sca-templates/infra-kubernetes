@@ -16,12 +16,13 @@ on:
 permissions:
   actions: read # for fetching the CodeQL bundle
   contents: read
-  security-events: write # upload SARIF to code scanning
 
 jobs:
   analyze:
     name: Analyze (GitHub Actions)
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write # upload SARIF to code scanning
     timeout-minutes: 60
     steps:
       - name: Checkout
