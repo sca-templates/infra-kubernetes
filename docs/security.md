@@ -21,6 +21,45 @@ Deploy-time security (no pages by design in the radar, manual prod sync) is
 covered in [observability-radar.md](observability-radar.md) and
 [workflow.md](workflow.md).
 
+## Python dependency pinning
+
+All CI Python dependencies are hash-pinned. Each install uses
+`pip install --require-hashes -r <lockfile>` so every transitive dependency is
+verified against a SHA-256 digest:
+
+| Tool | Lockfile | Source |
+| --- | --- | --- |
+| checkov (IaC) | `.github/requirements.txt` | compiled with `uv pip compile --generate-hashes` |
+| yamllint | `.github/requirements-yamllint.txt` | compiled with `uv pip compile --generate-hashes` |
+
+Lockfiles are generated, not hand-edited. To regenerate after a tool bump:
+
+```bash
+printf 'checkov==<version>\n' | uv pip compile --generate-hashes --python-version 3.11 -o .github/requirements.txt -
+printf 'yamllint==<version>\n' | uv pip compile --generate-hashes --python-version 3.11 -o .github/requirements-yamllint.txt -
+```
+
+### Known vulnerable transitive dependencies (accepted)
+
+Scorecard flags three OSV advisories in the checkov dependency chain. They are
+**inherent to checkov and have no fix in its resolution**, so they are accepted
+and dismissed with justification rather than ignored silently:
+
+| OSV | Package | Advisories | Status |
+| --- | --- | --- | --- |
+| GHSA-89v8-rhwq-hf77 | asteval | sandbox escape / DoS | **accepted** — no resolvable fix |
+| GHSA-9w56-46f6-3qhx | asteval | sandbox escape (RCE-equivalent) | **accepted** — no resolvable fix |
+| PYSEC-2026-1325 | ecdsa | Minerva P-256 timing attack | **accepted** — no upstream fix (out of scope) |
+
+Rationale: `checkov==3.3.16` (current) hard-pins `asteval==1.0.6` (both
+advisories are fixed upstream in `asteval>=1.0.9`, but checkov has not adopted
+it), and `ecdsa<1.0.0,>=0.19.0` resolves to `ecdsa==0.19.2` (latest), which
+still carries the Minerva advisory — upstream explicitly considers side-channel
+attacks out of scope. Both packages are build-time CI tools, not runtime
+components of the platform; their vulnerable surfaces are not reachable from
+`checkov`'s IaC-scanning usage. They will be re-evaluated when checkov adopts a
+fixed `asteval` or `ecdsa` publishes a fix.
+
 ## Repository rules that enforce the posture
 
 - **Pinning enforcement**: images and charts are official upstream releases
