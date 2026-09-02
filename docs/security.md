@@ -39,17 +39,19 @@ printf 'checkov==<version>\n' | uv pip compile --generate-hashes --python-versio
 printf 'yamllint==<version>\n' | uv pip compile --generate-hashes --python-version 3.11 -o .github/requirements-yamllint.txt -
 ```
 
-### Known vulnerable transitive dependencies (accepted)
+### Ignored OSV advisories (via osv-scanner.toml)
 
 Scorecard flags three OSV advisories in the checkov dependency chain. They are
-**inherent to checkov and have no fix in its resolution**, so they are accepted
-and dismissed with justification rather than ignored silently:
+**inherent to checkov and have no fix in its resolution**, so they are
+explicitly ignored through `.github/osv-scanner.toml` (the standard ignore
+mechanism, honoured by the `osv-scanner` library that Scorecard embeds) placed
+next to the `.github/requirements.txt` manifest that carries them:
 
-| OSV | Package | Advisories | Status |
+| OSV | Package | Advisories | Mechanism |
 | --- | --- | --- | --- |
-| GHSA-89v8-rhwq-hf77 | asteval | sandbox escape / DoS | **accepted** — no resolvable fix |
-| GHSA-9w56-46f6-3qhx | asteval | sandbox escape (RCE-equivalent) | **accepted** — no resolvable fix |
-| PYSEC-2026-1325 | ecdsa | Minerva P-256 timing attack | **accepted** — no upstream fix (out of scope) |
+| GHSA-89v8-rhwq-hf77 | asteval | sandbox escape / DoS | ignored — no resolvable fix |
+| GHSA-9w56-46f6-3qhx | asteval | sandbox escape (RCE-equivalent) | ignored — no resolvable fix |
+| PYSEC-2026-1325 | ecdsa | Minerva P-256 timing attack | ignored — no upstream fix (out of scope) |
 
 Rationale: `checkov==3.3.16` (current) hard-pins `asteval==1.0.6` (both
 advisories are fixed upstream in `asteval>=1.0.9`, but checkov has not adopted

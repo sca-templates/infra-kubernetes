@@ -112,7 +112,9 @@
     "clustersecretstore",
     "externalsecrets",
     "clustersecretstores",
-    "codegraph"
+    "codegraph",
+    "dotenv",
+    "opencode"
   ],
   "files.exclude": {
     ".codegraph": true,

@@ -1,0 +1,11 @@
+[[IgnoredVulns]]
+id = "GHSA-89v8-rhwq-hf77"
+reason = "Inherent to the checkov dependency chain: checkov (current 3.3.16) hard-pins asteval==1.0.6, while the fix is upstream in asteval>=1.0.9 and not yet adopted by checkov. Build-time CI tool only; surface not reachable from checkov's IaC scanning. Re-evaluated when checkov adopts a fixed asteval. See docs/security.md."
+
+[[IgnoredVulns]]
+id = "GHSA-9w56-46f6-3qhx"
+reason = "Inherent to the checkov dependency chain: checkov (current 3.3.16) hard-pins asteval==1.0.6, while the fix is upstream in asteval>=1.0.9 and not yet adopted by checkov. Build-time CI tool only; surface not reachable from checkov's IaC scanning. Re-evaluated when checkov adopts a fixed asteval. See docs/security.md."
+
+[[IgnoredVulns]]
+id = "PYSEC-2026-1325"
+reason = "ecdsa==0.19.2 is the latest available and still carries the Minerva P-256 timing advisory; upstream explicitly scopes side-channel attacks out and publishes no fix. Transitive build-time dependency of checkov; not used for signing in this project. Re-evaluated if ecdsa publishes a fix. See docs/security.md."
