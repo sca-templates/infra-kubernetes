@@ -1,84 +1,106 @@
-# Roadmap
+# Roadmap — Delivery Plan
 
-The delivery plan for the `sca` platform on Kubernetes, one component per
-phase, each with a human-reviewed functional gate. This file is the **source
-of truth for the delivery plan**; the work items themselves are tracked in
-GitHub (**Projects board, Milestones and Issues**) and linked from the rows
-below. `status.md` is the source of truth for *what is deployed right now*
-and the known gaps.
+Context: `infra-kubernetes`, the GitOps source of truth for the `sca` platform
+on Kubernetes. Board: [GitHub Projects](https://github.com/sca-templates/infra-kubernetes/projects) · Milestones: per project below · Issues: `#N` placeholders until the repo is published.
 
-**Rule: docs move with their component.** A phase that lands appends a **Work
-Log** row (see [Work log](#work-log)) and updates this file's Status column +
-`docs/architecture.md` (Status, deviations log) in the **same commit**.
+This file is the **index and source of truth for the delivery plan**. Per-project detail
+lives in `docs/roadmap/<project>.md`; what is deployed *now* lives in
+[status.md](status.md); the component catalog and sync-waves live in
+[architecture.md](architecture.md).
 
-## Model
+## Timeline (dependency graph)
 
-- **One component = one phase = one commit = one PR = one review.**
-- A component that does not turn green **rolls back** — there are no
-  `fix(...)` chains, no ad-hoc `ignoreDifferences`/SSA patches, nothing
-  deployed by hand after `make bootstrap`.
-- Sync-waves are assigned in `docs/architecture.md`; a new component gets a
-  wave ≥10 apart from its dependencies.
-- GitHub linkage: each phase below maps to an **Issue** (and, once promoted, a
-  **Milestone**). The Projects board groups phases by environment
-  (`local` → `dev` → `qa` → `prod`).
+Dependencies flow forward (child waits for parent); layers with no link can be
+worked in parallel.
 
-## Roadmap
+```text
+[01 cert-manager] ──▶ [02 vault] ──▶ [03 external-secrets]
+[04 linkerd-crds] ──────────────────────────────▶ [09 linkerd control plane]
+[05 cloudnative-pg] ──▶ [10 postgres-app]
+[06 strimzi] ─────────▶ [11 kafka]
+[07 redis-operator] ──▶ [12 redis]
+[08 kong]
+[13 keycloak]
+[14 kube-prometheus-stack] ──┬─▶ [15 loki/alloy]
+                             └─▶ [16 tempo]
+[17 minio] ──▶ [18 velero]
+```
 
-The 18 phases and their gates. `Status` is `pending` until the phase's gate is
-verified green, then `done` (and the Work Log row appended).
+- **Wave −20/−10**: security + operator layer — `01`–`07` install first,
+  largely in parallel (each is an operator/CRD).
+- **Wave 0/20/30**: `02` Vault, `08` Kong, `09` linkerd control plane —
+  sequential behind their dependencies.
+- **Wave 40**: datastores `10`–`12` (clusters/CRs) behind their operators.
+- **Wave 50**: `13` Keycloak behind its DB (`10`).
+- **Wave 60**: observability `14`–`16` (parallel after data keys).
+- **Wave 70/80**: `17` MinIO (local only) then `18` Velero.
+- Everything is **local-first**; promotion to `dev`/`qa`/`prod` is gated per
+  green project (see [workflow.md](workflow.md)).
 
-| Phase | Component | Functional gate | GitHub issue | Status |
-| --- | --- | --- | --- | --- |
-| 1 | cert-manager + `sca-ca` ClusterIssuer | test Certificate Ready | [#1](https://github.com/sca-templates/infra-kubernetes/issues/1) | pending |
-| 2 | Vault (raft) | pod Ready, `vault status` initialized + unsealed, TLS via cert-manager, idempotent seed | [#2](https://github.com/sca-templates/infra-kubernetes/issues/2) | pending |
-| 3 | external-secrets + ClusterSecretStore | smoke ExternalSecret → `SecretSynced` | [#3](https://github.com/sca-templates/infra-kubernetes/issues/3) | pending |
-| 4 | linkerd-crds | CRDs present, app Healthy | [#4](https://github.com/sca-templates/infra-kubernetes/issues/4) | pending |
-| 5 | cloudnative-pg | `Cluster` CRD accepted | [#5](https://github.com/sca-templates/infra-kubernetes/issues/5) | pending |
-| 6 | strimzi | `Kafka`/`KafkaNodePool` CRDs | [#6](https://github.com/sca-templates/infra-kubernetes/issues/6) | pending |
-| 7 | redis-operator | `Redis` CRD | [#7](https://github.com/sca-templates/infra-kubernetes/issues/7) | pending |
-| 8 | Kong (dedicated app) | echo service via NodePort 30080, admin Healthy | [#8](https://github.com/sca-templates/infra-kubernetes/issues/8) | pending |
-| 9 | Linkerd control plane (script) | mTLS identity up | [#9](https://github.com/sca-templates/infra-kubernetes/issues/9) | pending |
-| 10 | postgres-app + keycloak-db | clusters Ready, `psql SELECT 1` | [#10](https://github.com/sca-templates/infra-kubernetes/issues/10) | pending |
-| 11 | Kafka CR + SCRAM | create topic + produce/consume smoke | [#11](https://github.com/sca-templates/infra-kubernetes/issues/11) | pending |
-| 12 | Redis CR | `SET`/`GET` | [#12](https://github.com/sca-templates/infra-kubernetes/issues/12) | pending |
-| 13 | Keycloak | admin API login, valid RS256 JWT | [#13](https://github.com/sca-templates/infra-kubernetes/issues/13) | pending |
-| 14 | kube-prometheus-stack | Prometheus + Grafana up, targets, radar rules | [#14](https://github.com/sca-templates/infra-kubernetes/issues/14) | pending |
-| 15 | Loki + Alloy | logs queryable | [#15](https://github.com/sca-templates/infra-kubernetes/issues/15) | pending |
-| 16 | Tempo | OTLP up, trace smoke | [#16](https://github.com/sca-templates/infra-kubernetes/issues/16) | pending |
-| 17 | MinIO (local-only, wave 70) | health endpoint OK | [#17](https://github.com/sca-templates/infra-kubernetes/issues/17) | pending |
-| 18 | Velero (wave 80) | install + schedule + backup/restore of a small namespace | [#18](https://github.com/sca-templates/infra-kubernetes/issues/18) | pending |
+## Definition of Done (applies to every project)
 
-> **Issue numbers are placeholders.** They become valid links once this
-> repository is published to GitHub and per-phase issues are created. Until
-> then they point at the future `sca-templates/infra-kubernetes` issues.
-
-## Per-component Definition of Done (local)
-
-Apply this checklist to every phase before it flips to `done`. The checklist
-for *adding* a component lives in
-[onboarding-new-service.md](onboarding-new-service.md); the DoD below is the
-release gate per phase.
-
-- Component `Synced` + `Healthy` in ArgoCD.
-- Pods `Running`, no `CrashLoopBackOff`/`ImagePullBackOff` after 2+ min stable.
+- Application `Synced` + `Healthy` in ArgoCD.
+- Pods `Running`, no `CrashLoopBackOff` / `ImagePullBackOff` after 2+ min stable.
 - `ExternalSecret` → `SecretSynced` where applicable.
-- One functional smoke (the row above).
+- One functional smoke (per-project gate, in each project file).
 - `make status` shows no new `Degraded`.
-- Single commit, human-reviewed; docs updated in the same commit (Work Log
-  below + `architecture.md`/`status.md`).
+- Single commit, human-reviewed; docs updated in the same commit (this file's
+  Work Log + `architecture.md` + `status.md`).
 
-## Work log
+## Projects (index)
 
-Reverse-chronological record of landed components — the delivery plan's
-history. Each entry: phase, component, gate result, commit, and the GitHub
-issue it closed.
-
-| Date | Phase | Component | Gate result | Commit | Issue |
+| Project | Area | Wave | Milestones | Issues | Status |
 | --- | --- | --- | --- | --- | --- |
-| 2026-09-01 | 0.1 | Knowledge base (docs) | scaffold + docs green | `dbbf5f4` | — |
-| *next* | 1 | cert-manager | *pending* | | #1 |
+| [cert-manager](roadmap/cert-manager.md) | Security & Identity | -20 | — | #1 | pending |
+| [vault](roadmap/vault.md) | Security & Identity | 0 | M1 bootstrap · M2 seed · M3 integration | #2-1…#2-3 | pending |
+| [external-secrets](roadmap/external-secrets.md) | Security & Identity | -10 | — | #3 | pending |
+| [linkerd-crds](roadmap/linkerd-crds.md) | Edge & Mesh | -10 | — | #4 | pending |
+| [cloudnative-pg](roadmap/cloudnative-pg.md) | Data | -10 | — | #5 | pending |
+| [strimzi](roadmap/strimzi.md) | Data | -10 | — | #6 | pending |
+| [redis-operator](roadmap/redis-operator.md) | Data | -10 | — | #7 | pending |
+| [kong](roadmap/kong.md) | Edge & Mesh | 20 | M1 dedicated app | #8 | pending |
+| [linkerd](roadmap/linkerd.md) | Edge & Mesh | 30 | M1 control plane | #9 | pending |
+| [postgres-app](roadmap/postgres-app.md) | Data | 40 | M1 cluster · M2 keycloak-db | #10 | pending |
+| [kafka](roadmap/kafka.md) | Data | 40 | M1 CR + SCRAM | #11 | pending |
+| [redis](roadmap/redis.md) | Data | 40 | — | #12 | pending |
+| [keycloak](roadmap/keycloak.md) | Security & Identity | 50 | M1 deploy · M2 realm | #13 | pending |
+| [kube-prometheus-stack](roadmap/kube-prometheus-stack.md) | Observability | 60 | M1 stack · M2 radar | #14 | pending |
+| [loki](roadmap/loki.md) | Observability | 60 | M1 loki · M2 alloy | #15 | pending |
+| [tempo](roadmap/tempo.md) | Observability | 60 | — | #16 | pending |
+| [minio](roadmap/minio.md) | Delivery & Resilience | 70 | — | #17 | pending |
+| [velero](roadmap/velero.md) | Delivery & Resilience | 80 | M1 install · M2 backup/restore | #18 | pending |
 
-> Phases 0.x scaffold the repo and are not "components" with a gate; they are
-> recorded here for continuity. From Phase 1, each row is appended by the
-> phase that lands (not planned ahead of time).
+## Work log (global, reverse-chronological)
+
+| Date | Project | Gate | Commit | Issue |
+| --- | --- | --- | --- | --- |
+| 2026-09-01 | Knowledge base (docs) | scaffold + docs green | `dbbf5f4` | — |
+| *next* | cert-manager | *pending* | | #1 |
+
+Phases 0.x scaffold the repository and are not delivery projects; they are
+recorded here for continuity. From Phase 1, each row is appended in the same
+commit that lands the component.
+
+## Rules, out-of-plan and placeholders
+
+- **Not every task belongs to a project/milestone.** Issues raised by bots
+  (dependabot, scorecard) or by external developers, and ad-hoc debt, are
+  tracked on the board, may carry a milestone/project label only when it
+  applies, and are **not forced into this roadmap**. They resolve
+  independently and do not block promotion.
+- **One project = one component = one commit = one PR = one review.** A
+  component that does not turn green **rolls back** — no fix chains, no ad-hoc
+  `ignoreDifferences`/SSA patches, nothing deployed by hand after
+  `make bootstrap`.
+- **Milestones are optional** — a project without natural phases has its issues
+  directly under it (no `### Milestone` heading).
+- **Issue numbers are placeholders** (`#N`): they become valid links once this
+  repository is published to GitHub and per-phase issues are created.
+- **`[x]` marks completion**; timestamps live in the commits (git history), not
+  in the marks.
+
+## Change flow
+
+A change lands via PR → CI (static; selective smoke in later phases) → human
+review → merge → each environment's ArgoCD applies it per its sync policy. See
+[workflow.md](workflow.md) for the full flow and the escalation (rollback) gate.

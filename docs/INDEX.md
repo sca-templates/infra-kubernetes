@@ -37,7 +37,7 @@ here.
 | [kubernetes-basics.md](kubernetes-basics.md) | K8s concepts exercised by the repo: object model, operators, Helm, GitOps, networking, storage, identity | official kubernetes.io/helm.sh/argo-cd docs + `charts/service-template` |
 | [architecture.md](architecture.md) | Layers, component catalog (with status + phase), sync-waves, namespaces, secret flow, environment model, deviations log | `argocd/*`, `envs/*`, `infrastructure/*` (from Phase 1) |
 | [status.md](status.md) | Current state, known accepted limitations, intentional exclusions | live cluster + `make status` |
-| [roadmap.md](roadmap.md) | The 18-phase delivery plan with gates, per-component DoD, and the Work Log; linked to GitHub Projects/Milestones/Issues | GitHub board; `docs/status.md` for what is deployed |
+| [roadmap.md](roadmap.md) | The delivery plan index: dependency-graph timeline, shared DoD, project index, global Work Log, and out-of-plan rules; linked to GitHub Projects/Milestones/Issues. Per-project detail lives in [roadmap/](roadmap/), one file per component | GitHub board; [roadmap/](roadmap/) for per-project gates; `docs/status.md` for what is deployed |
 | [workflow.md](workflow.md) | GitOps model, change→deploy flow, per-env promotion with promote-test, escalation gate, troubleshooting | `argocd/*`, `Makefile` |
 | [ci-cd.md](ci-cd.md) | What the four shipped GitHub Actions do; cluster-smoke plan (absent by design) | `.github/workflows/*.yml`, `Makefile` |
 | [security.md](security.md) | Security controls wired into CI: gitleaks, checkov baseline, pinning guards, settings checklist, leaked-secret runbook | `.github/workflows/security.yml`, `codeql.yml`, `scorecard.yml` |
@@ -54,11 +54,11 @@ here.
   drift between documentation and repository.
 - **Truth over aspiration.** The documents describe what the repository
   contains today. Components that are planned but not deployed are explicitly
-  marked `planned (Phase N)` in `architecture.md` and `status.md`, never
-  silently listed as existing.
+  marked `planned (Phase N)` in `architecture.md`, `roadmap.md` and
+  `status.md`, never silently listed as existing.
 - **Docs move with their component.** The commit that lands a component also
-  updates `architecture.md` (Status column, deviations log) and `status.md`
-  (roadmap row). A doc that says one thing while the repo does another is a
-  bug to fix in the same PR.
+  updates `architecture.md` (Status column, deviations log), `roadmap.md`
+  (Work Log row) and `status.md`. A doc that says one thing while the repo
+  does another is a bug to fix in the same PR.
 - **Runbooks** are imperative and safe to copy-paste.
 - Content, commits and pull requests are in English (repository rule).
