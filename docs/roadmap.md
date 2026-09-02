@@ -47,6 +47,11 @@ worked in parallel.
 - Single commit, human-reviewed; docs updated in the same commit (this file's
   Work Log + `architecture.md` + `status.md`).
 
+> **CI note (does not change with this roadmap):** the Validate workflow runs
+> `kube-linter` over any `infrastructure/*/manifests/*.yaml` it finds. As each
+> component lands a `manifests/` directory in Phase 1+, kube-linter covers it
+> automatically — no per-component wiring is needed.
+
 ## Projects (index)
 
 | Project | Area | Wave | Milestones | Issues | Status |

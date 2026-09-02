@@ -10,8 +10,8 @@ how a merge becomes a deployment.
 
 | Workflow | File | Runs on | What it does |
 | --- | --- | --- | --- |
-| Validate | `.github/workflows/validate.yml` | push + PR | Static suite: markdownlint, yamllint, YAML parse, `bash -n` (mirrors `make validate-static`) |
-| Security | `.github/workflows/security.yml` | push + PR | gitleaks, checkov (static IaC), pin guards (no `latest` tags/charts) |
+| Validate | `.github/workflows/validate.yml` | push + PR | Static suite: markdownlint, yamllint, YAML parse, `bash -n`, actionlint (workflow lint), kube-linter (K8s manifest lint) |
+| Security | `.github/workflows/security.yml` | push + PR | gitleaks, checkov (static IaC), osv-scanner (SCA), pin guards (no `latest` tags/charts) |
 | CodeQL | `.github/workflows/codeql.yml` | push + PR + schedule | GitHub CodeQL static analysis on the repo languages |
 | Scorecard | `.github/workflows/scorecard.yml` | push + schedule | OpenSSF Scorecard attestation + badge |
 
@@ -48,6 +48,11 @@ Enforce, on `main`:
 2. `Security` — required on every PR (block on gitleaks findings).
 3. `CodeQL` — required once stable.
 4. Human review — always the release gate for "turns green".
+
+The two `Validate` linters and the `Security` SCA job are part of the required
+`Validate`/`Security` checks above, so a clear PR must satisfy Markdown +
+YAML + shell + workflow lint, kube-linter, gitleaks, checkov and osv-scanner
+before merge.
 
 When the cluster smoke returns, add it as a required check only for the paths
 it covers, so infra-only docs changes are not blocked by it.

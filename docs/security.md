@@ -12,6 +12,7 @@ see [ci-cd.md](ci-cd.md).
 | --- | --- | --- |
 | gitleaks | security.yml | Secrets/password scan on push and PR; blocks on findings |
 | checkov (static IaC) | security.yml | IaC misconfiguration scan of YAML manifests |
+| osv-scanner (SCA) | security.yml | Open-source dependency vulnerability scan on push + PR; honours `.github/osv-scanner.toml` ignores |
 | checkov baseline | — | Exists in the repo but is **re-examined** before enforcement; reason: the previous attempt's baseline hid real findings while its cluster smoke was broken |
 | CodeQL | codeql.yml | Static analysis on push + PR + weekly schedule |
 | OpenSSF Scorecard | scorecard.yml | Attestation on push + weekly; feeds the README badge |
