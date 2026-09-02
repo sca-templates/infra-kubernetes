@@ -1,0 +1,84 @@
+name: Bug report
+description: Report a problem with the platform or a component
+title: "bug: [component] <short description>"
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: Which environment is affected?
+      options:
+        - local
+        - dev
+        - qa
+        - prod
+        - unsure
+    validations:
+      required: true
+
+  - type: input
+    id: phase-component
+    attributes:
+      label: Phase or component
+      description: "e.g. P2 Vault, Kong, CI"
+      placeholder: "P2 Vault"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: symptom
+    attributes:
+      label: Symptom
+      description: What symptom are you observing?
+      options:
+        - OutOfSync
+        - SecretSyncedError
+        - CrashLoopBackOff
+        - ImagePullBackOff
+        - webhook or admission
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: |
+        Paste the output of the following commands to help diagnose the issue:
+        ```
+        make status
+        kubectl get applications -n argocd
+        kubectl get externalsecret -A
+        kubectl describe pod -n <namespace> <pod-name>
+        ```
+      render: shell
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Acknowledgements
+      options:
+        - label: I read [AGENTS.md Troubleshooting](AGENTS.md#9-troubleshooting-quick-refs) first
+          required: true
+        - label: Reproducible on a fresh `local` cluster (or explain why not)
+          required: false

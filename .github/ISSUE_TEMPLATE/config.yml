@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask in Discussions
+    url: https://github.com/sca-templates/infra-kubernetes/discussions/categories/q-a
+    about: Questions about the platform, how to use it, or troubleshooting
+  - name: Report a security vulnerability
+    url: https://github.com/sca-templates/infra-kubernetes/security/advisories/new
+    about: Report security vulnerabilities privately (do not open a public issue)

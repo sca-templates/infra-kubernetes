@@ -1,0 +1,54 @@
+name: Feature request
+description: Propose a new feature or improvement for the platform
+title: "feat: "
+labels: ["feature"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: What area does this feature affect?
+      options:
+        - new component
+        - phase change
+        - CI
+        - docs
+        - process
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem does this feature solve? Is it related to a frustration?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-behavior
+    attributes:
+      label: Proposed behavior
+      description: How should the platform behave after this change?
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Have you considered any alternative solutions or workarounds?
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance criteria
+      description: How will we know this feature is complete and working?
+
+  - type: input
+    id: roadmap-impact
+    attributes:
+      label: Roadmap impact
+      description: "Which phase row(s) in docs/roadmap.md does this touch?"
+      placeholder: "P8 Kong, P14 kube-prometheus-stack"
+    validations:
+      required: true

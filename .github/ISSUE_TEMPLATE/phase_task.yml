@@ -1,0 +1,74 @@
+name: Phase / component addition
+description: Track the work of one roadmap phase or component addition
+title: "phase: P<N> <component>"
+labels: ["phase"]
+body:
+  - type: input
+    id: phase-row
+    attributes:
+      label: Phase row (docs/roadmap.md)
+      description: "Reference the exact row from docs/roadmap.md"
+      placeholder: "cert-manager | Security & Identity | -20 | — | #1"
+    validations:
+      required: true
+
+  - type: input
+    id: namespace-wave-gate
+    attributes:
+      label: Namespace / wave / gate
+      description: "From docs/architecture.md and the per-component gate"
+      placeholder: "cert-manager / wave -20 / Issuer issuance smoke"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: registration
+    attributes:
+      label: Registration
+      description: Which environments will this component be registered in?
+      options:
+        - local only
+        - local + promote dev
+        - dev + qa + prod
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: implementation
+    attributes:
+      label: Implementation
+      description: All items must be completed before merge.
+      options:
+        - label: infrastructure/<c>/ README + values-base
+          required: true
+        - label: manifests
+          required: true
+        - label: "envs/{local,dev,qa,prod}/<c>.yaml"
+          required: true
+        - label: appset element
+          required: true
+        - label: sync-wave respected
+          required: true
+        - label: seed-vault entry if secrets needed
+          required: true
+        - label: docs updated
+          required: true
+
+  - type: checkboxes
+    id: definition-of-done
+    attributes:
+      label: Definition of Done
+      description: All gates must pass before merge.
+      options:
+        - label: app Synced/Healthy
+          required: true
+        - label: pods Ready 2+ min
+          required: true
+        - label: ExternalSecret SecretSynced (if applicable)
+          required: true
+        - label: functional smoke
+          required: true
+        - label: validate-static green
+          required: true
+        - label: roadmap Work Log row appended
+          required: true
