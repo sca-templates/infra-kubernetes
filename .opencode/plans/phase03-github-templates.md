@@ -30,11 +30,13 @@ contact_links:
 ### B. `.github/ISSUE_TEMPLATE/bug_report.yml`
 
 Issue form with YAML `body`. Fields:
+
 - `name: Bug report`
 - `description: Report a problem with the platform or a component`
 - `title: "bug: [component] <short description>"`
 - `labels: ["bug"]`
 - `body`:
+
   - dropdown `Environment`: local / dev / qa / prod / unsure (required)
   - input `Phase or component`: e.g. "P2 Vault", "Kong", "CI" (required)
   - dropdown `Symptom`: OutOfSync / SecretSyncedError / CrashLoopBackOff / ImagePullBackOff / webhook or admission / other (required)
@@ -46,10 +48,12 @@ Issue form with YAML `body`. Fields:
 ### C. `.github/ISSUE_TEMPLATE/feature_request.yml`
 
 Issue form. Fields:
+
 - `name: Feature request`
 - `title: "feat: ..."`
 - `labels: ["feature"]`
 - `body`:
+
   - dropdown `Area`: new component / phase change / CI / docs / process / other (required)
   - textarea `Problem` (required)
   - textarea `Proposed behavior`
@@ -60,6 +64,7 @@ Issue form. Fields:
 ### D. `.github/ISSUE_TEMPLATE/phase_task.yml`
 
 Issue form to track ONE roadmap phase. Fields:
+
 - `name: Phase / component addition`
 - `title: "phase: P<N> <component>"`
 - `labels: ["phase"]`
@@ -87,7 +92,7 @@ Issue form to track ONE roadmap phase. Fields:
 
 Restructured for v2:
 
-```markdown
+````markdown
 # Pull Request — Phase <N> (<component>)
 
 ## Summary
@@ -116,7 +121,7 @@ Restructured for v2:
 
 <details><summary>make status</summary>
 
-```
+```text
 <paste output>
 ```
 
@@ -124,7 +129,7 @@ Restructured for v2:
 
 <details><summary>kubectl get applications</summary>
 
-```
+```text
 <paste output>
 ```
 
@@ -132,7 +137,7 @@ Restructured for v2:
 
 <details><summary>kubectl get pods</summary>
 
-```
+```text
 <paste output>
 ```
 
@@ -154,7 +159,8 @@ Restructured for v2:
 - [ ] Sync-waves respected (operators before CRs, Vault before ESO, datastores before consumers; new component wave ≥10 apart)
 - [ ] Security workflows green (gitleaks, checkov, pin guards)
 - [ ] `CONTRIBUTING.md` read
-```
+
+````
 
 ### F. `.github/CONTRIBUTING.md` (rewrite)
 
@@ -181,7 +187,7 @@ Four plain markdown files:
 
 ### H. `CODEOWNERS` (repo root)
 
-```
+```text
 * @Santiago1010
 ```
 
