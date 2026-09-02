@@ -23,8 +23,9 @@ After bootstrap, changes deploy exclusively via `git push` — never
 The docs define the target state — read them first:
 
 1. Read `docs/architecture.md` (catalog, sync-waves, deviations log),
-   `docs/status.md` (roadmap + per-component gate) and
-   `docs/onboarding-new-service.md` (add checklist).
+   `docs/roadmap.md` (the 18-phase plan + per-component gate) and
+   `docs/onboarding-new-service.md` (add checklist). `docs/status.md` tells
+   you what is actually deployed today.
 2. Create `infrastructure/<name>/` with `README.md` (purpose, upstream chart,
    provenance links) and `values-base.yaml` (cross-env defaults).
 3. Add per-env overlays: `envs/local/<name>.yaml`, `envs/dev/…`, `envs/qa/…`,
@@ -41,9 +42,9 @@ The docs define the target state — read them first:
    `make cluster-up && make bootstrap` and confirm the new Application is
    Synced/Healthy.
 8. Update the docs in the **same commit**: append the roadmap Work Log row in
-   `docs/status.md` (and wherever the roadmap lives), flip the component's
-   Status column to `deployed` in `docs/architecture.md`, and note any
-   deviation. Docs are updated as components land.
+   `docs/roadmap.md`, flip the component's Status column to `deployed` in
+   `docs/architecture.md`, and note any deviation. Docs are updated as
+   components land; link the phase to its GitHub issue/milestone.
 
 ## Health checks (plain kubectl + helm mental model; no rollouts CLI)
 

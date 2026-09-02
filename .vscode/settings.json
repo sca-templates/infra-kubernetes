@@ -23,7 +23,7 @@
       "source.fixAll.markdownlint": "explicit"
     }
   },
-  "markdown.extension.tableFormatter.enabled": true,
+  "markdown.extension.tableFormatter.enabled": false,
   "markdown.extension.orderedList.marker": "one",
   "yaml.format.enable": true,
   "yaml.validate": true,

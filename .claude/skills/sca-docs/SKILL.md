@@ -13,7 +13,8 @@ description: Enforce sca-docs conventions when writing or updating this reposito
 2. **One fact, one place** — depth in this repo's `docs/`, topology in the
    vault, pointers in READMEs. Never duplicate a fact across files.
 3. **Source of truth = `docs/`.** From Phase 1, phase prompts read
-   `docs/INDEX.md` → `docs/status.md` + `docs/architecture.md` first, execute
+   `docs/INDEX.md` → `docs/roadmap.md` (plan/gates) + `docs/status.md`
+   (current state) + `docs/architecture.md` (catalog/waves) first, execute
    against their gates, and update those files (plus the roadmap Work Log) in
    the same commit that lands a component. Docs move with their code.
 4. **Truth over aspiration** — never list an un-deployed component as
@@ -26,8 +27,10 @@ description: Enforce sca-docs conventions when writing or updating this reposito
    with each environment's profile and sync policy (see `docs/architecture.md`).
 7. **Links** — relative markdown links between `docs/` files and to the repo
    root; wikilinks `[[…]]` only inside the vault, never here.
-8. **Roadmap Work Log** — every phase that lands appends its row (phase,
-   component, gate result, commit) so the roadmap records reality, not intent.
+8. **Roadmap Work Log** — every phase that lands appends its row in
+   `docs/roadmap.md` (phase, component, gate result, commit, issue) so the
+   roadmap records reality, not intent. The roadmap links to GitHub
+   Projects/Milestones/Issues.
 
 ## Definition of done
 

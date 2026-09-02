@@ -5,7 +5,7 @@ Kubernetes. ArgoCD reconciles this repository; **nothing is deployed by hand**.
 This is a clean restart after the previous `infra-kubernetes` churned in
 `fix(...)` commits — one component, one commit, one reviewed gate per phase.
 Nothing beyond ArgoCD is deployed yet; the roadmap is in
-[docs/status.md](docs/status.md).
+[docs/roadmap.md](docs/roadmap.md).
 
 ## Quick Start (local)
 
@@ -81,7 +81,8 @@ This repository ships a complete knowledge base in
 [docs/INDEX.md](docs/INDEX.md) — and from Phase 1 onward those docs are the
 **source of truth**: architecture, the GitOps workflow, CI/CD, the Vault + ESO
 secret strategy, the security posture, the radar alerts, service onboarding, a
-glossary and an honest status page with the 18-phase roadmap. Readers new to
+glossary and an honest status page with the 18-phase
+[roadmap](docs/roadmap.md). Readers new to
 Kubernetes start with [docs/kubernetes-basics.md](docs/kubernetes-basics.md).
 See [AGENTS.md](AGENTS.md) for the repository guide.
 

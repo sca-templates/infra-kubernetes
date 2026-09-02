@@ -17,7 +17,7 @@
 - [ ] I have read [CONTRIBUTING.md](CONTRIBUTING.md).
 - [ ] Content is in English.
 - [ ] No secrets, kubeconfigs or generated artifacts are committed.
-- [ ] Docs updated in this PR: roadmap Work Log row (`docs/status.md` roadmap)
+- [ ] Docs updated in this PR: roadmap Work Log row (`docs/roadmap.md`)
       *and* the component's Status column in `docs/architecture.md`.
 - [ ] All four `envs/<env>/<component>.yaml` overlays updated (or intentionally
       local-only and documented in `docs/architecture.md`).

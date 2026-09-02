@@ -4,6 +4,10 @@ An honest picture of the platform today: what is deployed where, what is being
 worked on, what is intentionally absent. Anything not listed here is either in
 the component catalog ([architecture.md](architecture.md)) or does not exist.
 
+The **delivery plan** (the 18 phases, their gates and the Work Log) now lives
+in [roadmap.md](roadmap.md) and is tracked on the GitHub Projects board,
+Milestones and Issues.
+
 ## Current state
 
 **Phase 0.1 — scaffold + knowledge base only.** Nothing beyond ArgoCD is
@@ -21,42 +25,6 @@ for everything deployed in Phases 1–18 and beyond.
 | `platform-local` ApplicationSet | present, empty `elements: []` (0 generated apps) |
 | Observability / smoke CI | not yet shipped (see [ci-cd.md](ci-cd.md)) |
 | dev / qa / prod clusters | pending (provisioned by terraform/ansible, outside this repo) |
-
-## Roadmap
-
-The 18 phases, each with a human-reviewed functional gate. A component that
-does not turn green **rolls back** — there are no `fix(...)` chains. Every
-phase lands as one component, one commit, one review.
-
-| Phase | Component | Functional gate |
-| --- | --- | --- |
-| 1 | cert-manager + `sca-ca` ClusterIssuer | test Certificate Ready |
-| 2 | Vault (raft) | pod Ready, `vault status` initialized + unsealed, TLS via cert-manager, idempotent seed |
-| 3 | external-secrets + ClusterSecretStore | smoke ExternalSecret → `SecretSynced` |
-| 4 | linkerd-crds | CRDs present, app Healthy |
-| 5 | cloudnative-pg | `Cluster` CRD accepted |
-| 6 | strimzi | `Kafka`/`KafkaNodePool` CRDs |
-| 7 | redis-operator | `Redis` CRD |
-| 8 | Kong (dedicated app) | echo service via NodePort 30080, admin Healthy |
-| 9 | Linkerd control plane (script) | mTLS identity up |
-| 10 | postgres-app + keycloak-db | clusters Ready, `psql SELECT 1` |
-| 11 | Kafka CR + SCRAM | create topic + produce/consume smoke |
-| 12 | Redis CR | `SET`/`GET` |
-| 13 | Keycloak | admin API login, valid RS256 JWT |
-| 14 | kube-prometheus-stack | Prometheus + Grafana up, targets, radar rules |
-| 15 | Loki + Alloy | logs queryable |
-| 16 | Tempo | OTLP up, trace smoke |
-| 17 | MinIO (local-only, wave 70) | health endpoint OK |
-| 18 | Velero (wave 80) | install + schedule + backup/restore of a small namespace |
-
-### Per-component Definition of Done (local)
-
-- Component `Synced` + `Healthy` in ArgoCD.
-- Pods `Running`, no `CrashLoopBackOff`/`ImagePullBackOff` after 2+ min stable.
-- `ExternalSecret` → `SecretSynced` where applicable.
-- One functional smoke (the table above).
-- `make status` shows no new `Degraded`.
-- Single commit, human-reviewed.
 
 ## Known accepted limitations
 
@@ -78,7 +46,7 @@ phase lands as one component, one commit, one review.
 
 ## Read this doc
 
-- Before any change, check the [roadmap](#roadmap) and the [deviations
+- Before any change, check the [roadmap](roadmap.md) and the [deviations
   log](architecture.md#deviations-log): they are the normative record.
 - `local` is the demo/CI substrate; treat everything it runs as the minimal
   but *complete* platform, not as a reduced copy.

@@ -38,7 +38,7 @@ live in [architecture.md](architecture.md).
 | **MinIO**                     | S3-compatible object store, local-only (Velero, Loki, storage tests). Phase 17             |
 | **Velero**                    | Cluster backup/restore to object storage. Phase 18                                         |
 
-Phase numbers refer to the roadmap in [status.md](status.md).
+Phase numbers refer to the roadmap in [roadmap.md](roadmap.md).
 
 ## Environments
 

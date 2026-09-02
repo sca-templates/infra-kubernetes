@@ -36,12 +36,13 @@ here.
 | --- | --- | --- |
 | [kubernetes-basics.md](kubernetes-basics.md) | K8s concepts exercised by the repo: object model, operators, Helm, GitOps, networking, storage, identity | official kubernetes.io/helm.sh/argo-cd docs + `charts/service-template` |
 | [architecture.md](architecture.md) | Layers, component catalog (with status + phase), sync-waves, namespaces, secret flow, environment model, deviations log | `argocd/*`, `envs/*`, `infrastructure/*` (from Phase 1) |
-| [status.md](status.md) | Current state, the 18-phase roadmap with gates, known limitations, intentional exclusions | live cluster + `make status` |
+| [status.md](status.md) | Current state, known accepted limitations, intentional exclusions | live cluster + `make status` |
+| [roadmap.md](roadmap.md) | The 18-phase delivery plan with gates, per-component DoD, and the Work Log; linked to GitHub Projects/Milestones/Issues | GitHub board; `docs/status.md` for what is deployed |
 | [workflow.md](workflow.md) | GitOps model, change→deploy flow, per-env promotion with promote-test, escalation gate, troubleshooting | `argocd/*`, `Makefile` |
 | [ci-cd.md](ci-cd.md) | What the four shipped GitHub Actions do; cluster-smoke plan (absent by design) | `.github/workflows/*.yml`, `Makefile` |
 | [security.md](security.md) | Security controls wired into CI: gitleaks, checkov baseline, pinning guards, settings checklist, leaked-secret runbook | `.github/workflows/security.yml`, `codeql.yml`, `scorecard.yml` |
 | [secrets.md](secrets.md) | Vault + ESO design, KV path inventory, seed script, short-refresh rationale, per-component secret flow | `bootstrap/seed-vault.sh` |
-| [observability-radar.md](observability-radar.md) | Metrics pipeline and radar alerts as designed (planned until Phase 14) | roadmap in `status.md` |
+| [observability-radar.md](observability-radar.md) | Metrics pipeline and radar alerts as designed (planned until Phase 14) | roadmap in `roadmap.md` |
 | [onboarding-new-service.md](onboarding-new-service.md) | Step-by-step to add a new microservice; doubles as the per-component add checklist | `charts/service-template`, `argocd/apps-<env>.yaml` |
 | [glossary.md](glossary.md) | Every term and component name explained in one place | — |
 

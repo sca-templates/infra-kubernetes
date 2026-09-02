@@ -133,8 +133,10 @@ exclusively via `git push` → ArgoCD.
 - Respect sync-waves: a new component gets a wave ≥10 apart from its
   dependencies.
 - From Phase 1, the commit that lands a component also updates
-  `docs/architecture.md` (Status, deviations log) and `docs/status.md`
-  (roadmap row). Docs are updated as components land.
+  `docs/roadmap.md` (Work Log row) and `docs/architecture.md` (Status,
+  deviations log) / `docs/status.md`. Docs are updated as components land.
+  The roadmap is tracked on the GitHub Projects board, Milestones and Issues
+  and linked from `docs/roadmap.md`.
 - Consult the sca-docs notes below before touching topology, ports or networks.
 
 ## 8. Documentation to consult (always)

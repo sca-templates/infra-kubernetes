@@ -11,5 +11,6 @@ If there is no `.codegraph/` directory, skip CodeGraph entirely — indexing is 
 
 ## Authority
 
-Read **AGENTS.md** and **docs/status.md** (roadmap) — they are authoritative
-for this repository. `docs/INDEX.md` is the entry point to the knowledge base.
+Read **AGENTS.md**, **docs/roadmap.md** (delivery plan) and
+**docs/status.md** (current state) — they are authoritative for this repository.
+`docs/INDEX.md` is the entry point to the knowledge base.
