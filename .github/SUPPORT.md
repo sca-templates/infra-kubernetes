@@ -10,11 +10,11 @@
 
 ## Troubleshooting
 
-Before opening an issue, check [AGENTS.md Troubleshooting](AGENTS.md#9-troubleshooting-quick-refs) and the runbooks in [docs/workflow.md](docs/workflow.md).
+Before opening an issue, check [AGENTS.md Troubleshooting](../AGENTS.md#9-troubleshooting-quick-refs) and the runbooks in [docs/workflow.md](../docs/workflow.md).
 
 ## Expectations
 
 This is a **maintainer-driven, best-effort** project. There is no SLA. Response
 times depend on maintainer availability. The roadmap and phase gates in
-[docs/roadmap.md](docs/roadmap.md) define the delivery plan; issues are triaged
+[roadmap.md](../docs/roadmap.md) define the delivery plan; issues are triaged
 against that plan.

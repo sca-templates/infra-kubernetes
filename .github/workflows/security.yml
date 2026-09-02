@@ -1,3 +1,5 @@
+# Copyright (c) 2026 sca-templates contributors
+# SPDX-License-Identifier: MIT
 # =============================================================================
 # infra-kubernetes security checks — secrets, IaC posture, image/version guards
 # =============================================================================
@@ -70,6 +72,28 @@ jobs:
           checkov -d . --framework kubernetes \
             --download-external-modules false \
             --quiet --compact
+
+  osv:
+    name: Dependencies (osv-scanner)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install osv-scanner (pinned, verified)
+        run: |
+          OSV_VERSION="v2.5.1"
+          OSV_SHA256="f9f25499a2c8cc367b3af45df2ea7eeca7fbccceab9c35079968f4b3652194be"
+          curl -fsSL "https://github.com/google/osv-scanner/releases/download/${OSV_VERSION}/osv-scanner_linux_amd64" \
+            -o /tmp/osv-scanner
+          printf '%s  %s\n' "${OSV_SHA256}" /tmp/osv-scanner | sha256sum -c -
+          chmod +x /tmp/osv-scanner
+          sudo install -m 0755 /tmp/osv-scanner /usr/local/bin/osv-scanner
+          osv-scanner --version
+      - name: OSV scan
+        # Honours the .github/osv-scanner.toml ignore list (accepted advisories
+        # documented in docs/security.md); genuinely new/fixed-as-of-now vulns
+        # fail the PR.
+        run: osv-scanner scan -r .
 
   guards:
     name: Guard policies

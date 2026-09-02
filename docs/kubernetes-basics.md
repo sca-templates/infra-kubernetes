@@ -30,7 +30,7 @@ Official: [Overview of Kubernetes Objects](https://kubernetes.io/docs/concepts/o
   ([architecture.md](architecture.md#sync-wave-map)).
 
 Official: [Kubernetes Operators](https://kubernetes.io/docs/concepts/extend-kubernetes/extend-cluster/),
-[CNCF Operators 101](https://www.cncf.io/blog/2022/06/15/kubernetes-operators-101-part-1-overview-and-features/).
+[CNCF Operators 101](https://www.cncf.io/blog/2020/10/02/kubernetes-operators-101/).
 
 ## Helm
 
@@ -62,7 +62,7 @@ Official: [ArgoCD Concepts](https://argo-cd.readthedocs.io/en/stable/core_concep
 - **ServiceMonitors** — Prometheus operators' scrape config (Phase 14).
 
 Official: [Kubernetes Network Concepts](https://kubernetes.io/docs/concepts/services-networking/service/),
-[ServiceMonitor spec](https://prometheus-operator.dev/docs/developer/api/).
+[ServiceMonitor spec](https://prometheus-operator.dev/docs/api-reference/api/).
 
 ## Storage and state
 

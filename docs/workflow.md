@@ -19,7 +19,7 @@ cluster. Companion to [architecture.md](architecture.md) (the *state*) and
 
 ```mermaid
 graph LR
-    A[PR on main] --> B[CI: validate + security]
+    A[PR on main] --> B[CI: validate + security + smoke Phase 1]
     B --> C[Human review]
     C --> D[Merge to main]
     D --> E[ArgoCD reconcile per env]
@@ -32,8 +32,9 @@ graph LR
 1. **Author**: edit only the files the change owns (component + its env
    overlays), run `make validate-static`, commit with a conventional message
    (`feat(vault): …`, `fix(kong): …`).
-2. **CI**: static suite always; later phases add a *selective* cluster smoke of
-   the touched component. See [ci-cd.md](ci-cd.md).
+2. **CI**: static suite always; from Phase 1 a *selective* cluster smoke of the
+   touched component also runs (ephemeral `kind`, profile `local`) — see
+   [ci-cd.md](ci-cd.md).
 3. **Review**: a human reviews the diff; the reviewer is the gate for "turns
    green" (the per-component DoD in [status.md](status.md)).
 4. **Merge**: ArgoCD picks it up per environment based on the sync policy.

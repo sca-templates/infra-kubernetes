@@ -31,6 +31,13 @@ make status
   design.
 - From then on, changes land via git push → ArgoCD reconcile.
 
+Before opening a pull request, run the validation suite
+(`make validate-static`, or `make validate` with a live cluster):
+each check is invocable via its own standard CLI (markdownlint-cli2,
+yamllint, `bash -n`, kubeconform, helm lint, kube-linter, actionlint).
+GitHub Actions runs the same suite in CI on every push and pull request
+(the `Validate` and `Security` badges above link to the latest runs).
+
 ## Environments
 
 | Environment | Profile | ArgoCD sync policy | Substrate |

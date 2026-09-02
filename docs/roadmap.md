@@ -47,6 +47,19 @@ worked in parallel.
 - Single commit, human-reviewed; docs updated in the same commit (this file's
   Work Log + `architecture.md` + `status.md`).
 
+> **CI note (does not change with this roadmap):** the Validate workflow runs
+> `kube-linter` over any `infrastructure/*/manifests/*.yaml` it finds. As each
+> component lands a `manifests/` directory in Phase 1+, kube-linter covers it
+> automatically — no per-component wiring is needed.
+>
+> **CI note (cluster smoke):** the cluster smoke (`pr-cluster.yml`) is a
+> Phase 1 deliverable that lands with cert-manager and then runs
+> automatically for every subsequent component — each project's "one
+> functional smoke" (in the per-project gate above) becomes the `pr-cluster`
+> smoke command. No per-component workflow wiring is needed beyond the
+> component's smoke command in `bootstrap/smoke-target.sh`. Profile: `local`
+> (see [ci-cd.md](ci-cd.md)).
+
 ## Projects (index)
 
 | Project | Area | Wave | Milestones | Issues | Status |
@@ -101,6 +114,6 @@ commit that lands the component.
 
 ## Change flow
 
-A change lands via PR → CI (static; selective smoke in later phases) → human
+A change lands via PR → CI (static; selective cluster smoke from Phase 1) → human
 review → merge → each environment's ArgoCD applies it per its sync policy. See
 [workflow.md](workflow.md) for the full flow and the escalation (rollback) gate.

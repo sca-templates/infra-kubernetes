@@ -1,3 +1,5 @@
+# Copyright (c) 2026 sca-templates contributors
+# SPDX-License-Identifier: MIT
 # =============================================================================
 # infra-kubernetes validation — pull requests and pushes to main
 # =============================================================================
@@ -31,8 +33,15 @@ jobs:
         run: npx --yes markdownlint-cli2 "**/*.md"
       - name: Markdown links
         run: |
-          npx --yes markdown-link-check -c .github/markdown-link-check.json README.md
-          npx --yes markdown-link-check -c .github/markdown-link-check.json .github/CONTRIBUTING.md
+          status=0
+          while IFS= read -r f; do
+            [ -f "$f" ] || continue
+            npx --yes markdown-link-check -c .github/markdown-link-check.json "$f" || status=1
+          done < <(
+            printf '%s\n' README.md
+            find docs .github -name '*.md' -type f | sort
+          )
+          exit $status
 
   yaml:
     name: YAML and Shell
@@ -50,6 +59,25 @@ jobs:
         run: yamllint -c .yamllint.yaml .
       - name: Shell syntax
         run: bash -n bootstrap/*.sh
+
+  actionlint:
+    name: Workflow lint (actionlint)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install actionlint (pinned, verified)
+        run: |
+          ACTIONLINT_VERSION="v1.7.12"
+          ACTIONLINT_SHA256="8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
+          curl -fsSL "https://github.com/rhysd/actionlint/releases/download/${ACTIONLINT_VERSION}/actionlint_1.7.12_linux_amd64.tar.gz" \
+            -o /tmp/actionlint.tar.gz
+          printf '%s  %s\n' "${ACTIONLINT_SHA256}" /tmp/actionlint.tar.gz | sha256sum -c -
+          tar -xzf /tmp/actionlint.tar.gz -C /tmp actionlint
+          sudo install -m 0755 /tmp/actionlint /usr/local/bin/actionlint
+          actionlint -version
+      - name: Lint GitHub Actions workflows
+        run: actionlint -color
 
   kubernetes:
     name: Kubernetes and Helm
@@ -89,4 +117,30 @@ jobs:
             helm lint charts/service-template
           else
             echo "No service template yet; helm lint activates with Phase 6."
+          fi
+      - name: Install kube-linter (pinned, verified)
+        run: |
+          KUBELINTER_VERSION="v0.8.3"
+          KUBELINTER_SHA256="1a6d8419b11971372971fdbc22682b684ebfb7cf1c39591662d1b6ca736c41df"
+          curl -fsSL "https://github.com/stackrox/kube-linter/releases/download/${KUBELINTER_VERSION}/kube-linter-linux.tar.gz" \
+            -o /tmp/kube-linter.tar.gz
+          printf '%s  %s\n' "${KUBELINTER_SHA256}" /tmp/kube-linter.tar.gz | sha256sum -c -
+          tar -xzf /tmp/kube-linter.tar.gz -C /tmp kube-linter
+          sudo install -m 0755 /tmp/kube-linter /usr/local/bin/kube-linter
+          kube-linter version
+      - name: kube-linter rendered service template
+        run: |
+          set -euo pipefail
+          if [ -d charts/service-template ]; then
+            kube-linter lint .generated/service-template.yaml
+          else
+            echo "No service template yet; kube-linter activates with Phase 6."
+          fi
+      - name: kube-linter infrastructure manifests when present
+        run: |
+          set -euo pipefail
+          if ls infrastructure/*/manifests/*.yaml >/dev/null 2>&1; then
+            kube-linter lint infrastructure/*/manifests/*.yaml
+          else
+            echo "No infrastructure/ manifests yet; activates with Phase 1."
           fi

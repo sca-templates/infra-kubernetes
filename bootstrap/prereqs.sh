@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 sca-templates contributors
+# SPDX-License-Identifier: MIT
 # prereqs.sh — Install the pinned platform CLI toolchain (kubectl, helm, kind).
 #   1. Binaries already present at the pinned version are skipped (idempotent)
 #   2. Downloads from official upstream release URLs with sha256 verification

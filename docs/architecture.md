@@ -280,6 +280,7 @@ as each component lands; the log always explains *why*, never just *what*.
 ## Change flow (summary)
 
 Full detail in [workflow.md](workflow.md): a change lands via PR, is validated
-by CI (static today; selective cluster smoke returning in later phases),
+by CI (static today; selective cluster smoke returns at Phase 1, profile
+`local` — see [ci-cd.md](ci-cd.md)),
 merges to `main`, and each environment's ArgoCD applies it according to its own
 sync policy (`local`/`dev` auto, `qa` auto-no-prune, `prod` manual by a human).
