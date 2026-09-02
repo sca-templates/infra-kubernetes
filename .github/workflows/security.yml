@@ -61,8 +61,8 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.x"
-      - name: Install checkov (pinned)
-        run: python -m pip install --disable-pip-version-check checkov==3.3.15
+      - name: Install checkov (pinned, verified)
+        run: python -m pip install --disable-pip-version-check --require-hashes -r .github/requirements.txt
       - name: Checkov scan
         # Phase 0 ships no IaC and no baseline; the baseline gates findings
         # once infrastructure/ lands (Phase 1 onward).

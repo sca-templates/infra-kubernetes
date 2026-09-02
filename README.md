@@ -1,5 +1,11 @@
 # infra-kubernetes
 
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14423/badge)](https://www.bestpractices.dev/projects/14423)
+[![Validate](https://github.com/sca-templates/infra-kubernetes/actions/workflows/validate.yml/badge.svg)](https://github.com/sca-templates/infra-kubernetes/actions/workflows/validate.yml)
+[![Security](https://github.com/sca-templates/infra-kubernetes/actions/workflows/security.yml/badge.svg)](https://github.com/sca-templates/infra-kubernetes/actions/workflows/security.yml)
+[![CodeQL](https://github.com/sca-templates/infra-kubernetes/actions/workflows/codeql.yml/badge.svg)](https://github.com/sca-templates/infra-kubernetes/actions/workflows/codeql.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Portable GitOps source of truth for the `sca` infrastructure platform on
 Kubernetes. ArgoCD reconciles this repository; **nothing is deployed by hand**.
 This is a clean restart after the previous `infra-kubernetes` churned in
