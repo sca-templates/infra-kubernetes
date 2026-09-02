@@ -12,6 +12,22 @@
   ArgoCD to reconcile.
 - Use conventional commits such as `feat(platform): add component values`.
 
+## Developer Certificate of Origin (DCO)
+
+All commits **must** be signed off to certify that you have the right to
+submit the contribution under the project's license. This implements the
+[Developer Certificate of Origin](https://developercertificate.org/).
+
+Add `-s` when committing:
+
+```bash
+git commit -s -m "feat(platform): add cert-manager values"
+```
+
+If your commit is missing the sign-off line, the PR cannot be merged. The
+sign-off attests that you wrote or have the right to submit the code under the
+MIT license ([LICENSE](../LICENSE)).
+
 ## Roadmap is Source of Truth
 
 Read `docs/roadmap.md` before any change. Every delivery change is a **phase**:
@@ -73,6 +89,18 @@ Follow the checklist in `docs/onboarding-new-service.md` and in
 values, four environment overlays, ApplicationSet entries, sync-wave
 assignment, secrets and validation. Use the **Phase / component addition**
 issue template to track the work.
+
+## Test Policy
+
+Every phase that delivers a new component **must** include a functional
+smoke test as part of its Definition of Done (see [roadmap.md](../roadmap.md)):
+the smoke command validates the component in a live `kind` cluster via
+`pr-cluster.yml`.
+
+When a bug is fixed, a regression test **should** be added to the
+component's smoke or to the CI suite to prevent the defect from reappearing.
+The regression test **must** be added to the automated test suite for at least
+50% of bugs fixed within the last six months.
 
 ## Environment Gradient
 

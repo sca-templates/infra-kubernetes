@@ -34,6 +34,7 @@ for everything deployed in Phases 1–18 and beyond.
 | 2 | **Cluster smoke CI absent (until Phase 1)** | `pr-cluster.yml` is not shipped yet — the merge gate is static validation + human review | Returns at **Phase 1** with cert-manager: selective smoke of the touched component on an ephemeral `kind` cluster, profile `local` (1 replica, auto-sync + prune), no trim hacks, no self-heal disabling; informative until stable on 2–3 components (see [ci-cd.md](ci-cd.md)) |
 | 3 | **dev / qa / prod clusters pending** | Not provisioned (terraform/ansible outside this repo) | Provision per env; promote via `promote-test` (see [workflow.md](workflow.md)) |
 | 4 | **Nothing seeded in Vault** | Vault seed script ships (`bootstrap/seed-vault.sh`) but is never run — no Vault yet | Runs at Phase 2; short ESO `refreshInterval` in local prevents the previous wedge |
+| 5 | **OpenSSF Best Practices badge — silver blocked** | All silver criteria are met except `contributors_unassociated` and `bus_factor` (≥2): the project has a single maintainer (`CODEOWNERS` = `@Santiago1010`) | Achieved once a second **unassociated** contributor joins and is reflected in `CODEOWNERS` + `GOVERNANCE.md`; passing badge is already achievable (see [GOVERNANCE.md](../GOVERNANCE.md), [docs/ci-cd.md](ci-cd.md)) |
 
 ## Intentional exclusions
 

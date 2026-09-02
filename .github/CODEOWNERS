@@ -1,1 +1,6 @@
+# Default owners for everything in the repo.
+# See GOVERNANCE.md for role definitions.
+#
+# TODO: add @<second-maintainer> here once bus factor ≥ 2 is achieved
+# (required for OpenSSF Best Practices silver badge).
 * @Santiago1010
