@@ -33,8 +33,15 @@ jobs:
         run: npx --yes markdownlint-cli2 "**/*.md"
       - name: Markdown links
         run: |
-          npx --yes markdown-link-check -c .github/markdown-link-check.json README.md
-          npx --yes markdown-link-check -c .github/markdown-link-check.json .github/CONTRIBUTING.md
+          status=0
+          while IFS= read -r f; do
+            [ -f "$f" ] || continue
+            npx --yes markdown-link-check -c .github/markdown-link-check.json "$f" || status=1
+          done < <(
+            printf '%s\n' README.md
+            find docs .github -name '*.md' -type f | sort
+          )
+          exit $status
 
   yaml:
     name: YAML and Shell

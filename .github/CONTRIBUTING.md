@@ -93,7 +93,7 @@ issue template to track the work.
 ## Test Policy
 
 Every phase that delivers a new component **must** include a functional
-smoke test as part of its Definition of Done (see [roadmap.md](../roadmap.md)):
+smoke test as part of its Definition of Done (see [roadmap.md](../docs/roadmap.md)):
 the smoke command validates the component in a live `kind` cluster via
 `pr-cluster.yml`.
 

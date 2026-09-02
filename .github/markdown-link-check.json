@@ -1,7 +1,8 @@
 {
   "ignorePatterns": [
-    { "pattern": "^\\.\\./" },
-    { "pattern": "^#" }
+    { "pattern": "^#" },
+    { "pattern": "^https://www\\.bestpractices\\.dev/projects/14423" },
+    { "pattern": "^https://github\\.com/sca-templates/infra-kubernetes/projects" }
   ],
   "retryOn429": true,
   "retryCount": 3,
