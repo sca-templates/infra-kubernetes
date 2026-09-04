@@ -1,12 +1,14 @@
 # Roadmap — Delivery Plan
 
 Context: `infra-kubernetes`, the GitOps source of truth for the `sca` platform
-on Kubernetes. Board: [GitHub Projects](https://github.com/sca-templates/infra-kubernetes/projects) · Milestones: per project below · Issues: `#N` placeholders until the repo is published.
+on Kubernetes. Board: [Kubernetes Planning](https://github.com/orgs/sca-templates/projects/1) (org Project) · Milestones: one per project below · Issues: linked per project.
 
-This file is the **index and source of truth for the delivery plan**. Per-project detail
-lives in `docs/roadmap/<project>.md`; what is deployed *now* lives in
+This file is the index for the delivery plan. Per-project detail lives in
+`docs/roadmap/<project>.md`; what is deployed *now* lives in
 [status.md](status.md); the component catalog and sync-waves live in
-[architecture.md](architecture.md).
+[architecture.md](architecture.md). Tracking happens on the **Kubernetes
+Planning** board: one epic issue per component (sub-issues for out-phased
+components), grouped by `Domain` and `Wave`.
 
 ## Timeline (dependency graph)
 
@@ -64,31 +66,36 @@ worked in parallel.
 
 | Project | Area | Wave | Milestones | Issues | Status |
 | --- | --- | --- | --- | --- | --- |
-| [cert-manager](roadmap/cert-manager.md) | Security & Identity | -20 | — | #1 | pending |
-| [vault](roadmap/vault.md) | Security & Identity | 0 | M1 bootstrap · M2 seed · M3 integration | #2-1…#2-3 | pending |
-| [external-secrets](roadmap/external-secrets.md) | Security & Identity | -10 | — | #3 | pending |
-| [linkerd-crds](roadmap/linkerd-crds.md) | Edge & Mesh | -10 | — | #4 | pending |
-| [cloudnative-pg](roadmap/cloudnative-pg.md) | Data | -10 | — | #5 | pending |
-| [strimzi](roadmap/strimzi.md) | Data | -10 | — | #6 | pending |
-| [redis-operator](roadmap/redis-operator.md) | Data | -10 | — | #7 | pending |
-| [kong](roadmap/kong.md) | Edge & Mesh | 20 | M1 dedicated app | #8 | pending |
-| [linkerd](roadmap/linkerd.md) | Edge & Mesh | 30 | M1 control plane | #9 | pending |
-| [postgres-app](roadmap/postgres-app.md) | Data | 40 | M1 cluster · M2 keycloak-db | #10 | pending |
-| [kafka](roadmap/kafka.md) | Data | 40 | M1 CR + SCRAM | #11 | pending |
-| [redis](roadmap/redis.md) | Data | 40 | — | #12 | pending |
-| [keycloak](roadmap/keycloak.md) | Security & Identity | 50 | M1 deploy · M2 realm | #13 | pending |
-| [kube-prometheus-stack](roadmap/kube-prometheus-stack.md) | Observability | 60 | M1 stack · M2 radar | #14 | pending |
-| [loki](roadmap/loki.md) | Observability | 60 | M1 loki · M2 alloy | #15 | pending |
-| [tempo](roadmap/tempo.md) | Observability | 60 | — | #16 | pending |
-| [minio](roadmap/minio.md) | Delivery & Resilience | 70 | — | #17 | pending |
-| [velero](roadmap/velero.md) | Delivery & Resilience | 80 | M1 install · M2 backup/restore | #18 | pending |
+| [cert-manager](roadmap/cert-manager.md) | Security & Identity | -20 | — | [#6](https://github.com/sca-templates/infra-kubernetes/issues/6) | pending |
+| [vault](roadmap/vault.md) | Security & Identity | 0 | M1 bootstrap · M2 seed · M2 integration | [#7](https://github.com/sca-templates/infra-kubernetes/issues/7) · [#24](https://github.com/sca-templates/infra-kubernetes/issues/24) · [#25](https://github.com/sca-templates/infra-kubernetes/issues/25) · [#26](https://github.com/sca-templates/infra-kubernetes/issues/26) | pending |
+| [external-secrets](roadmap/external-secrets.md) | Security & Identity | -10 | — | [#8](https://github.com/sca-templates/infra-kubernetes/issues/8) | pending |
+| [linkerd-crds](roadmap/linkerd-crds.md) | Edge & Mesh | -10 | — | [#9](https://github.com/sca-templates/infra-kubernetes/issues/9) | pending |
+| [cloudnative-pg](roadmap/cloudnative-pg.md) | Data | -10 | — | [#10](https://github.com/sca-templates/infra-kubernetes/issues/10) | pending |
+| [strimzi](roadmap/strimzi.md) | Data | -10 | — | [#11](https://github.com/sca-templates/infra-kubernetes/issues/11) | pending |
+| [redis-operator](roadmap/redis-operator.md) | Data | -10 | — | [#12](https://github.com/sca-templates/infra-kubernetes/issues/12) | pending |
+| [kong](roadmap/kong.md) | Edge & Mesh | 20 | M1 dedicated app | [#13](https://github.com/sca-templates/infra-kubernetes/issues/13) | pending |
+| [linkerd](roadmap/linkerd.md) | Edge & Mesh | 30 | M1 control plane | [#14](https://github.com/sca-templates/infra-kubernetes/issues/14) | pending |
+| [postgres-app](roadmap/postgres-app.md) | Data | 40 | M1 cluster · M1 keycloak-db | [#15](https://github.com/sca-templates/infra-kubernetes/issues/15) · [#27](https://github.com/sca-templates/infra-kubernetes/issues/27) · [#28](https://github.com/sca-templates/infra-kubernetes/issues/28) | pending |
+| [kafka](roadmap/kafka.md) | Data | 40 | M1 CR + SCRAM | [#16](https://github.com/sca-templates/infra-kubernetes/issues/16) | pending |
+| [redis](roadmap/redis.md) | Data | 40 | — | [#17](https://github.com/sca-templates/infra-kubernetes/issues/17) | pending |
+| [keycloak](roadmap/keycloak.md) | Security & Identity | 50 | M1 deploy | [#18](https://github.com/sca-templates/infra-kubernetes/issues/18) | pending |
+| [kube-prometheus-stack](roadmap/kube-prometheus-stack.md) | Observability | 60 | M1 stack · M2 radar | [#19](https://github.com/sca-templates/infra-kubernetes/issues/19) · [#29](https://github.com/sca-templates/infra-kubernetes/issues/29) | pending |
+| [loki](roadmap/loki.md) | Observability | 60 | M1 loki · M2 alloy | [#20](https://github.com/sca-templates/infra-kubernetes/issues/20) | pending |
+| [tempo](roadmap/tempo.md) | Observability | 60 | — | [#21](https://github.com/sca-templates/infra-kubernetes/issues/21) | pending |
+| [minio](roadmap/minio.md) | Delivery & Resilience | 70 | — | [#22](https://github.com/sca-templates/infra-kubernetes/issues/22) | pending |
+| [velero](roadmap/velero.md) | Delivery & Resilience | 80 | M1 install · M2 restore | [#23](https://github.com/sca-templates/infra-kubernetes/issues/23) · [#30](https://github.com/sca-templates/infra-kubernetes/issues/30) | pending |
+
+Issues are the tracker; `#N` links resolve to `infra-kubernetes`. Sub-issues
+(collections under an epic) match the out-phased components (Vault, postgres-app,
+kube-prometheus-stack, Velero). Status remains `pending` until the component
+lands (see the Work Log below).
 
 ## Work log (global, reverse-chronological)
 
 | Date | Project | Gate | Commit | Issue |
 | --- | --- | --- | --- | --- |
 | 2026-09-01 | Knowledge base (docs) | scaffold + docs green | `dbbf5f4` | — |
-| *next* | cert-manager | *pending* | | #1 |
+| *next* | cert-manager | *pending* | | [#6](https://github.com/sca-templates/infra-kubernetes/issues/6) |
 
 Phases 0.x scaffold the repository and are not delivery projects; they are
 recorded here for continuity. From Phase 1, each row is appended in the same
@@ -107,8 +114,8 @@ commit that lands the component.
   `make bootstrap`.
 - **Milestones are optional** — a project without natural phases has its issues
   directly under it (no `### Milestone` heading).
-- **Issue numbers are placeholders** (`#N`): they become valid links once this
-  repository is published to GitHub and per-phase issues are created.
+- **Issue numbers are real links** — created when the repo was published; the
+  board and issues are the tracker, this file is the index.
 - **`[x]` marks completion**; timestamps live in the commits (git history), not
   in the marks.
 
@@ -117,3 +124,4 @@ commit that lands the component.
 A change lands via PR → CI (static; selective cluster smoke from Phase 1) → human
 review → merge → each environment's ArgoCD applies it per its sync policy. See
 [workflow.md](workflow.md) for the full flow and the escalation (rollback) gate.
+
