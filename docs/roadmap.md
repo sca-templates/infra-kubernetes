@@ -124,4 +124,3 @@ commit that lands the component.
 A change lands via PR → CI (static; selective cluster smoke from Phase 1) → human
 review → merge → each environment's ArgoCD applies it per its sync policy. See
 [workflow.md](workflow.md) for the full flow and the escalation (rollback) gate.
-
