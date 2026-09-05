@@ -46,9 +46,19 @@ pre-release history; subsequent components are additive minors.
 A commit body containing `Release-As: x.y.z` makes release-please open a
 release PR for exactly that version (e.g. a coordinated platform cut). Use it
 rarely and with a review gate — the normal flow is automatic. The initial
-`0.1.0` is bootstrapped this way (the automation commit that introduced
-release-please carries `Release-As: 0.1.0`), so the first cut is deterministic
-regardless of pre-release history.
+`0.1.0` is bootstrapped this way, so the first cut is deterministic regardless
+of pre-release history.
+
+> **Squash-merge gotcha (first release almost became `1.0.0`):** the repo
+> merges PRs with **squash**, and GitHub concatenates the squashed message as
+> `subject` + a `* <commit message>` bullet per commit. `Release-As` is only
+> parsed as a conventional-commit **footer**, i.e. it must sit in the **final
+> paragraph** of the merged message. The automation commit that introduced
+> release-please carried `Release-As: 0.1.0`, but the squash buried it mid-body
+> and release-please silently computed `1.0.0`; it was corrected by landing a
+> `chore(release)` commit whose body ends, verbatim, with `Release-As: 0.1.0`.
+> **Rule: when forcing a version, put the footer as the last line of the last
+> commit of the PR**, and confirm with `release-pr --dry-run` before merging.
 
 ## Signed release tags
 
