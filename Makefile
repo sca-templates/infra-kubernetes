@@ -11,6 +11,7 @@ ENV ?= local
 KIND_CLUSTER_NAME ?= sca-local
 ARGOCD_CHART_VERSION ?= 9.5.22
 GIT_REPO_URL ?= https://github.com/sca-templates/infra-kubernetes
+GIT_TARGET_BRANCH ?= main
 
 export KUBECONFIG
 
@@ -25,11 +26,15 @@ prereqs: ## Install the pinned CLI toolchain (kubectl, helm, kind) — idempoten
 .PHONY: cluster-up
 cluster-up: ## Create the local kind cluster from bootstrap/kind-config.yaml
 	@[ -f bootstrap/kind-config.yaml ] || { echo 'bootstrap/kind-config.yaml is missing'; exit 1; }
-	kind create cluster --name "$(KIND_CLUSTER_NAME)" --config bootstrap/kind-config.yaml --wait 180s
+	@if kind get clusters 2>/dev/null | grep -qx "$(KIND_CLUSTER_NAME)"; then \
+		echo "[skip] kind cluster '$(KIND_CLUSTER_NAME)' already exists"; \
+	else \
+		kind create cluster --name "$(KIND_CLUSTER_NAME)" --config bootstrap/kind-config.yaml --wait 180s; \
+	fi
 
 .PHONY: cluster-down
 cluster-down: ## Delete the local kind cluster (keeps nothing)
-	kind delete cluster --name "$(KIND_CLUSTER_NAME)"
+	kind delete cluster --name "$(KIND_CLUSTER_NAME)" --ignore-not-found
 
 .PHONY: argocd-up
 argocd-up: ## Install or upgrade ArgoCD from argocd/install-values.yaml (no apps)
@@ -40,10 +45,10 @@ argocd-up: ## Install or upgrade ArgoCD from argocd/install-values.yaml (no apps
 .PHONY: bootstrap
 bootstrap: argocd-up ## Install ArgoCD and apply the Applications for ENV=$(ENV)
 	@[ -f "argocd/apps-$(ENV).yaml" ] && [ -f "argocd/root-app-$(ENV).yaml" ] || { echo 'argocd/apps-$(ENV).yaml and root-app-$(ENV).yaml are missing'; exit 1; }
-	@echo '── Applying ApplicationSet (GIT_REPO_URL=$(GIT_REPO_URL))'
-	sed "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" "argocd/apps-$(ENV).yaml" | kubectl apply -f -
-	@echo '── Applying root Application (GIT_REPO_URL=$(GIT_REPO_URL))'
-	sed "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" "argocd/root-app-$(ENV).yaml" | kubectl apply -f -
+	@echo '── Applying ApplicationSet (GIT_REPO_URL=$(GIT_REPO_URL), GIT_TARGET_BRANCH=$(GIT_TARGET_BRANCH))'
+	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/apps-$(ENV).yaml" | kubectl apply -f -
+	@echo '── Applying root Application (GIT_REPO_URL=$(GIT_REPO_URL), GIT_TARGET_BRANCH=$(GIT_TARGET_BRANCH))'
+	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/root-app-$(ENV).yaml" | kubectl apply -f -
 	@echo ''
 	@echo 'ArgoCD is reconciling. Watch progress with: make status'
 
@@ -88,14 +93,15 @@ smoke-app: ## Apply the touched component as "<name>-smoke" for REF (fresh ArgoC
 	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke-app COMPONENT=<component> REF=<branch|sha>'; exit 1; }
 	@[ -f argocd/apps-local.yaml ] || { echo 'argocd/apps-local.yaml is missing'; exit 1; }
 	@mkdir -p .generated
-	@count_refs="$$(grep -c 'targetRevision: main' argocd/apps-local.yaml)"; \
-	[ "$$count_refs" = "2" ] || { echo "ERROR: expected 2 'targetRevision: main' refs in apps-local.yaml, got $$count_refs"; exit 1; }; \
+	@count_refs="$$(grep -c '{{GIT_TARGET_BRANCH}}' argocd/apps-local.yaml)"; \
+	[ "$$count_refs" = "2" ] || { echo "ERROR: expected 2 '{{GIT_TARGET_BRANCH}}' refs in apps-local.yaml, got $$count_refs"; exit 1; }; \
 	grep -q 'name: platform-local' argocd/apps-local.yaml || { echo 'ERROR: appset platform-local not found'; exit 1; }; \
 	grep -q "name: '{{.name}}-local'" argocd/apps-local.yaml || { echo 'ERROR: app name template not found'; exit 1; }
 	@echo '⚠ smoke-app targets a FRESH ArgoCD (CI/kind). Alongside an existing platform install the same Helm release collides.'
 	sed -e 's|name: platform-local|name: platform-local-smoke|' \
 	    -e "s|name: '{{.name}}-local'|name: '{{.name}}-smoke'|" \
-	    -e 's|targetRevision: main|targetRevision: $(REF)|g' \
+	    -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" \
+	    -e "s|{{GIT_TARGET_BRANCH}}|$(REF)|g" \
 	    argocd/apps-local.yaml > .generated/apps-local-smoke.yaml
 	@echo '── Applying smoke ApplicationSet (.generated/apps-local-smoke.yaml, REF=$(REF))'
 	kubectl apply -f .generated/apps-local-smoke.yaml
@@ -105,6 +111,20 @@ smoke-app: ## Apply the touched component as "<name>-smoke" for REF (fresh ArgoC
 smoke-clean: ## Remove the smoke ApplicationSet after a local smoke run
 	kubectl delete applicationset platform-local-smoke --namespace argocd --ignore-not-found 2>/dev/null || true
 	@echo 'Done.'
+
+##@ Local Git serve
+
+.PHONY: local-git-up
+local-git-up: ## Stand up the fully-local git serve (bare mirror + git daemon + .env seam)
+	GIT_TARGET_BRANCH="$(GIT_TARGET_BRANCH)" bootstrap/local-git-up.sh
+
+.PHONY: local-git-update
+local-git-update: ## Mirror local HEAD into the local git serve (after each commit)
+	GIT_TARGET_BRANCH="$(GIT_TARGET_BRANCH)" bootstrap/local-git-update.sh
+
+.PHONY: local-git-down
+local-git-down: ## Stop the local git serve (keeps the bare mirror)
+	bootstrap/local-git-down.sh
 
 ##@ Operations
 
@@ -142,7 +162,7 @@ port-forward: ## Reach a platform UI/API locally: make port-forward APP=argocd|v
 
 .PHONY: clean
 clean: ## Remove local state (.env, .secrets/, generated artifacts)
-	rm -rf .env .secrets .generated
+	rm -rf .env .secrets .generated .git-local
 	rm -f ./*.tgz
 	@echo 'Done.'
 
