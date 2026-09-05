@@ -1,0 +1,72 @@
+# Copyright (c) 2026 sca-templates contributors
+# SPDX-License-Identifier: MIT
+# =============================================================================
+# infra-kubernetes main-sync — keep open PR branches in sync with main
+# =============================================================================
+# After every push to main, merge the new main into each open PR's head branch
+# (same-repo only) and push it back. PRs queued behind a release or a moving
+# main converge automatically; conflicts are left untouched and reported on the
+# PR. A branch update dismisses the approval by design
+# (require_last_push_approval), so the latest code is what gets reviewed.
+
+name: main-sync
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: main-sync
+  cancel-in-progress: false
+
+jobs:
+  sync-open-prs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Merge main into open PR branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Explicit refspec: overwrite the limited refspec actions/checkout
+          # configures, so every head branch is fetched.
+          git fetch origin --prune '+refs/heads/*:refs/remotes/origin/*'
+
+          gh pr list \
+            --state open \
+            --base main \
+            --json number,headRefName,headRepositoryOwner,author \
+            --jq '.[] | [.number, .headRefName, .headRepositoryOwner.login, .author.login] | @tsv' \
+          | while IFS=$'\t' read -r number ref owner author; do
+              case "$author" in
+                *[bot]*) echo "== skip #$number ($author)"; continue ;;
+              esac
+              if [ "$ref" = "release-please--branches--main" ]; then
+                echo "== skip #$number (release-please branch)"; continue
+              fi
+              if [ "$owner" != "sca-templates" ]; then
+                echo "== skip #$number (fork $owner)"; continue
+              fi
+              echo "== sync PR #$number ($ref)"
+              if ! git checkout -q -B "sync-$number" "origin/$ref"; then
+                echo "missing branch $ref"; continue
+              fi
+              if ! git merge -q --no-edit origin/main; then
+                echo "conflict while updating #$number — leaving untouched"
+                git merge --abort 2>/dev/null || true
+                gh pr comment "$number" --body \
+                  "main-sync: merging \`main\` into this branch conflicted; resolve locally and push." \
+                  || true
+                continue
+              fi
+              git push -q origin "HEAD:$ref" || { echo "push failed for #$number"; continue; }
+              echo "== #$number updated"
+            done
