@@ -11,7 +11,14 @@ spec:
     - missingkey=error
   generators:
     - list:
-        elements: []
+        elements:
+          - name: cert-manager
+            namespace: cert-manager
+            chartRepo: https://charts.jetstack.io
+            chart: cert-manager
+            targetRevision: v1.21.1
+            wave: "-20"
+            path: cert-manager/manifests
   template:
     metadata:
       name: '{{.name}}-dev'
@@ -29,10 +36,10 @@ spec:
             valueFiles:
               - '$values/infrastructure/{{.name}}/values-base.yaml'
               - '$values/envs/dev/{{.name}}.yaml'
-        - repoURL: "{{GIT_REPO_URL}}"
+        - repoURL: "https://github.com/sca-templates/infra-kubernetes"
           targetRevision: main
           ref: values
-        - repoURL: "{{GIT_REPO_URL}}"
+        - repoURL: "https://github.com/sca-templates/infra-kubernetes"
           targetRevision: main
           path: infrastructure/{{.path}}
           directory:

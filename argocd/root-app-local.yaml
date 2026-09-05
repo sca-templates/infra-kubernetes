@@ -10,7 +10,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: "{{GIT_REPO_URL}}"
+    repoURL: "https://github.com/sca-templates/infra-kubernetes"
     targetRevision: main
     path: argocd
     directory:
