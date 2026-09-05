@@ -93,16 +93,25 @@ See [architecture.md](architecture.md) and [observability-radar.md](observabilit
 
 ## Repository secrets (GitHub Actions)
 
-A different secret plane from Vault/ESO: the two **release** secrets are stored
-as **GitHub Actions secrets** at the **repository** level (not org, not
+A different secret plane from Vault/ESO: the **release** secrets are stored as
+**GitHub Actions secrets** at the **repository** level (not org, not
 environment) and consumed only by the `Release` workflow
 ([.github/workflows/release.yml](../.github/workflows/release.yml)). Vault stays
 the SSOT for *cluster* secrets; this is where CI *automation* secrets live.
 
 | Secret | Purpose |
 | --- | --- |
-| `RELEASE_PLEASE_TOKEN` | PAT so release PRs opened by release-please trigger the required CI checks (see [versioning.md](versioning.md)) |
+| `APP_ID` | `sca-bot-release` GitHub App ID (org-owned) |
+| `APP_PRIVATE_KEY` | `sca-bot-release` GitHub App private key, PEM with newlines (base64 single-line also accepted) |
 | `RELEASE_GPG_PRIVATE_KEY` | Release-bot signing key armor (see [versioning.md](versioning.md)) |
+
+`release.yml` mints a per-run installation token from `APP_ID` +
+`APP_PRIVATE_KEY` via `actions/create-github-app-token` (scoped to
+`infra-kubernetes`, `owner: sca-templates`), so the release PR and the tag push
+authenticate as `sca-bot-release[bot]` — a GitHub App, not a PAT — triggering
+the required CI checks on the release PR (see [versioning.md](versioning.md),
+[ci-cd.md](ci-cd.md)). The old dedicated PAT (`RELEASE_PLEASE_TOKEN`) was
+removed in the swap.
 
 Storage model (GitHub):
 
@@ -117,10 +126,11 @@ Storage model (GitHub):
 - The secrets are available in CI **only** through
   `${{ secrets.<NAME> }}` inside `release.yml`, are handed to the runner only
   for the jobs that reference them, and are masked (`***`) in the logs.
-- **Rotating a value** (e.g. swapping the PAT to a dedicated release-bot
-  account) replaces only the value: fetch the current public key, re-encrypt,
-  `PATCH` the secret — or use Settings → Secrets → Actions. No workflow change
-  is involved.
+- **Rotating a value** (e.g. regenerating the App private key and replacing
+  `APP_PRIVATE_KEY`) changes only the value: fetch the current public key,
+  re-encrypt, `PATCH` the secret — or use Settings → Secrets → Actions. No
+  workflow change is involved (the minting step only reads `APP_ID` +
+  `APP_PRIVATE_KEY`).
 - Plaintext never lands in git, in the API, or on runner disk. The local
   counterpart `.secrets/` (disk, gitignored) feeds
   `bootstrap/seed-vault.sh` and is never used for release secrets.

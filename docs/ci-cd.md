@@ -42,8 +42,13 @@ a deployment.
   already-published lightweight tag is promoted to signed (used for `v0.1.0`).
 
 The workflow is the only one that holds repository secrets
-(`RELEASE_PLEASE_TOKEN`, `RELEASE_GPG_PRIVATE_KEY`) — see
+(`APP_ID`, `APP_PRIVATE_KEY`, `RELEASE_GPG_PRIVATE_KEY`) — see
 [secrets.md](secrets.md) for how they are stored and rotated.
+`release-please` and the tag push authenticate as the org-owned
+`sca-bot-release` GitHub App via a per-run installation token minted with
+`actions/create-github-app-token` (scoped to `infra-kubernetes`), so release
+PRs/tags are authored by `sca-bot-release[bot]` and still trigger the required
+checks.
 
 ## Cluster smoke (`pr-cluster.yml`, returns at Phase 1)
 

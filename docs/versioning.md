@@ -30,10 +30,10 @@ pre-release history; subsequent components are additive minors.
    adds `CHANGELOG.md` (new version section), bumps
    `.release-please-manifest.json` and `version.txt`, and targets `main`.
 3. The release PR goes through the **same gates as any other PR**: `Validate`
-   and `Security` run on it (a dedicated `RELEASE_PLEASE_TOKEN` PAT, not the
-   default `GITHUB_TOKEN`, is used precisely so those checks run — resources
-   opened with `GITHUB_TOKEN` do not trigger workflow runs), and it needs
-   human review + merge.
+   and `Security` run on it (a dedicated token minted from the
+   `sca-bot-release` GitHub App, not the default `GITHUB_TOKEN`, is used
+   precisely so those checks run — resources opened with `GITHUB_TOKEN` do not
+   trigger workflow runs), and it needs human review + merge.
 4. On merge, the workflow tags the merge commit (`vX.Y.Z`) and creates the
    GitHub Release. The tag is re-created by the **`sign-tag` job** as an
    annotated tag signed by the dedicated release bot key, then force-pushed
@@ -116,7 +116,7 @@ file was curated by hand. The release PR must still pass the same static gates
 | Item | Deviation | Reason |
 | --- | --- | --- |
 | Tag lifecycle | The API-created lightweight tag is replaced by an annotated, signed tag at the same commit (force-push by the release bot) | GitHub Releases are created from the API, which only produces lightweight refs; re-signing keeps the release, its notes and the signature on one object |
-| Release automation token | A dedicated PAT (`RELEASE_PLEASE_TOKEN`) instead of the default `GITHUB_TOKEN` | `GITHUB_TOKEN`-created resources do not trigger workflow runs, so the release PR would never run the required checks and could not merge |
+| Release automation token | A per-run installation token minted from the `sca-bot-release` GitHub App (`APP_ID` + `APP_PRIVATE_KEY`, scoped to `infra-kubernetes`) instead of the default `GITHUB_TOKEN` | `GITHUB_TOKEN`-created resources do not trigger workflow runs, so the release PR would never run the required checks and could not merge |
 
 ## Local parity
 
