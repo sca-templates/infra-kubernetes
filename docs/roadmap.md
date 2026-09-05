@@ -94,13 +94,18 @@ lands (see the Work Log below).
 
 | Date | Project | Gate | Commit | Issue |
 | --- | --- | --- | --- | --- |
-| 2026-09-01 | Knowledge base (docs) | scaffold + docs green | `dbbf5f4` | — |
+| 2026-09-04 | Release tag signing (CI) + re-sign | signed tag `v0.1.0` green | `f8d50f4` (squash of PR #35), re-sign via workflow dispatch | — |
+| 2026-09-04 | Release `v0.1.0` (first release) | release + tag shipped | `0e39a99` (squash of PR #33) | — |
+| 2026-09-04 | Release gating fix (CI) | release PRs pass static gates | `3c658fe` (squash of PR #34) | — |
 | 2026-09-04 | Release automation (CI) | static gates green | `26359b6` (squash of PR #32) | — |
+| 2026-09-01 | Knowledge base (docs) | scaffold + docs green | `dbbf5f4` | — |
 | *next* | cert-manager | *pending* | | [#6](https://github.com/sca-templates/infra-kubernetes/issues/6) |
 
 Phases 0.x scaffold the repository and are not delivery projects; they are
 recorded here for continuity. From Phase 1, each row is appended in the same
-commit that lands the component.
+commit that lands the component. The first release (`v0.1.0`) covers the whole
+pre-release history as a signed baseline — see
+[versioning.md](versioning.md).
 
 ## Rules, out-of-plan and placeholders
 
