@@ -4,6 +4,7 @@
 [![Validate](https://github.com/sca-templates/infra-kubernetes/actions/workflows/validate.yml/badge.svg)](https://github.com/sca-templates/infra-kubernetes/actions/workflows/validate.yml)
 [![Security](https://github.com/sca-templates/infra-kubernetes/actions/workflows/security.yml/badge.svg)](https://github.com/sca-templates/infra-kubernetes/actions/workflows/security.yml)
 [![CodeQL](https://github.com/sca-templates/infra-kubernetes/actions/workflows/codeql.yml/badge.svg)](https://github.com/sca-templates/infra-kubernetes/actions/workflows/codeql.yml)
+[![Release](https://github.com/sca-templates/infra-kubernetes/actions/workflows/release.yml/badge.svg)](https://github.com/sca-templates/infra-kubernetes/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Portable GitOps source of truth for the `sca` infrastructure platform on
@@ -110,6 +111,9 @@ See [AGENTS.md](AGENTS.md) for the repository guide.
 - Content, commits and pull requests are in English.
 - No floating image tags or chart versions; pins are enforced by CI
   (`Security` guards). See [docs/security.md](docs/security.md).
+- Releases, tags and the `CHANGELOG.md` are automated (release-please) and
+  release tags are signed by a dedicated bot key. See
+  [docs/versioning.md](docs/versioning.md).
 
 ## Agent tooling & MCP servers
 

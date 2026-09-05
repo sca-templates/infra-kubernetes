@@ -1,11 +1,13 @@
 # CI/CD
 
 What GitHub Actions do — and deliberately do **not** — do for this
-repository. Phase 0 ships the four static workflows; the cluster-smoke
-workflow (`pr-cluster.yml`) **returns at Phase 1**, when the first real
-component lands, and is rebuilt from scratch. See [security.md](security.md)
-for the security controls these workflows carry, and
-[workflow.md](workflow.md) for how a merge becomes a deployment.
+repository. Phase 0 ships the static workflows plus the release automation
+(still **no** cluster smoke); the cluster-smoke workflow (`pr-cluster.yml`)
+**returns at Phase 1**, when the first real component lands, and is rebuilt
+from scratch. See [security.md](security.md) for the security controls these
+workflows carry, [versioning.md](versioning.md) for how releases, tags and the
+CHANGELOG are produced, and [workflow.md](workflow.md) for how a merge becomes
+a deployment.
 
 ## Shipped workflows
 
@@ -15,6 +17,7 @@ for the security controls these workflows carry, and
 | Security | `.github/workflows/security.yml` | push + PR | gitleaks, checkov (static IaC), osv-scanner (SCA), pin guards (no `latest` tags/charts) |
 | CodeQL | `.github/workflows/codeql.yml` | push + PR + schedule | GitHub CodeQL static analysis on the repo languages |
 | Scorecard | `.github/workflows/scorecard.yml` | push + schedule | OpenSSF Scorecard attestation + badge |
+| Release | `.github/workflows/release.yml` | push to `main` | release-please opens release PRs, tags (+ signed) and GitHub Releases; drives `CHANGELOG.md` (see [versioning.md](versioning.md)) |
 
 ### Scope semantics
 
