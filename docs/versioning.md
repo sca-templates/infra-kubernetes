@@ -37,7 +37,10 @@ pre-release history; subsequent components are additive minors.
 4. On merge, the workflow tags the merge commit (`vX.Y.Z`) and creates the
    GitHub Release. The tag is re-created by the **`sign-tag` job** as an
    annotated tag signed by the dedicated release bot key, then force-pushed
-   to the same commit (see Deviations).
+   to the same commit (see Deviations). The job first runs a fresh
+   `actions/checkout` at the tag's commit, so the GPG import happens inside a
+   git work tree (`f8d50f4`; the earlier version failed because it imported
+   the key before checking anything out).
 
 `docs` / `chore` / `ci` merges never open a release PR.
 
@@ -63,7 +66,10 @@ of pre-release history.
 ## Signed release tags
 
 Every release tag is signed by a **dedicated, single-purpose GPG key** for the
-release bot:
+release bot. The release of record is **`v0.1.0`** (first release,
+2026-09-05): an annotated tag at commit `0e39a99` (merge of PR #33), signed by
+the release bot — `git tag -v v0.1.0` shows
+`Good signature from "SCA Release Bot"`.
 
 | Item | Value |
 | --- | --- |
@@ -76,6 +82,8 @@ release bot:
 Verify a tag after pulling:
 
 ```bash
+git fetch --tags origin
+gpg --import .github/release-bot-gpg.pub    # once — committed trust anchor
 git tag -v v0.1.0
 ```
 
@@ -84,6 +92,16 @@ fingerprint above. Rotation is a **repository-level** action: generate a new
 key, replace the `RELEASE_GPG_PRIVATE_KEY` secret, update this table and
 `.github/release-bot-gpg.pub`, then re-sign future tags. History itself is not
 rewritten when a key rotates.
+
+### Re-signing an existing tag
+
+The `Release` workflow also accepts a manual `workflow_dispatch` with two
+optional inputs, `tag_name` + `commit_sha`, to (re)sign an existing tag
+**without** creating a new release: the `sign-tag` job runs whenever
+`releases_created == 'true'` *or* the workflow is dispatched manually. The
+initial `v0.1.0` tag was released before the signing job existed; it was
+promoted from the API-created lightweight ref to the signed annotated tag with
+exactly this dispatch, pinned to commit `0e39a99`.
 
 ## CHANGELOG.md
 

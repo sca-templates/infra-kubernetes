@@ -17,7 +17,7 @@ a deployment.
 | Security | `.github/workflows/security.yml` | push + PR | gitleaks, checkov (static IaC), osv-scanner (SCA), pin guards (no `latest` tags/charts) |
 | CodeQL | `.github/workflows/codeql.yml` | push + PR + schedule | GitHub CodeQL static analysis on the repo languages |
 | Scorecard | `.github/workflows/scorecard.yml` | push + schedule | OpenSSF Scorecard attestation + badge |
-| Release | `.github/workflows/release.yml` | push to `main` | release-please opens release PRs, tags (+ signed) and GitHub Releases; drives `CHANGELOG.md` (see [versioning.md](versioning.md)) |
+| Release | `.github/workflows/release.yml` | push to `main` | release-please opens release PRs, tags (+ signed annotated tags) and GitHub Releases; drives `CHANGELOG.md`; a manual `workflow_dispatch` (`tag_name` + `commit_sha`) re-signs an existing tag (see [versioning.md](versioning.md)) |
 
 ### Scope semantics
 
@@ -28,6 +28,21 @@ a deployment.
   [security.md](security.md)).
 - Workflows are scoped to the paths they own (docs/CI config), so a pure
   documentation PR does not re-run IaC scanning unnecessarily.
+
+### Release workflow
+
+`release.yml` has two jobs:
+
+- **release-please** — computes the next version, opens or updates the release
+  PR, and on merge creates the tag and the GitHub Release.
+- **sign-tag** — re-creates the tag as an annotated tag signed by the
+  release-bot GPG key on the same commit. It runs on every release **or** on a
+  manual `workflow_dispatch` (`tag_name` + `commit_sha`), which is how an
+  already-published lightweight tag is promoted to signed (used for `v0.1.0`).
+
+The workflow is the only one that holds repository secrets
+(`RELEASE_PLEASE_TOKEN`, `RELEASE_GPG_PRIVATE_KEY`) — see
+[secrets.md](secrets.md) for how they are stored and rotated.
 
 ## Cluster smoke (`pr-cluster.yml`, returns at Phase 1)
 

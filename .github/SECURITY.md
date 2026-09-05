@@ -8,7 +8,10 @@ That makes integrity of this repository the highest security value.
 
 The platform is maintained as a single track. The only supported revision is
 the tip of `main`, reconciled continuously by ArgoCD in the `local`, `dev`,
-`qa` and `prod` environments. There are no LTS branches.
+`qa` and `prod` environments. There are no LTS branches. Release tags are
+signed annotated snapshots of `main` (currently `v0.1.0`, see
+[docs/versioning.md](../docs/versioning.md)) — integrity evidence, not support
+branches.
 
 ## Reporting a vulnerability
 
@@ -69,9 +72,15 @@ security policy of their own upstream projects and of the
 
 1. **Git repository** (source of truth) — commits are signed; DCO attests
    contributor authorization; branch protection requires review.
-2. **CI pipeline** — GitHub Actions run with `permissions: contents: read`;
-   no secrets injected beyond `GITHUB_TOKEN` (read-only). The pipeline
-   validates, but never deploys.
+2. **CI pipeline** — GitHub Actions run with `contents: read` (plus the
+   `Release` workflow's `contents: write` / `pull-requests: write`, which it
+   needs to open release PRs and push tags). Beyond the read-only
+   `GITHUB_TOKEN`, only the `Release` workflow receives secrets — the two
+   repository secrets `RELEASE_PLEASE_TOKEN` and
+   `RELEASE_GPG_PRIVATE_KEY`, stored encrypted by GitHub (libsodium sealed box)
+   and injected only into that workflow's jobs (see
+   [docs/secrets.md](../docs/secrets.md)). CI validates and releases, but never
+   deploys.
 3. **ArgoCD reconciliation** — only ArgoCD may deploy; human `kubectl apply`
    is forbidden after bootstrap. Sync policies follow ADR-003.
 4. **Cluster runtime** — nodes run only images from approved registries with
