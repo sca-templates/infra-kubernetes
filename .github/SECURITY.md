@@ -40,8 +40,9 @@ repository where the flaw lives; the maintainers triage across the ecosystem.
 The repository enforces, from `main`, the checks described in
 [docs/security.md](../docs/security.md): gitleaks secret scanning, checkov
 infrastructure posture (baseline re-examined before enforcement), image/version
-pinning guards, CodeQL on the GitHub Actions files and an OpenSSF Scorecard.
-Secrets must never be committed — the CI blocks pushes that leak them.
+pinning guards, CodeQL on the GitHub Actions files, an OpenSSF Scorecard and
+release-tag signing by a dedicated bot key. Secrets must never be committed —
+the CI blocks pushes that leak them.
 
 ## Scope
 
@@ -62,7 +63,7 @@ security policy of their own upstream projects and of the
 | Malicious Helm charts or K8s manifests | CI gate | Misconfiguration or privilege escalation | checkov (IaC posture); kube-linter (manifest lint); helm lint; kubeconform (schema) |
 | Unreviewed or low-quality changes | PR review | Regression or configuration drift | Validate + Security + CodeQL + human review required; "rollback not fix chains" |
 | Supply-chain compromise of CI actions | GitHub Actions | Tampered workflow or action | All actions pinned by commit SHA with version comment; lockfiles with SHA-256 hashes |
-| Loss of maintainer | Personnel | Project abandoned | GOVERNANCE.md access continuity; bus-factor backup with admin access; signing keys in lockbox |
+| Loss of maintainer | Personnel | Project abandoned | GOVERNANCE.md access continuity; bus-factor backup with admin access; signing keys in lockbox (release-bot private key backed up alongside) |
 
 ### Trust boundaries
 
@@ -87,8 +88,10 @@ security policy of their own upstream projects and of the
   `image: <name>:latest` or `tag: latest` on every push.
 - **IaC misconfiguration**: checkov scans all YAML manifests; baseline is
   re-examined before enforcement to avoid hiding real findings.
-- **Unsigned commits**: DCO sign-off is required per CONTRIBUTING.md; the
-  maintainer signs release tags.
+- **Unsigned commits**: DCO sign-off is required per CONTRIBUTING.md; release
+  tags are signed by the dedicated release-bot GPG key (fingerprint
+  `E272B06540C49A7EF2AA22A22D7114035EB46A21`, see
+  [docs/versioning.md](../docs/versioning.md)).
 
 ## Security review
 

@@ -110,6 +110,9 @@ See [AGENTS.md](AGENTS.md) for the repository guide.
 - Content, commits and pull requests are in English.
 - No floating image tags or chart versions; pins are enforced by CI
   (`Security` guards). See [docs/security.md](docs/security.md).
+- Releases, tags and the `CHANGELOG.md` are automated (release-please) and
+  release tags are signed by a dedicated bot key. See
+  [docs/versioning.md](docs/versioning.md).
 
 ## Agent tooling & MCP servers
 

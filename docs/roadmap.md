@@ -95,6 +95,7 @@ lands (see the Work Log below).
 | Date | Project | Gate | Commit | Issue |
 | --- | --- | --- | --- | --- |
 | 2026-09-01 | Knowledge base (docs) | scaffold + docs green | `dbbf5f4` | — |
+| 2026-09-04 | Release automation (CI) | static gates green | [PR #32](https://github.com/sca-templates/infra-kubernetes/pull/32) | — |
 | *next* | cert-manager | *pending* | | [#6](https://github.com/sca-templates/infra-kubernetes/issues/6) |
 
 Phases 0.x scaffold the repository and are not delivery projects; they are
