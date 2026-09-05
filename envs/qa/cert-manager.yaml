@@ -1,0 +1,10 @@
+# cert-manager — qa profile (HA: 3 replicas per component, PDBs and
+# anti-affinity come from the chart's HA settings).
+
+replicaCount: 3
+
+webhook:
+  replicaCount: 3
+
+cainjector:
+  replicaCount: 3

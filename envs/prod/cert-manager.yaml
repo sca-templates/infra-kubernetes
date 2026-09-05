@@ -1,0 +1,9 @@
+# cert-manager — prod profile (full HA: 3 replicas per component).
+
+replicaCount: 3
+
+webhook:
+  replicaCount: 3
+
+cainjector:
+  replicaCount: 3

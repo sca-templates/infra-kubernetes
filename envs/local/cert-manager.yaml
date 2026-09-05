@@ -1,0 +1,10 @@
+# cert-manager — local profile (developer kind cluster: 1 replica, minimal
+# resources). Matches the base defaults; declared explicitly for tier symmetry.
+
+replicaCount: 1
+
+webhook:
+  replicaCount: 1
+
+cainjector:
+  replicaCount: 1
