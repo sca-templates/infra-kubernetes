@@ -1,0 +1,74 @@
+# Copyright (c) 2026 sca-templates contributors
+# SPDX-License-Identifier: MIT
+# =============================================================================
+# infra-kubernetes release — GitHub Releases + CHANGELOG + signed tags
+# =============================================================================
+#
+# release-please (conventional commits) opens a release PR for every `feat` or
+# `fix` merged to main. When that PR (or any release-marked commit) lands, the
+# tag and GitHub Release are created here, then sign-tag re-signs the tag with
+# the dedicated release-bot GPG key (repalcing the API-created lightweight ref
+# with an annotated, signed one at the same commit).
+#
+# A dedicated PAT (RELEASE_PLEASE_TOKEN) is required: resources opened via the
+# default GITHUB_TOKEN do not trigger workflow runs, so the release PR would
+# never run the required Validate/Security checks and could not be merged.
+# See docs/versioning.md.
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Release please
+    runs-on: ubuntu-latest
+    outputs:
+      releases_created: ${{ steps.release.outputs.releases_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - name: Run release-please
+        id: release
+        uses: google-github-actions/release-please-action@e4dc86ba9405554aeba3c6bb2d169500e7d3b4ee # v4.1.1
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          release-type: simple
+          config-file: .release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  sign-tag:
+    name: Sign release tag
+    needs: release
+    if: needs.release.outputs.releases_created == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Import release-bot GPG key
+        id: import-gpg
+        uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd # v7.0.0
+        with:
+          gpg_private_key: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+          git_tag_gpgsign: false
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+
+      - name: Sign and push release tag
+        run: |
+          TAG="${{ needs.release.outputs.tag_name }}"
+          test -n "$TAG"
+          git tag -f -s -m "${TAG}" "${TAG}" "${GITHUB_SHA}"
+          git push -f origin "refs/tags/${TAG}"
