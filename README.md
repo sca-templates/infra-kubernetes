@@ -4,7 +4,6 @@
 [![Validate](https://github.com/sca-templates/infra-kubernetes/actions/workflows/validate.yml/badge.svg)](https://github.com/sca-templates/infra-kubernetes/actions/workflows/validate.yml)
 [![Security](https://github.com/sca-templates/infra-kubernetes/actions/workflows/security.yml/badge.svg)](https://github.com/sca-templates/infra-kubernetes/actions/workflows/security.yml)
 [![CodeQL](https://github.com/sca-templates/infra-kubernetes/actions/workflows/codeql.yml/badge.svg)](https://github.com/sca-templates/infra-kubernetes/actions/workflows/codeql.yml)
-[![Release](https://github.com/sca-templates/infra-kubernetes/actions/workflows/release.yml/badge.svg)](https://github.com/sca-templates/infra-kubernetes/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Portable GitOps source of truth for the `sca` infrastructure platform on
