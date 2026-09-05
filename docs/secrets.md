@@ -6,6 +6,10 @@ only projected copies, never the originals. This is a state document — Vault i
 not deployed yet (Phase 2); the design below is normative for the phases that
 consume it.
 
+In addition to the cluster plane below there is a **repository plane**: the CI
+release secrets stored as GitHub Actions secrets, documented at the end of this
+file (the two planes never touch).
+
 ## Design
 
 ```mermaid
@@ -86,3 +90,37 @@ Each phase that consumes secrets ships, next to the component, exactly one
 Velero diverges only in *target*: `local` uses the in-cluster MinIO, while
 `dev`/`qa`/`prod` use external S3 with credentials injected via Vault/ESO.
 See [architecture.md](architecture.md) and [observability-radar.md](observability-radar.md).
+
+## Repository secrets (GitHub Actions)
+
+A different secret plane from Vault/ESO: the two **release** secrets are stored
+as **GitHub Actions secrets** at the **repository** level (not org, not
+environment) and consumed only by the `Release` workflow
+([.github/workflows/release.yml](../.github/workflows/release.yml)). Vault stays
+the SSOT for *cluster* secrets; this is where CI *automation* secrets live.
+
+| Secret | Purpose |
+| --- | --- |
+| `RELEASE_PLEASE_TOKEN` | PAT so release PRs opened by release-please trigger the required CI checks (see [versioning.md](versioning.md)) |
+| `RELEASE_GPG_PRIVATE_KEY` | Release-bot signing key armor (see [versioning.md](versioning.md)) |
+
+Storage model (GitHub):
+
+- GitHub keeps a **per-repository keypair**. The public half is exposed via
+  `GET /repos/{owner}/{repo}/actions/secrets/public-key`; the plaintext never
+  touches the API.
+- Setting a secret means encrypting the value **client-side** as a libsodium
+  **sealed box** (`crypto_box_seal`) with that public key and `PUT`/`PATCH`ing
+  it to `actions/secrets/{name}`. GitHub decrypts in its backend and stores the
+  secret **encrypted at rest**; the API returns only `name` / `created_at` /
+  `updated_at` — never the value.
+- The secrets are available in CI **only** through
+  `${{ secrets.<NAME> }}` inside `release.yml`, are handed to the runner only
+  for the jobs that reference them, and are masked (`***`) in the logs.
+- **Rotating a value** (e.g. swapping the PAT to a dedicated release-bot
+  account) replaces only the value: fetch the current public key, re-encrypt,
+  `PATCH` the secret — or use Settings → Secrets → Actions. No workflow change
+  is involved.
+- Plaintext never lands in git, in the API, or on runner disk. The local
+  counterpart `.secrets/` (disk, gitignored) feeds
+  `bootstrap/seed-vault.sh` and is never used for release secrets.
