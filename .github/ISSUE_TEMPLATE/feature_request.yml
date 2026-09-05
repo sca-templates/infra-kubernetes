@@ -1,7 +1,7 @@
 name: Feature request
 description: Propose a new feature or improvement for the platform
 title: "feat: "
-labels: ["feature"]
+labels: ["enhancement"]
 body:
   - type: dropdown
     id: area

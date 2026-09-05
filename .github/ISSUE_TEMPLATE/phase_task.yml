@@ -1,7 +1,6 @@
 name: Phase / component addition
 description: Track the work of one roadmap phase or component addition
 title: "phase: P<N> <component>"
-labels: ["phase"]
 body:
   - type: input
     id: phase-row

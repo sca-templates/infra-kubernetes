@@ -43,6 +43,7 @@ here.
 | [versioning.md](versioning.md) | Semver pre-1.0 scheme, release-please flow, signed release tags, CHANGELOG rules | `.github/workflows/release.yml`, `.release-please-*.json`, `.github/release-bot-gpg.pub` |
 | [security.md](security.md) | Security controls wired into CI: gitleaks, checkov baseline, pinning guards, settings checklist, leaked-secret runbook | `.github/workflows/security.yml`, `codeql.yml`, `scorecard.yml` |
 | [secrets.md](secrets.md) | Vault + ESO design, KV path inventory, seed script, short-refresh rationale, per-component secret flow | `bootstrap/seed-vault.sh` |
+| [labels.md](labels.md) | Label model: structural grouping lives in board fields (`Domain`/`Wave`/`Status`), labels stay flat and cross-cutting; the only labels that exist | Kubernetes Planning board; `.github/ISSUE_TEMPLATE/*.yml` |
 | [observability-radar.md](observability-radar.md) | Metrics pipeline and radar alerts as designed (planned until Phase 14) | roadmap in `roadmap.md` |
 | [onboarding-new-service.md](onboarding-new-service.md) | Step-by-step to add a new microservice; doubles as the per-component add checklist | `charts/service-template`, `argocd/apps-<env>.yaml` |
 | [glossary.md](glossary.md) | Every term and component name explained in one place | — |
