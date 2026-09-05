@@ -75,6 +75,27 @@ No ad-hoc `ignoreDifferences` patches, no `ServerSideApply=true` toggles, no
 manual `kubectl apply` after bootstrap. If ArgoCD drift needs absorbing, it is
 a deliberate, documented deviation (the [Deviations log](architecture.md#deviations-log)).
 
+## Queued PRs, branch names and main-sync
+
+- **Branch names are a whitelist.** A ruleset (`allowed-branches-only`)
+  rejects any branch outside `~DEFAULT_BRANCH` plus the conventional prefixes
+  `feat/`, `feature/`, `chore/`, `fix/`, `hotfix/`, `hf/`, `refactor/`,
+  `docs/`, `test/`, `ci/`, `build/`, `style/`, `dependabot/`, `copilot/` and
+  `release-please--branches--`. A push whose branch is not on the list is
+  rejected (`422`).
+- **A branch name never decides whether a release happens.** release-please
+  only bumps on squashed `feat`/`fix` commits (minor/patch); `docs`,
+  `chore`, `test`, `ci`, `build`, `style` and `refactor` merges never open a
+  release PR. Keep those types off `feat`/`fix` titles and no tag appears —
+  the "immunity" is the commit type, not the branch.
+- **Open PRs update themselves.** After every push to `main`, the
+  `main-sync` workflow merges the new `main` into each open PR's branch and
+  pushes it back (same-repo only; conflicts are left untouched and reported
+  on the PR). PRs queued behind a merge therefore converge automatically —
+  and, by design, each update dismisses the approval
+  (`require_last_push_approval`), so the latest code is always what gets
+  reviewed.
+
 ## Troubleshooting quick refs
 
 | Symptom | Probable cause | Fix |

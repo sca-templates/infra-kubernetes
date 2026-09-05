@@ -6,6 +6,10 @@ only projected copies, never the originals. This is a state document — Vault i
 not deployed yet (Phase 2); the design below is normative for the phases that
 consume it.
 
+In addition to the cluster plane below there is a **repository plane**: the CI
+release secrets stored as GitHub Actions secrets, documented at the end of this
+file (the two planes never touch).
+
 ## Design
 
 ```mermaid
@@ -86,3 +90,47 @@ Each phase that consumes secrets ships, next to the component, exactly one
 Velero diverges only in *target*: `local` uses the in-cluster MinIO, while
 `dev`/`qa`/`prod` use external S3 with credentials injected via Vault/ESO.
 See [architecture.md](architecture.md) and [observability-radar.md](observability-radar.md).
+
+## Repository secrets (GitHub Actions)
+
+A different secret plane from Vault/ESO: the **release** secrets are stored as
+**GitHub Actions secrets** at the **repository** level (not org, not
+environment) and consumed only by the `Release` workflow
+([.github/workflows/release.yml](../.github/workflows/release.yml)). Vault stays
+the SSOT for *cluster* secrets; this is where CI *automation* secrets live.
+
+| Secret | Purpose |
+| --- | --- |
+| `APP_ID` | `sca-bot-release` GitHub App ID (org-owned) |
+| `APP_PRIVATE_KEY` | `sca-bot-release` GitHub App private key, PEM with newlines (base64 single-line also accepted) |
+| `RELEASE_GPG_PRIVATE_KEY` | Release-bot signing key armor (see [versioning.md](versioning.md)) |
+
+`release.yml` mints a per-run installation token from `APP_ID` +
+`APP_PRIVATE_KEY` via `actions/create-github-app-token` (scoped to
+`infra-kubernetes`, `owner: sca-templates`), so the release PR and the tag push
+authenticate as `sca-bot-release[bot]` — a GitHub App, not a PAT — triggering
+the required CI checks on the release PR (see [versioning.md](versioning.md),
+[ci-cd.md](ci-cd.md)). The old dedicated PAT (`RELEASE_PLEASE_TOKEN`) was
+removed in the swap.
+
+Storage model (GitHub):
+
+- GitHub keeps a **per-repository keypair**. The public half is exposed via
+  `GET /repos/{owner}/{repo}/actions/secrets/public-key`; the plaintext never
+  touches the API.
+- Setting a secret means encrypting the value **client-side** as a libsodium
+  **sealed box** (`crypto_box_seal`) with that public key and `PUT`/`PATCH`ing
+  it to `actions/secrets/{name}`. GitHub decrypts in its backend and stores the
+  secret **encrypted at rest**; the API returns only `name` / `created_at` /
+  `updated_at` — never the value.
+- The secrets are available in CI **only** through
+  `${{ secrets.<NAME> }}` inside `release.yml`, are handed to the runner only
+  for the jobs that reference them, and are masked (`***`) in the logs.
+- **Rotating a value** (e.g. regenerating the App private key and replacing
+  `APP_PRIVATE_KEY`) changes only the value: fetch the current public key,
+  re-encrypt, `PATCH` the secret — or use Settings → Secrets → Actions. No
+  workflow change is involved (the minting step only reads `APP_ID` +
+  `APP_PRIVATE_KEY`).
+- Plaintext never lands in git, in the API, or on runner disk. The local
+  counterpart `.secrets/` (disk, gitignored) feeds
+  `bootstrap/seed-vault.sh` and is never used for release secrets.

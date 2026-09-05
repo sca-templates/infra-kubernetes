@@ -17,10 +17,21 @@ see [ci-cd.md](ci-cd.md).
 | CodeQL | codeql.yml | Static analysis on push + PR + weekly schedule |
 | OpenSSF Scorecard | scorecard.yml | Attestation on push + weekly; feeds the README badge |
 | Pin guards | security.yml | Fails any chart reference or image tag that is `latest` or floating |
+| Release tag signing | release.yml | Every release tag is re-signed with the dedicated **release-bot** GPG key (private key in repo secret `RELEASE_GPG_PRIVATE_KEY`) |
 
 Deploy-time security (no pages by design in the radar, manual prod sync) is
 covered in [observability-radar.md](observability-radar.md) and
 [workflow.md](workflow.md).
+
+## Release signing
+
+Release tags are signed by a dedicated, single-purpose release-bot key —
+fingerprint `E272B06540C49A7EF2AA22A22D7114035EB46A21`, public trust anchor in
+`.github/release-bot-gpg.pub`. The private key lives only in the
+`RELEASE_GPG_PRIVATE_KEY` repo secret and a lockbox backup; it is imported (by
+SHA-pinned `crazy-max/ghaction-import-gpg`) only inside the `sign-tag` job of
+`release.yml`. Verification and rotation policy in
+[versioning.md](versioning.md).
 
 ## Python dependency pinning
 
@@ -70,6 +81,9 @@ fixed `asteval` or `ecdsa` publishes a fix.
   guard, and ADR). The previous attempt drifted because this was not enforced.
 - **Secrets never in git**: `.env`, `.secrets/`, kubeconfigs, unseal keys and
   tokens are gitignored; Vault is the SSOT (see [secrets.md](secrets.md)).
+  The CI release secrets (`APP_ID`, `APP_PRIVATE_KEY`,
+  `RELEASE_GPG_PRIVATE_KEY`) live only as encrypted GitHub Actions secrets,
+  never in the repository (storage model in [secrets.md](secrets.md)).
 - **No commit-time credentials**: Vault design is described in the docs but
   never filled; placeholders are `{{GIT_REPO_URL}}`-style and substituted at
   bootstrap.

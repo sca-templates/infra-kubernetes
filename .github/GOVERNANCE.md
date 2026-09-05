@@ -18,7 +18,7 @@ beyond 3 active contributors, a lightweight meritocracy model is adopted
 
 | Role | Responsibilities | Current holder |
 | --- | --- | --- |
-| **Project lead / maintainer** | Final merge authority; sets roadmap priorities; triages issues and PRs; defines security response; signs releases | Santiago1010 |
+| **Project lead / maintainer** | Final merge authority; sets roadmap priorities; triages issues and PRs; defines security response; authorizes release PRs (tags are signed by the automated release bot) | Santiago1010 |
 | **Contributor** | Opens PRs, reports bugs, proposes features; must follow CONTRIBUTING.md and the DCO process | Anyone |
 | **Security responder** | Triage of private vulnerability reports; coordinates fix and disclosure | Santiago1010 (same as maintainer) |
 | **Bus-factor backup** | Has repository admin access; can create/close issues, merge PRs, tag releases if the lead is unavailable | **[to be assigned — see Access continuity]** |
@@ -43,8 +43,11 @@ continue. The following are in place:
   "bus-factor backup") has admin access to the `sca-templates` organization
   repository. This person can merge, tag, and manage releases.
 - **GPG/SSH signing keys**: the maintainer's key is backed up in a
-  physical lockbox accessible to a designated person. The backup
-  signer has the authority and means to sign future tags/releases.
+  physical lockbox accessible to a designated person. The release-bot GPG
+  key (which signs release tags, see [docs/versioning.md](../docs/versioning.md))
+  lives in the `RELEASE_GPG_PRIVATE_KEY` repo secret and is backed up in the
+  same lockbox; a new maintainer can rotate it at any time. The backup
+  maintainer has the authority and means to sign future tags/releases.
 - **Documentation**: this file, `SECURITY.md`, and `CONTRIBUTING.md` are
   sufficient for a new maintainer to pick up the project without prior
   context.

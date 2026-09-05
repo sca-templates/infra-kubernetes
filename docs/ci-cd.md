@@ -1,11 +1,13 @@
 # CI/CD
 
 What GitHub Actions do — and deliberately do **not** — do for this
-repository. Phase 0 ships the four static workflows; the cluster-smoke
-workflow (`pr-cluster.yml`) **returns at Phase 1**, when the first real
-component lands, and is rebuilt from scratch. See [security.md](security.md)
-for the security controls these workflows carry, and
-[workflow.md](workflow.md) for how a merge becomes a deployment.
+repository. Phase 0 ships the static workflows plus the release automation
+(still **no** cluster smoke); the cluster-smoke workflow (`pr-cluster.yml`)
+**returns at Phase 1**, when the first real component lands, and is rebuilt
+from scratch. See [security.md](security.md) for the security controls these
+workflows carry, [versioning.md](versioning.md) for how releases, tags and the
+CHANGELOG are produced, and [workflow.md](workflow.md) for how a merge becomes
+a deployment.
 
 ## Shipped workflows
 
@@ -15,6 +17,8 @@ for the security controls these workflows carry, and
 | Security | `.github/workflows/security.yml` | push + PR | gitleaks, checkov (static IaC), osv-scanner (SCA), pin guards (no `latest` tags/charts) |
 | CodeQL | `.github/workflows/codeql.yml` | push + PR + schedule | GitHub CodeQL static analysis on the repo languages |
 | Scorecard | `.github/workflows/scorecard.yml` | push + schedule | OpenSSF Scorecard attestation + badge |
+| Release | `.github/workflows/release.yml` | push to `main` | release-please opens release PRs, tags (+ signed annotated tags) and GitHub Releases; drives `CHANGELOG.md`; a manual `workflow_dispatch` (`tag_name` + `commit_sha`) re-signs an existing tag (see [versioning.md](versioning.md)) |
+| Release gate | `.github/workflows/release-gate.yml` | PR + manual | blocks human PRs while a release-please PR is open (`release-gate` required check) |
 
 ### Scope semantics
 
@@ -25,6 +29,26 @@ for the security controls these workflows carry, and
   [security.md](security.md)).
 - Workflows are scoped to the paths they own (docs/CI config), so a pure
   documentation PR does not re-run IaC scanning unnecessarily.
+
+### Release workflow
+
+`release.yml` has two jobs:
+
+- **release-please** — computes the next version, opens or updates the release
+  PR, and on merge creates the tag and the GitHub Release.
+- **sign-tag** — re-creates the tag as an annotated tag signed by the
+  release-bot GPG key on the same commit. It runs on every release **or** on a
+  manual `workflow_dispatch` (`tag_name` + `commit_sha`), which is how an
+  already-published lightweight tag is promoted to signed (used for `v0.1.0`).
+
+The workflow is the only one that holds repository secrets
+(`APP_ID`, `APP_PRIVATE_KEY`, `RELEASE_GPG_PRIVATE_KEY`) — see
+[secrets.md](secrets.md) for how they are stored and rotated.
+`release-please` and the tag push authenticate as the org-owned
+`sca-bot-release` GitHub App via a per-run installation token minted with
+`actions/create-github-app-token` (scoped to `infra-kubernetes`), so release
+PRs/tags are authored by `sca-bot-release[bot]` and still trigger the required
+checks.
 
 ## Cluster smoke (`pr-cluster.yml`, returns at Phase 1)
 
@@ -75,6 +99,20 @@ The smoke runs the **`local`** profile (1 replica, auto-sync + prune), never
   for the paths it covers once stable, so infra-only doc changes are not
   blocked by a cluster boot.
 
+### Release gate
+
+`release-gate.yml` runs on every PR and holds a single fact: **a
+release-please PR (head branch `release-please--branches--main` against the
+default branch) must merge before any human PR**. While one is open, human
+PRs keep a failing `release-gate` check (`::error` and non-zero exit) and
+cannot merge; the release PR is excluded (only release-please opens that
+branch, and only one exists at a time), so it is never blocked. Because the
+check is registered as a required context on `main`, the block is enforced by
+branch protection, not by policy. The gate keys on the *branch name* of the
+release PR — which only release-please can produce — matching the
+[main-sync](workflow.md#queued-prs-branch-names-and-main-sync) model where
+mechanisms trust the reserved branch, never ad-hoc PR titles.
+
 ## Required checks
 
 Enforce, on `main`:
@@ -82,7 +120,9 @@ Enforce, on `main`:
 1. `Validate` (static) — required on every PR.
 2. `Security` — required on every PR (block on gitleaks findings).
 3. `CodeQL` — required once stable.
-4. Human review — always the release gate for "turns green".
+4. `release-gate` — required on every PR (fails while a release PR is open;
+   passes on the release PR itself).
+5. Human review — always the release gate for "turns green".
 
 The two `Validate` linters and the `Security` SCA job are part of the required
 `Validate`/`Security` checks above, so a clear PR must satisfy Markdown +
