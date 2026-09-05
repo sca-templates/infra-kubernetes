@@ -18,6 +18,7 @@ a deployment.
 | CodeQL | `.github/workflows/codeql.yml` | push + PR + schedule | GitHub CodeQL static analysis on the repo languages |
 | Scorecard | `.github/workflows/scorecard.yml` | push + schedule | OpenSSF Scorecard attestation + badge |
 | Release | `.github/workflows/release.yml` | push to `main` | release-please opens release PRs, tags (+ signed annotated tags) and GitHub Releases; drives `CHANGELOG.md`; a manual `workflow_dispatch` (`tag_name` + `commit_sha`) re-signs an existing tag (see [versioning.md](versioning.md)) |
+| Release gate | `.github/workflows/release-gate.yml` | PR + manual | blocks human PRs while a release-please PR is open (`release-gate` required check) |
 
 ### Scope semantics
 
@@ -93,6 +94,20 @@ The smoke runs the **`local`** profile (1 replica, auto-sync + prune), never
   for the paths it covers once stable, so infra-only doc changes are not
   blocked by a cluster boot.
 
+### Release gate
+
+`release-gate.yml` runs on every PR and holds a single fact: **a
+release-please PR (head branch `release-please--branches--main` against the
+default branch) must merge before any human PR**. While one is open, human
+PRs keep a failing `release-gate` check (`::error` and non-zero exit) and
+cannot merge; the release PR is excluded (only release-please opens that
+branch, and only one exists at a time), so it is never blocked. Because the
+check is registered as a required context on `main`, the block is enforced by
+branch protection, not by policy. The gate keys on the *branch name* of the
+release PR — which only release-please can produce — matching the
+[main-sync](workflow.md#queued-prs-branch-names-and-main-sync) model where
+mechanisms trust the reserved branch, never ad-hoc PR titles.
+
 ## Required checks
 
 Enforce, on `main`:
@@ -100,7 +115,9 @@ Enforce, on `main`:
 1. `Validate` (static) — required on every PR.
 2. `Security` — required on every PR (block on gitleaks findings).
 3. `CodeQL` — required once stable.
-4. Human review — always the release gate for "turns green".
+4. `release-gate` — required on every PR (fails while a release PR is open;
+   passes on the release PR itself).
+5. Human review — always the release gate for "turns green".
 
 The two `Validate` linters and the `Security` SCA job are part of the required
 `Validate`/`Security` checks above, so a clear PR must satisfy Markdown +
