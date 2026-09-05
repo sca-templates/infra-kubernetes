@@ -1,0 +1,12 @@
+# sca-ca — self-signed bootstrap ClusterIssuer. Signs leaf Certificates for the
+# sca platform; root of the in-cluster PKI hierarchy.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: sca-ca
+  annotations:
+    # Within the cert-manager Application (app-wide wave -20), apply after the
+    # chart's CRDs and controller land (default wave 0).
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  selfSigned: {}

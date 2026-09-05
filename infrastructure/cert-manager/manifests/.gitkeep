@@ -1,3 +1,0 @@
-# Keeps infrastructure/cert-manager/manifests/ present in git before the first
-# raw manifest lands, so the appset's raw source path never points at a
-# missing directory. Removed once sca-ca-clusterissuer.yaml exists.
