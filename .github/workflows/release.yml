@@ -20,6 +20,16 @@ name: Release
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Existing tag to (re)sign; requires commit_sha
+        required: false
+        type: string
+      commit_sha:
+        description: Commit the tag must point to
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -49,9 +59,15 @@ jobs:
   sign-tag:
     name: Sign release tag
     needs: release
-    if: needs.release.outputs.releases_created == 'true'
+    if: needs.release.outputs.releases_created == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          ref: ${{ inputs.commit_sha || github.sha }}
+
       - name: Import release-bot GPG key
         id: import-gpg
         uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd # v7.0.0
@@ -61,14 +77,10 @@ jobs:
           git_commit_gpgsign: true
           git_tag_gpgsign: false
 
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
-
       - name: Sign and push release tag
         run: |
-          TAG="${{ needs.release.outputs.tag_name }}"
+          TAG="${{ inputs.tag_name || needs.release.outputs.tag_name }}"
           test -n "$TAG"
-          git tag -f -s -m "${TAG}" "${TAG}" "${GITHUB_SHA}"
+          SHA="${{ inputs.commit_sha || github.sha }}"
+          git tag -f -s -m "${TAG}" "${TAG}" "${SHA}"
           git push -f origin "refs/tags/${TAG}"
