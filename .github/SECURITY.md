@@ -75,8 +75,8 @@ security policy of their own upstream projects and of the
 2. **CI pipeline** — GitHub Actions run with `contents: read` (plus the
    `Release` workflow's `contents: write` / `pull-requests: write`, which it
    needs to open release PRs and push tags). Beyond the read-only
-   `GITHUB_TOKEN`, only the `Release` workflow receives secrets — the two
-   repository secrets `RELEASE_PLEASE_TOKEN` and
+   `GITHUB_TOKEN`, only the `Release` workflow receives secrets — the three
+   repository secrets `APP_ID`, `APP_PRIVATE_KEY` and
    `RELEASE_GPG_PRIVATE_KEY`, stored encrypted by GitHub (libsodium sealed box)
    and injected only into that workflow's jobs (see
    [docs/secrets.md](../docs/secrets.md)). CI validates and releases, but never

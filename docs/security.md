@@ -81,7 +81,7 @@ fixed `asteval` or `ecdsa` publishes a fix.
   guard, and ADR). The previous attempt drifted because this was not enforced.
 - **Secrets never in git**: `.env`, `.secrets/`, kubeconfigs, unseal keys and
   tokens are gitignored; Vault is the SSOT (see [secrets.md](secrets.md)).
-  The CI release secrets (`RELEASE_PLEASE_TOKEN`,
+  The CI release secrets (`APP_ID`, `APP_PRIVATE_KEY`,
   `RELEASE_GPG_PRIVATE_KEY`) live only as encrypted GitHub Actions secrets,
   never in the repository (storage model in [secrets.md](secrets.md)).
 - **No commit-time credentials**: Vault design is described in the docs but

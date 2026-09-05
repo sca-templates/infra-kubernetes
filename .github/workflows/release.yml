@@ -7,13 +7,15 @@
 # release-please (conventional commits) opens a release PR for every `feat` or
 # `fix` merged to main. When that PR (or any release-marked commit) lands, the
 # tag and GitHub Release are created here, then sign-tag re-signs the tag with
-# the dedicated release-bot GPG key (repalcing the API-created lightweight ref
+# the dedicated release-bot GPG key (replacing the API-created lightweight ref
 # with an annotated, signed one at the same commit).
 #
-# A dedicated PAT (RELEASE_PLEASE_TOKEN) is required: resources opened via the
-# default GITHUB_TOKEN do not trigger workflow runs, so the release PR would
-# never run the required Validate/Security checks and could not be merged.
-# See docs/versioning.md.
+# A dedicated installation token is required: resources opened via the default
+# GITHUB_TOKEN do not trigger workflow runs, so the release PR would never run
+# the required Validate/Security checks and could not be merged. The token is
+# minted per run from the org-owned `sca-bot-release` GitHub App (APP_ID +
+# APP_PRIVATE_KEY), scoped to this repository. See docs/versioning.md and
+# docs/secrets.md.
 
 name: Release
 
@@ -47,11 +49,20 @@ jobs:
       releases_created: ${{ steps.release.outputs.releases_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
+      - name: Mint sca-bot-release token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: sca-templates
+          repositories: infra-kubernetes
+
       - name: Run release-please
         id: release
         uses: google-github-actions/release-please-action@e4dc86ba9405554aeba3c6bb2d169500e7d3b4ee # v4.1.1
         with:
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           release-type: simple
           config-file: .release-please-config.json
           manifest-file: .release-please-manifest.json
@@ -62,10 +73,19 @@ jobs:
     if: needs.release.outputs.releases_created == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
+      - name: Mint sca-bot-release token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: sca-templates
+          repositories: infra-kubernetes
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           ref: ${{ inputs.commit_sha || github.sha }}
 
       - name: Import release-bot GPG key

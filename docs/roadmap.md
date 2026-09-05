@@ -94,7 +94,9 @@ lands (see the Work Log below).
 
 | Date | Project | Gate | Commit | Issue |
 | --- | --- | --- | --- | --- |
-| 2026-09-04 | Release gate (CI) | human PRs blocked while a release PR is open | `chore/release-gate` (PR) | — |
+| 2026-09-05 | Release automation swap (CI) | release PRs/tags authored by `sca-bot-release[bot]` GitHub App token | `chore/release-app` (PR) | — |
+| 2026-09-05 | PR branch sync (CI) | queued PRs auto-merged with new `main` | `2b9da65` (squash of PR #38) | — |
+| 2026-09-05 | Release gate (CI) | human PRs blocked while a release PR is open | `a2e7937` (squash of PR #39) | — |
 | 2026-09-04 | Release tag signing (CI) + re-sign | signed tag `v0.1.0` green | `f8d50f4` (squash of PR #35), re-sign via workflow dispatch | — |
 | 2026-09-04 | Release `v0.1.0` (first release) | release + tag shipped | `0e39a99` (squash of PR #33) | — |
 | 2026-09-04 | Release gating fix (CI) | release PRs pass static gates | `3c658fe` (squash of PR #34) | — |
