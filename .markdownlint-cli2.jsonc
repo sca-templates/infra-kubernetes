@@ -9,6 +9,7 @@
   },
   "ignores": [
     "0.Project_info/**",
-    "**/node_modules/**"
+    "**/node_modules/**",
+    "CHANGELOG.md"
   ]
 }
