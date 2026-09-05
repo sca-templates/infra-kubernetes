@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/sca-templates/infra-kubernetes/compare/v0.1.0...v0.1.1) (2026-09-05)
+
+
+### Bug Fixes
+
+* **ci:** checkout repo before importing release GPG key ([#35](https://github.com/sca-templates/infra-kubernetes/issues/35)) ([f8d50f4](https://github.com/sca-templates/infra-kubernetes/commit/f8d50f440661437ccac15053a17e401a1d7d58b3))
+
 ## 0.1.0 (2026-09-05)
 
 
