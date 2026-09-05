@@ -36,11 +36,11 @@ spec:
             valueFiles:
               - '$values/infrastructure/{{.name}}/values-base.yaml'
               - '$values/envs/local/{{.name}}.yaml'
-        - repoURL: "https://github.com/sca-templates/infra-kubernetes"
-          targetRevision: main
+        - repoURL: "{{GIT_REPO_URL}}"
+          targetRevision: {{GIT_TARGET_BRANCH}}
           ref: values
-        - repoURL: "https://github.com/sca-templates/infra-kubernetes"
-          targetRevision: main
+        - repoURL: "{{GIT_REPO_URL}}"
+          targetRevision: {{GIT_TARGET_BRANCH}}
           path: infrastructure/{{.path}}
           directory:
             recurse: true
