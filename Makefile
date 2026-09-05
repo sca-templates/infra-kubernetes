@@ -31,11 +31,15 @@ cluster-up: ## Create the local kind cluster from bootstrap/kind-config.yaml
 cluster-down: ## Delete the local kind cluster (keeps nothing)
 	kind delete cluster --name "$(KIND_CLUSTER_NAME)"
 
-.PHONY: bootstrap
-bootstrap: ## Install ArgoCD and apply the Applications for ENV=$(ENV)
-	@[ -f argocd/install-values.yaml ] && [ -f "argocd/apps-$(ENV).yaml" ] && [ -f "argocd/root-app-$(ENV).yaml" ] || { echo 'argocd/ manifests are missing'; exit 1; }
+.PHONY: argocd-up
+argocd-up: ## Install or upgrade ArgoCD from argocd/install-values.yaml (no apps)
+	@[ -f argocd/install-values.yaml ] || { echo 'argocd/install-values.yaml is missing'; exit 1; }
 	kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
 	helm upgrade --install argocd argo-cd --repo https://argoproj.github.io/argo-helm --version "$(ARGOCD_CHART_VERSION)" --namespace argocd --values argocd/install-values.yaml --wait
+
+.PHONY: bootstrap
+bootstrap: argocd-up ## Install ArgoCD and apply the Applications for ENV=$(ENV)
+	@[ -f "argocd/apps-$(ENV).yaml" ] && [ -f "argocd/root-app-$(ENV).yaml" ] || { echo 'argocd/apps-$(ENV).yaml and root-app-$(ENV).yaml are missing'; exit 1; }
 	@echo '── Applying ApplicationSet (GIT_REPO_URL=$(GIT_REPO_URL))'
 	sed "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" "argocd/apps-$(ENV).yaml" | kubectl apply -f -
 	@echo '── Applying root Application (GIT_REPO_URL=$(GIT_REPO_URL))'
@@ -68,6 +72,39 @@ validate-static: ## Static suite only: markdownlint, yamllint, YAML parse, bash 
 	fi
 	@echo '=== bash -n ==='
 	@for f in bootstrap/*.sh; do bash -n "$$f" && echo "[OK] $$f"; done
+
+COMPONENT ?=
+REF ?= $(shell git branch --show-current)
+
+##@ Smoke
+
+.PHONY: smoke
+smoke: ## Smoke a deployed component: make smoke COMPONENT=cert-manager
+	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cert-manager)'; exit 1; }
+	bootstrap/smoke-target.sh "$(COMPONENT)"
+
+.PHONY: smoke-app
+smoke-app: ## Apply the touched component as "<name>-smoke" for REF (fresh ArgoCD only)
+	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke-app COMPONENT=<component> REF=<branch|sha>'; exit 1; }
+	@[ -f argocd/apps-local.yaml ] || { echo 'argocd/apps-local.yaml is missing'; exit 1; }
+	@mkdir -p .generated
+	@count_refs="$$(grep -c 'targetRevision: main' argocd/apps-local.yaml)"; \
+	[ "$$count_refs" = "2" ] || { echo "ERROR: expected 2 'targetRevision: main' refs in apps-local.yaml, got $$count_refs"; exit 1; }; \
+	grep -q 'name: platform-local' argocd/apps-local.yaml || { echo 'ERROR: appset platform-local not found'; exit 1; }; \
+	grep -q "name: '{{.name}}-local'" argocd/apps-local.yaml || { echo 'ERROR: app name template not found'; exit 1; }
+	@echo '⚠ smoke-app targets a FRESH ArgoCD (CI/kind). Alongside an existing platform install the same Helm release collides.'
+	sed -e 's|name: platform-local|name: platform-local-smoke|' \
+	    -e "s|name: '{{.name}}-local'|name: '{{.name}}-smoke'|" \
+	    -e 's|targetRevision: main|targetRevision: $(REF)|g' \
+	    argocd/apps-local.yaml > .generated/apps-local-smoke.yaml
+	@echo '── Applying smoke ApplicationSet (.generated/apps-local-smoke.yaml, REF=$(REF))'
+	kubectl apply -f .generated/apps-local-smoke.yaml
+	@echo 'ArgoCD is reconciling <component>-smoke. Watch progress with: make status'
+
+.PHONY: smoke-clean
+smoke-clean: ## Remove the smoke ApplicationSet after a local smoke run
+	kubectl delete applicationset platform-local-smoke --namespace argocd --ignore-not-found 2>/dev/null || true
+	@echo 'Done.'
 
 ##@ Operations
 
