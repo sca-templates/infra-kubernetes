@@ -13,8 +13,8 @@ repo.
 - ArgoCD app-of-apps: one root Application per environment renders an
   ApplicationSet that generates one Application per component.
 - A **clean restart** of the previous `infra-kubernetes` (which churned in
-  `fix` commits): one component per commit, a human-reviewed gate per phase,
-  rollback over forward-fix.
+  `fix` commits): a human-reviewed gate per logical change, rollback over
+  forward-fix.
 - A **template**: it must be clonable standalone. Zero references to local
   paths outside the repo; sibling knowledge is always an external link.
 
@@ -127,9 +127,11 @@ support; `sca` fails fast with a pointer to WSL2).
 - English only: content, commits, PR descriptions.
 - Conventional commits: `feat(platform): …`, `feat(vault): …`,
   `docs(readme): …`.
-- **One component = one PR.** A component's commits land together in a single
-  PR that goes through one human review. A blocked component rolls back; no
-  `fix` chains, no ad-hoc `ignoreDifferences`/SSA patches.
+- **Changes land via reviewed PRs.** A component often ships as a single PR,
+  but the number of PRs and commits is a judgment call driven by the change —
+  the work is dynamic and grouping is not a rule. A blocked change rolls back
+  rather than being patched forward with `fix` chains; nothing is deployed by
+  hand after `make bootstrap`.
 - Changes land through PRs (initial population excepted, straight to `main`).
 - **Git writes are the user's**: do not `git commit`/`git push`/reset/amend or
   stage anything on your own. Draft commits/messages only; ask before any git
