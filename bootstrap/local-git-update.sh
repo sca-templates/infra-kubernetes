@@ -8,11 +8,11 @@
 set -euo pipefail
 
 GIT_TARGET_BRANCH="${GIT_TARGET_BRANCH:-main}"
-BARE=".git-local/sca-infra.git"
+GIT_REPO_URL="${GIT_REPO_URL:-}"
 
-[ -d "${BARE}/objects" ] || { echo 'ERROR: no local bare repo — run make local-git-up first'; exit 1; }
+[ -n "$GIT_REPO_URL" ] || { echo 'ERROR: GIT_REPO_URL is empty — run make local-git-up first'; exit 1; }
 
-echo "── mirroring HEAD → refs/heads/${GIT_TARGET_BRANCH} (local serve)"
-git push --force "${BARE}" "HEAD:refs/heads/${GIT_TARGET_BRANCH}"
+echo "── mirroring HEAD → ${GIT_TARGET_BRANCH} on ${GIT_REPO_URL}"
+git push --force "${GIT_REPO_URL}" "HEAD:refs/heads/${GIT_TARGET_BRANCH}"
 
-echo "[OK] local serve ${GIT_TARGET_BRANCH} is now $(git --git-dir="${BARE}" rev-parse --short "${GIT_TARGET_BRANCH}")"
+echo "[OK] local serve ${GIT_TARGET_BRANCH} is now $(git rev-parse --short HEAD)"

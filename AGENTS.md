@@ -103,7 +103,9 @@ guards ([docs/security.md](docs/security.md)).
 
 | Command | What it does |
 | --- | --- |
-| `make prereqs` | Install pinned kubectl/helm/kind into `~/.local/bin` (idempotent) |
+| `make prereqs` | Install pinned kubectl/helm/kind into `~/.local/bin` (idempotent, sha256-verified) — `bootstrap/sca.sh prerrequisites` |
+| `make doctor` | Read-only platform health check (toolchain, PATH, docker, cluster, ArgoCD apps, `.env` seam, git source) |
+| `make install-cli` | Symlink `bootstrap/sca.sh` → `~/.local/bin/sca` for direct `sca prereqs` / `sca doctor` / `sca version` |
 | `make cluster-up` | Create the local `kind` cluster from `bootstrap/kind-config.yaml` |
 | `make cluster-down` | Delete the local `kind` cluster (keeps nothing) |
 | `make bootstrap` | Install ArgoCD + apply the root Application for `$ENV` |
@@ -115,6 +117,10 @@ guards ([docs/security.md](docs/security.md)).
 
 The Makefile is a **thin wrapper**: after bootstrap, deployments happen
 exclusively via `git push` → ArgoCD.
+
+**OS support**: Linux (any distro) and macOS for the toolchain; **Windows is
+only supported via WSL2** (this platform is POSIX — no native Windows shell
+support; `sca` fails fast with a pointer to WSL2).
 
 ## 7. Conventions (strict)
 

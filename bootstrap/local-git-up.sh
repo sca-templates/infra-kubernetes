@@ -2,48 +2,54 @@
 # Copyright (c) 2026 sca-templates contributors
 # SPDX-License-Identifier: MIT
 # local-git-up.sh — stand up the fully-local git serve for the local kind
-# platform: a bare mirror of this repo served read-only over git://, plus the
-# .env seam pointing GIT_REPO_URL at it. Local ArgoCD then reconciles local
-# content with zero dependency on GitHub; `make local-git-update` pushes the
-# working tree into the serve. See docs/ci-cd.md and .env.example.
+# platform: an in-cluster git daemon (bootstrap/local-git-server.yaml) serving
+# a bare mirror of this repo on the kind node network, plus the .env seam
+# pointing GIT_REPO_URL at it. Local ArgoCD then reconciles local content with
+# zero dependency on GitHub; `make local-git-update` pushes the working tree
+# into the serve. See docs/ci-cd.md and .env.example.
 # Usage: make local-git-up
 set -euo pipefail
 
 GIT_TARGET_BRANCH="${GIT_TARGET_BRANCH:-main}"
-BASE_DIR=".git-local"
-BARE="${BASE_DIR}/sca-infra.git"
-PID_FILE="${BASE_DIR}/git-daemon.pid"
-LOG_FILE="${BASE_DIR}/git-daemon.log"
-PORT="${GIT_DAEMON_PORT:-9418}"
+KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-sca-local}"
+BARE=".git-local/sca-infra.git"
+PORT=9418
+SERVE_POD="git-local-serve"
+SERVE_NS="git-serve"
 
-mkdir -p "$BASE_DIR"
+mkdir -p .git-local
 
 if [ -d "${BARE}/objects" ]; then
-  echo "[skip] local bare repo already exists: ${BARE}"
+  echo "[skip] local bare mirror already exists: ${BARE}"
 else
   echo "── creating local bare mirror of the working repo: ${BARE}"
   git clone --bare . "${BARE}" >/dev/null
 fi
 git --git-dir="${BARE}" rev-parse --is-bare-repository >/dev/null
 
-if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
-  echo "[skip] git daemon already running (pid $(cat "$PID_FILE"), port ${PORT})"
+node="${KIND_CLUSTER_NAME}-control-plane"
+if docker exec "${node}" test -d /srv/sca-infra.git >/dev/null 2>&1; then
+  echo "[skip] bare repo already seeded on node /srv/sca-infra.git"
 else
-  echo "── starting git daemon on port ${PORT} (read-only, local serve)"
-  nohup git daemon \
-    --base-path="$BASE_DIR" --export-all --reuseaddr \
-    --port="$PORT" --pid-file="$PID_FILE" \
-    >"$LOG_FILE" 2>&1 &
-  sleep 1
-  kill -0 "$(cat "$PID_FILE")" 2>/dev/null || { echo "ERROR: git daemon failed to start — see ${LOG_FILE}"; exit 1; }
+  echo "── seeding bare repo onto kind node (${node}:/srv/sca-infra.git)"
+  docker exec "${node}" sh -c 'mkdir -p /srv'
+  docker cp "${BARE}" "${node}:/srv/sca-infra.git" >/dev/null
 fi
 
-gateway="$(docker network inspect kind -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}' 2>/dev/null || true)"
-case "$gateway" in
+sed "s|nodeName: sca-local-control-plane|nodeName: ${node}|" \
+  bootstrap/local-git-server.yaml | kubectl apply -f - >/dev/null
+echo "── waiting for git-local-serve (git daemon, port ${PORT}) to be Ready"
+kubectl -n "${SERVE_NS}" wait --for=condition=Ready "pod/${SERVE_POD}" --timeout=120s >/dev/null
+
+node_ip="$(kubectl get node "${node}" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}')"
+case "${node_ip}" in
   *"."*) ;;
-  *) echo "ERROR: cannot detect the kind network gateway (is the cluster up?)"; exit 1 ;;
+  *) echo "ERROR: cannot determine the kind node IP"; exit 1 ;;
 esac
-serve_url="git://${gateway}:${PORT}/sca-infra.git"
+serve_url="git://${node_ip}:${PORT}/sca-infra.git"
+
+echo "── checking reachability of ${serve_url} from the host"
+git ls-remote "${serve_url}" >/dev/null 2>&1 || { echo "ERROR: cannot reach ${serve_url}"; exit 1; }
 
 upsert_env() {
   local key="$1" value="$2"

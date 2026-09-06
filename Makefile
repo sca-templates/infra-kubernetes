@@ -19,7 +19,18 @@ export KUBECONFIG
 
 .PHONY: prereqs
 prereqs: ## Install the pinned CLI toolchain (kubectl, helm, kind) — idempotent
-	bootstrap/prereqs.sh
+	bootstrap/sca.sh prereqs
+
+.PHONY: doctor
+doctor: ## Read-only platform health check (toolchain, cluster, ArgoCD apps, seam)
+	@[ -f bootstrap/sca.sh ] || { echo 'bootstrap/sca.sh is missing'; exit 1; }
+	bootstrap/sca.sh doctor
+
+.PHONY: install-cli
+install-cli: ## Symlink bootstrap/sca.sh into ~/.local/bin/sca for direct use
+	@mkdir -p "${HOME}/.local/bin"
+	ln -sfn "$(CURDIR)/bootstrap/sca.sh" "${HOME}/.local/bin/sca"
+	@echo "sca is now available as: sca prereqs | sca doctor | sca version"
 
 ##@ Cluster
 

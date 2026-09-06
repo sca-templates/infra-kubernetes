@@ -23,12 +23,29 @@ a deployment.
 ### Scope semantics
 
 - `validate.yml` runs the same checks locally via `make validate-static`
-  (`bootstrap/prereqs.sh` installs the pinned CLI; no cluster required).
+  (`bootstrap/sca.sh` installs the pinned CLI; no cluster required).
 - `security.yml` guards run against the whole tree on every PR; the checkov
   **baseline** is re-examined before it is enforced (see
   [security.md](security.md)).
 - Workflows are scoped to the paths they own (docs/CI config), so a pure
   documentation PR does not re-run IaC scanning unnecessarily.
+
+## Local toolchain CLI
+
+`bootstrap/sca.sh` is the POSIX platform CLI (Linux distro-agnostic, macOS and
+WSL2; Windows-native fails fast — use WSL2). The Makefile targets are thin
+wrappers around it; `make install-cli` symlinks it as `~/.local/bin/sca`.
+
+| Command | What it does |
+| --- | --- |
+| `sca prereqs` | Install pinned kubectl/helm/kind into `~/.local/bin` — idempotent, sha256-verified, no sudo. Detects OS/arch (linux/darwin, amd64/arm64) and picks the matching upstream URLs; external deps (git, docker) are reported with install hints but never installed |
+| `sca doctor` | Read-only health: toolchain versions vs pins, PATH, docker, git, git source reachability, cluster, ArgoCD app sync/health, and the `.env` seam. Never mutates — run it first when something is off |
+| `sca version` | Print the pinned toolchain versions |
+
+Versions are pinned once in `bootstrap/versions.sh` (sourced by `sca.sh`);
+`.env`/environment overrides still win. The darwin install path follows the
+upstream URL patterns but is not yet exercised on hardware — see the pin
+guards in [security.md](security.md).
 
 ### Release workflow
 
