@@ -15,17 +15,21 @@ spec:
   hostNetwork: true
   containers:
     - name: git
-      image: alpine/git:2.47.2
+      image: alpine:3.21
       command:
-        - git
-        - daemon
-        - --base-path=/srv
-        - --export-all
-        - --reuseaddr
-        - --enable=upload-pack
-        - --enable=receive-pack
-        - --listen=0.0.0.0
-        - --port=9418
+        - /bin/sh
+        - -c
+        - |
+          apk add --no-cache git-daemon >/dev/null 2>&1
+          git config --global --add safe.directory /srv/sca-infra.git
+          exec git daemon \
+            --base-path=/srv \
+            --export-all \
+            --reuseaddr \
+            --enable=upload-pack \
+            --enable=receive-pack \
+            --listen=0.0.0.0 \
+            --port=9418
       volumeMounts:
         - name: git-repo
           mountPath: /srv
