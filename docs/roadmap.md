@@ -66,7 +66,7 @@ worked in parallel.
 
 | Project | Area | Wave | Milestones | Issues | Status |
 | --- | --- | --- | --- | --- | --- |
-| [cert-manager](roadmap/cert-manager.md) | Security & Identity | -20 | — | [#6](https://github.com/sca-templates/infra-kubernetes/issues/6) | pending |
+| [cert-manager](roadmap/cert-manager.md) | Security & Identity | -20 | — | [#6](https://github.com/sca-templates/infra-kubernetes/issues/6) | deployed |
 | [vault](roadmap/vault.md) | Security & Identity | 0 | M1 bootstrap · M2 seed · M2 integration | [#7](https://github.com/sca-templates/infra-kubernetes/issues/7) · [#24](https://github.com/sca-templates/infra-kubernetes/issues/24) · [#25](https://github.com/sca-templates/infra-kubernetes/issues/25) · [#26](https://github.com/sca-templates/infra-kubernetes/issues/26) | pending |
 | [external-secrets](roadmap/external-secrets.md) | Security & Identity | -10 | — | [#8](https://github.com/sca-templates/infra-kubernetes/issues/8) | pending |
 | [linkerd-crds](roadmap/linkerd-crds.md) | Edge & Mesh | -10 | — | [#9](https://github.com/sca-templates/infra-kubernetes/issues/9) | pending |
@@ -102,7 +102,7 @@ lands (see the Work Log below).
 | 2026-09-04 | Release gating fix (CI) | release PRs pass static gates | `3c658fe` (squash of PR #34) | — |
 | 2026-09-04 | Release automation (CI) | static gates green | `26359b6` (squash of PR #32) | — |
 | 2026-09-01 | Knowledge base (docs) | scaffold + docs green | `dbbf5f4` | — |
-| *next* | cert-manager | *pending* | | [#6](https://github.com/sca-templates/infra-kubernetes/issues/6) |
+| 2026-09-06 | cert-manager | deployed — `sca-ca` ClusterIssuer Ready, leaf Certificate smoke green, all 4 env overlays + appset wave -20 | `feature/phase-1` (PR) | [#6](https://github.com/sca-templates/infra-kubernetes/issues/6) |
 
 Phases 0.x scaffold the repository and are not delivery projects; they are
 recorded here for continuity. From Phase 1, each row is appended in the same
@@ -117,8 +117,9 @@ pre-release history as a signed baseline — see
   tracked on the board, may carry a milestone/project label only when it
   applies, and are **not forced into this roadmap**. They resolve
   independently and do not block promotion.
-- **One project = one component = one commit = one PR = one review.** A
-  component that does not turn green **rolls back** — no fix chains, no ad-hoc
+- **One project = one component = one PR.** A component's commits land
+  together in a single PR that goes through one human review. A component that
+  does not turn green **rolls back** — no fix chains, no ad-hoc
   `ignoreDifferences`/SSA patches, nothing deployed by hand after
   `make bootstrap`.
 - **Milestones are optional** — a project without natural phases has its issues

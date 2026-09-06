@@ -76,7 +76,7 @@ Mirrors `AGENTS.md` §9 and `docs/workflow.md`:
 
 ## Armor rules (verbatim)
 
-- **One phase/component = one commit = one PR = one review.** A component that
+- **One phase/component = one PR that groups its commits.** A component that
   does not turn green **rolls back** — no `fix` chains, no ad-hoc
   `ignoreDifferences`/SSA patches.
 - **No global `ServerSideApply`.** Kong runs as a dedicated Application with no

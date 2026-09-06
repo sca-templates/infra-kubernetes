@@ -127,8 +127,9 @@ support; `sca` fails fast with a pointer to WSL2).
 - English only: content, commits, PR descriptions.
 - Conventional commits: `feat(platform): …`, `feat(vault): …`,
   `docs(readme): …`.
-- **One component = one commit = one PR = one review.** A blocked component
-  rolls back; no `fix` chains, no ad-hoc `ignoreDifferences`/SSA patches.
+- **One component = one PR.** A component's commits land together in a single
+  PR that goes through one human review. A blocked component rolls back; no
+  `fix` chains, no ad-hoc `ignoreDifferences`/SSA patches.
 - Changes land through PRs (initial population excepted, straight to `main`).
 - **Git writes are the user's**: do not `git commit`/`git push`/reset/amend or
   stage anything on your own. Draft commits/messages only; ask before any git

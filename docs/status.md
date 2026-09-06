@@ -10,28 +10,30 @@ Milestones and Issues.
 
 ## Current state
 
-**Phase 0.1 — scaffold + knowledge base only.** Nothing beyond ArgoCD is
-deployed. Phase 0.0 delivered the empty scaffold (Makefile, `bootstrap/`,
-`argocd/` with `{{GIT_REPO_URL}}` placeholders, the four CI workflows, the
+**Phase 1 — cert-manager deployed.** Phase 0 delivered the scaffold (Makefile,
+`bootstrap/`, `argocd/` with the app-of-apps pattern, the CI workflows, the
 service template, this docs set) and brought the local `kind` cluster up with
-ArgoCD. Phase 0.1 adds this knowledge base, which is **the source of truth**
-for everything deployed in Phases 1–18 and beyond.
+ArgoCD. **Phase 1** lands the first real component, cert-manager, on the
+`local` profile (fully-local: ArgoCD reconciles an in-cluster git serve instead
+of GitHub). See [ci-cd.md](ci-cd.md) for the planned cluster-smoke return.
 
 | Fact | Value |
 | --- | --- |
-| Repository | `infra-kubernetes` (local; published to GitHub before Phase 1 — a live `GIT_REPO_URL` is a Phase 1 gate) |
-| Deployed components | ArgoCD only (bootstrap) |
-| `platform-root-local` | present, `OutOfSync` (accepted — no live repo yet) |
-| `platform-local` ApplicationSet | present, empty `elements: []` (0 generated apps) |
-| Observability / smoke CI | cluster smoke `pr-cluster.yml` not shipped yet — **returns at Phase 1** (profile `local`; see [ci-cd.md](ci-cd.md)) |
+| Repository | `infra-kubernetes` (local, fully-local git serve; published to GitHub before promotion) |
+| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1) |
+| `platform-root-local` | present, `Synced` against the local git serve (`main`) |
+| `platform-local` ApplicationSet | present, one element (`cert-manager`, wave -20) |
+| cert-manager app | `cert-manager-local` `Synced` + `Healthy`; `sca-ca` ClusterIssuer `Ready`; leaf Certificate smoke green |
+| git-local-serve | in-cluster git daemon (`git://<node>:9418/sca-infra.git`) `Ready` |
+| Observability / smoke CI | cluster smoke `pr-cluster.yml` not shipped yet — still **returns at Phase 1** (profile `local`; see [ci-cd.md](ci-cd.md)) |
 | dev / qa / prod clusters | pending (provisioned by terraform/ansible, outside this repo) |
 
 ## Known accepted limitations
 
 | # | Limitation | Current behavior | To close |
 | --- | --- | --- | --- |
-| 1 | **Root app OutOfSync** | `platform-root-local` shows `OutOfSync`; auto-sync disabled live because the `GIT_REPO_URL` placeholder is a public repo with legacy content | Publish this repo, swap `GIT_REPO_URL`, re-enable file-state (auto + prune) |
-| 2 | **Cluster smoke CI absent (until Phase 1)** | `pr-cluster.yml` is not shipped yet — the merge gate is static validation + human review | Returns at **Phase 1** with cert-manager: selective smoke of the touched component on an ephemeral `kind` cluster, profile `local` (1 replica, auto-sync + prune), no trim hacks, no self-heal disabling; informative until stable on 2–3 components (see [ci-cd.md](ci-cd.md)) |
+| 1 | **Fully-local git serve (not GitHub)** | Local ArgoCD reconciles the in-cluster git serve (`git://<node>:9418`), not the GitHub repo; the native GitHub `GIT_REPO_URL` remains the default in the files | Publish the repo and swap `GIT_REPO_URL` back to GitHub to exercise the real source-of-truth path |
+| 2 | **Cluster smoke CI absent (until the `pr-cluster.yml` lands)** | `pr-cluster.yml` is not shipped yet — the merge gate is static validation + human review | Lands as a Phase 1 deliverable with cert-manager: selective smoke of the touched component on an ephemeral `kind` cluster, profile `local` (1 replica, auto-sync + prune), no trim hacks, no self-heal disabling; informative until stable on 2–3 components (see [ci-cd.md](ci-cd.md)) |
 | 3 | **dev / qa / prod clusters pending** | Not provisioned (terraform/ansible outside this repo) | Provision per env; promote via `promote-test` (see [workflow.md](workflow.md)) |
 | 4 | **Nothing seeded in Vault** | Vault seed script ships (`bootstrap/seed-vault.sh`) but is never run — no Vault yet | Runs at Phase 2; short ESO `refreshInterval` in local prevents the previous wedge |
 | 5 | **OpenSSF Best Practices badge — silver blocked** | All silver criteria are met except `contributors_unassociated` and `bus_factor` (≥2): the project has a single maintainer (`CODEOWNERS` = `@Santiago1010`) | Achieved once a second **unassociated** contributor joins and is reflected in `CODEOWNERS` + `.github/GOVERNANCE.md`; passing badge is already achievable (see [.github/GOVERNANCE.md](../.github/GOVERNANCE.md), [docs/ci-cd.md](ci-cd.md)) |

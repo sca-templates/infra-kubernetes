@@ -2,9 +2,9 @@
 
 Reference for the `sca` platform on Kubernetes: layers, the component catalog,
 sync-waves, namespaces, the secret flow and the environment model. This is a
-**state document** — how the platform *is*. Nothing beyond ArgoCD is deployed
-yet (Phase 0.1): every catalog entry is marked `planned` until its phase lands.
-For how changes *flow* through the platform, see
+**state document** — how the platform *is*. Beyond ArgoCD, cert-manager
+(Phase 1) is deployed; every other catalog entry is marked `planned` until its
+phase lands. For how changes *flow* through the platform, see
 [workflow.md](workflow.md); for what is done and what is next, see
 [status.md](status.md).
 
@@ -68,12 +68,12 @@ both. This repository builds no images.
 The catalog has **17 components**. Each row shows its intended namespace,
 upstream chart, ArgoCD sync-wave and roadmap phase. Chart and image pins are
 set per component when that phase lands (values live under
-`infrastructure/<component>/` and `envs/<env>/` from Phase 1 on); nothing in
-this table is deployed yet except ArgoCD itself.
+`infrastructure/<component>/` and `envs/<env>/` from Phase 1 on); in the table
+ArgoCD and cert-manager (Phase 1) are deployed, the rest are `planned`.
 
 | Component | Namespace | Upstream chart | Wave | Phase | Status |
 | --- | --- | --- | --- | --- | --- |
-| cert-manager | `cert-manager` | jetstack/cert-manager | -20 | 1 | planned (Phase 1) |
+| cert-manager | `cert-manager` | jetstack/cert-manager | -20 | 1 | deployed (Phase 1) |
 | vault | `vault` | hashicorp/vault | 0 | 2 | planned (Phase 2) |
 | external-secrets | `external-secrets` | external-secrets/external-secrets | -10 | 3 | planned (Phase 3) |
 | linkerd-crds | `linkerd` | linkerd/linkerd-crds | -10 | 4 | planned (Phase 4) |
@@ -96,10 +96,10 @@ this table is deployed yet except ArgoCD itself.
 
 Notes:
 
-- **Status column** is the source of truth for "is it live?". At Phase 0.1 only
-  ArgoCD is deployed; every component is `planned (Phase N)`. The column is
-  flipped to `deployed` inside the phase that lands the component, and
-  `status.md` is updated in the same commit.
+- **Status column** is the source of truth for "is it live?". ArgoCD and
+  cert-manager (Phase 1) are deployed; every other component is
+  `planned (Phase N)`. The column is flipped to `deployed` inside the phase
+  that lands the component, and `status.md` is updated in the same commit.
 - `postgres-app` is a **local-only** raw `Application` (not in the
   `ApplicationSet` generator list) and also defines the `keycloak-db` CNPG
   cluster in `data` used by Keycloak in every environment. The Kafka and Redis
@@ -245,7 +245,8 @@ Full inventory and runbooks: [secrets.md](secrets.md).
 Sync policies follow ADR-003. Promotion between environments is gated by the
 `promote-test` (see [workflow.md](workflow.md)).
 
-Per-component replica profile (intended values, materialized from Phase 1 on):
+Per-component replica profile (intended values; materialized as each phase
+lands — cert-manager is done):
 
 | Component | local | dev | qa | prod |
 | --- | --- | --- | --- | --- |
@@ -271,7 +272,8 @@ as each component lands; the log always explains *why*, never just *what*.
 
 | Component | Deviation | Reason |
 | --- | --- | --- |
-| Root app (local) | `automated.enabled=false` applied live only (Phase 0.0); files keep auto + prune | The `GIT_REPO_URL` is a GitHub placeholder until the repo is published; disabling auto-sync live prevents the placeholder's legacy content from syncing. Reconciles to file state after publish |
+| Root app (local) | `automated.enabled=false` applied live only during Phase 0.0 while the `GIT_REPO_URL` was an unpublished GitHub placeholder; the files keep auto + prune | Once the repo is published (or a local git serve provides content, as in fully-local Phase 1), the seamless file-state auto-sync applies and the live override is dropped |
+| git-local-serve (local tooling) | In-cluster git server does **not** use the `alpine/git` image (it ships no `git daemon`); it boots `alpine:3.21` and installs `git-daemon`, plus `safe.directory` for the root-owned bare repo | `alpine/git` lacks the `git daemon` subcommand; the bare mirror on the node is owned by another user, which trips git's "dubious ownership" guard. Local tooling only — not part of the platform catalog |
 | Kong | DB-less (`database: off`), `ingressController.installCRDs: false`, managed as a dedicated `Application`, no SSA | Kong ships flat-schema CRDs; structured-merge diff breaks under `ServerSideApply=true`, and `--include-crds` re-emits CRDs twice |
 | postgres-app | Local raw `Application`, not in the `ApplicationSet` generator list | Only `local` runs the datastore; it must be applied without the env generator |
 | Linkerd | Control plane deployed by script, not ArgoCD | Helm chart signature requirements; control plane needs cert-manager + linkerd-crds first |
