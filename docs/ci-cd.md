@@ -25,7 +25,8 @@ a deployment.
 - `validate.yml` runs the same checks locally via `make validate-static`
   (`bootstrap/sca.sh` installs the pinned CLI; no cluster required).
 - `security.yml` guards run against the whole tree on every PR; the checkov
-  **baseline** is re-examined before it is enforced (see
+  **baseline** (`.github/checkov-baseline.json`) gates new findings — existing
+  entries are documented, intentional manifests (see
   [security.md](security.md)).
 - Workflows are scoped to the paths they own (docs/CI config), so a pure
   documentation PR does not re-run IaC scanning unnecessarily.

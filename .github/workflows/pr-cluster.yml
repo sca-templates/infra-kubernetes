@@ -64,7 +64,9 @@ jobs:
             # Selective: map changed paths to the touched component.
             changed="$(git diff --name-only "${PR_BASE_SHA}...${PR_HEAD_SHA}")"
             component=""
-            for c in $(ls infrastructure 2>/dev/null); do
+            for c in infrastructure/*/; do
+              [ -d "$c" ] || continue
+              c="${c%/}"; c="${c##*/}"
               if printf '%s\n' "$changed" | grep -qE "(^|/)${c}(/|\.yaml$|\.yml$)"; then
                 component="$c"
                 break

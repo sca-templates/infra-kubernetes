@@ -66,12 +66,16 @@ jobs:
       - name: Install checkov (pinned, verified)
         run: python -m pip install --disable-pip-version-check --require-hashes -r .github/requirements.txt
       - name: Checkov scan
-        # Phase 0 ships no IaC and no baseline; the baseline gates findings
-        # once infrastructure/ lands (Phase 1 onward).
+        # The baseline gates new IaC findings (Phase 1 onward): the entries in
+        # .github/checkov-baseline.json are documented, intentional manifests
+        # (e.g. the local-only git server pod); anything not in the baseline
+        # fails the PR. Re-derive the baseline only with review — see
+        # docs/security.md.
         run: |
           checkov -d . --framework kubernetes \
             --download-external-modules false \
-            --quiet --compact
+            --quiet --compact \
+            --baseline .github/checkov-baseline.json
 
   osv:
     name: Dependencies (osv-scanner)

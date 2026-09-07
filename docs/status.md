@@ -27,6 +27,7 @@ design.
 | cert-manager app | `cert-manager-local` `Synced` + `Healthy`; `sca-ca` ClusterIssuer `Ready`; leaf Certificate smoke green |
 | git-local-serve | in-cluster git daemon (`git://<node>:9418/sca-infra.git`) `Ready` |
 | Observability / smoke CI | cluster smoke `pr-cluster.yml` **shipped** (Phase 1): selective on PRs + vigilance on `push: main`; informative until stable on 2–3 components (see [ci-cd.md](ci-cd.md)) |
+| Security CI | checkov **baseline gate** active (Phase 1): `.github/checkov-baseline.json` documents the local-git-server pod findings; new IaC findings fail the PR; re-evaluated at Phase 18 (see [security.md](security.md)) |
 | dev / qa / prod clusters | pending (provisioned by terraform/ansible, outside this repo) |
 
 ## Known accepted limitations
