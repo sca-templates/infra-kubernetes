@@ -74,7 +74,7 @@ ArgoCD and cert-manager (Phase 1) are deployed, the rest are `planned`.
 | Component | Namespace | Upstream chart | Wave | Phase | Status |
 | --- | --- | --- | --- | --- | --- |
 | cert-manager | `cert-manager` | jetstack/cert-manager | -20 | 1 | deployed (Phase 1) |
-| vault | `vault` | hashicorp/vault | 0 | 2 | planned (Phase 2) |
+| vault | `vault` | hashicorp/vault | 0 | 2 | deployed (Phase 2) |
 | external-secrets | `external-secrets` | external-secrets/external-secrets | -10 | 3 | planned (Phase 3) |
 | linkerd-crds | `linkerd` | linkerd/linkerd-crds | -10 | 4 | planned (Phase 4) |
 | cloudnative-pg | `cloudnative-pg` | cloudnative-pg/cloudnative-pg | -10 | 5 | planned (Phase 5) |
@@ -279,6 +279,8 @@ as each component lands; the log always explains *why*, never just *what*.
 | postgres-app | Local raw `Application`, not in the `ApplicationSet` generator list | Only `local` runs the datastore; it must be applied without the env generator |
 | Linkerd | Control plane deployed by script, not ArgoCD | Helm chart signature requirements; control plane needs cert-manager + linkerd-crds first |
 | ESO | Short `refreshInterval` (~5 min) in local | Avoids the ExternalSecret wedge that wedged the previous attempt; restarts only ever manual after bootstrap |
+| Vault | `local` runs the **full HA raft trio** (`server.ha.replicas: 3`) rather than the "1 replica local" profile the pre-Phase-2 docs implied; each env overlay now declares `server.ha.replicas` explicitly (local/qa/prod = 3, dev = 1), and `replicaCount` (a no-op for raft HA) is dropped | The user keeps HA in local on purpose: the raft quorum + standby→leader redirect (`vault-active`) must be exercised on the same path the smoke and qa/prod exercise, so `make smoke COMPONENT=vault` validates real HA, not a single-node special case; dev stays single-node to keep the shared integration light |
+| Vault | The jetstack `hashicorp/vault` chart defaults to `global.tlsDisable: true`, which injects plain-http probe addresses that break against the TLS listener; we set `global.tlsDisable: false` and add `retry_join` with `leader_ca_cert_file` in the raft storage block | The chart ships no `retry_join` and no HTTPS probe wiring; without these the readiness probe (`vault status`) spoke HTTP to an HTTPS listener and the raft peers failed to join (`certificate signed by unknown authority` until the CA file was passed) |
 
 ## Change flow (summary)
 

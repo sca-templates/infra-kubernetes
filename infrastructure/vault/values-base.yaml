@@ -22,6 +22,9 @@ server:
   affinity: ""
   ha:
     enabled: true
+    # `replicas` (not `replicaCount`) is the raft HA replica count. Base
+    # defaults to the full trio; each env's overlay overrides it explicitly
+    # (local/qa/prod = 3, dev = 1) for tier symmetry.
     replicas: 3
     # Redirects (standby -> active) must point at a name covered by vault-tls,
     # not a Pod IP. vault-active is the chart's leader-backed Service.

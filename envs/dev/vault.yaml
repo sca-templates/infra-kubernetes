@@ -1,3 +1,8 @@
-# vault — dev profile (reduced HA: 1 replica).
+# vault — dev profile (reduced HA: 1 replica to keep shared integration light).
+# Overrides the base HA trio (server.ha.replicas: 3) down to a single node;
+# the raft config + TLS still apply, so dev stays a valid member of the same
+# HA-capable chart as local/qa/prod.
 
-replicaCount: 1
+server:
+  ha:
+    replicas: 1

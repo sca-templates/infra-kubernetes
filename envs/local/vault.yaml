@@ -1,4 +1,7 @@
-# vault — local profile (developer kind cluster: 1 replica, minimal resources).
-# Matches the base defaults; declared explicitly for tier symmetry.
+# vault — local profile (developer kind cluster). Declared HA raft trio so the
+# local/smoke cluster exercises the same quorum + leader redirect path as
+# qa/prod. `server.ha.replicas` overrides the base default (3) — local keeps 3.
 
-replicaCount: 1
+server:
+  ha:
+    replicas: 3

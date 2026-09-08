@@ -1,8 +1,10 @@
-# vault — prod profile (full HA: 3 replicas, real storage).
-
-replicaCount: 3
+# vault — prod profile (full HA: 3 replicas, real storage). `server.ha.replicas`
+# matches the base default (3), declared explicitly for tier symmetry.
 
 server:
+  ha:
+    replicas: 3
+
   dataStorage:
     size: 20Gi
   resources:
