@@ -11,6 +11,7 @@ case "$component" in
   cert-manager) exec "$(dirname "$0")/smoke-cert-manager.sh" ;;
   vault) exec "$(dirname "$0")/smoke-vault.sh" ;;
   external-secrets) exec "$(dirname "$0")/smoke-external-secrets.sh" ;;
-  "") echo "usage: $0 <component> (cert-manager, vault, external-secrets)" >&2; exit 2 ;;
+  linkerd-crds) exec "$(dirname "$0")/smoke-linkerd-crds.sh" ;;
+  "") echo "usage: $0 <component> (cert-manager, vault, external-secrets, linkerd-crds)" >&2; exit 2 ;;
   *) echo "ERROR: no smoke command for component '$component'" >&2; exit 2 ;;
 esac

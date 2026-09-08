@@ -69,14 +69,15 @@ The catalog has **17 components**. Each row shows its intended namespace,
 upstream chart, ArgoCD sync-wave and roadmap phase. Chart and image pins are
 set per component when that phase lands (values live under
 `infrastructure/<component>/` and `envs/<env>/` from Phase 1 on); in the table
-ArgoCD and cert-manager (Phase 1) are deployed, the rest are `planned`.
+ArgoCD, cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3) and
+linkerd-crds (Phase 4) are deployed, the rest are `planned`.
 
 | Component | Namespace | Upstream chart | Wave | Phase | Status |
 | --- | --- | --- | --- | --- | --- |
 | cert-manager | `cert-manager` | jetstack/cert-manager | -20 | 1 | deployed (Phase 1) |
 | vault | `vault` | hashicorp/vault | 0 | 2 | deployed (Phase 2) |
 | external-secrets | `external-secrets` | external-secrets/external-secrets | -10 | 3 | deployed (Phase 3) |
-| linkerd-crds | `linkerd` | linkerd/linkerd-crds | -10 | 4 | planned (Phase 4) |
+| linkerd-crds | `linkerd` | linkerd/linkerd-crds | -10 | 4 | deployed (Phase 4) |
 | cloudnative-pg | `cloudnative-pg` | cloudnative-pg/cloudnative-pg | -10 | 5 | planned (Phase 5) |
 | strimzi | `strimzi` | strimzi/strimzi-kafka-operator | -10 | 6 | planned (Phase 6) |
 | redis-operator | `data` | ot-container-kit/redis-operator | -10 | 7 | planned (Phase 7) |
@@ -96,8 +97,9 @@ ArgoCD and cert-manager (Phase 1) are deployed, the rest are `planned`.
 
 Notes:
 
-- **Status column** is the source of truth for "is it live?". ArgoCD and
-  cert-manager (Phase 1) are deployed; every other component is
+- **Status column** is the source of truth for "is it live?". ArgoCD,
+  cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3) and
+  linkerd-crds (Phase 4) are deployed; every other component is
   `planned (Phase N)`. The column is flipped to `deployed` inside the phase
   that lands the component, and `status.md` is updated in the same commit.
 - `postgres-app` is a **local-only** raw `Application` (not in the

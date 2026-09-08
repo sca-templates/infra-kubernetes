@@ -10,7 +10,7 @@ Milestones and Issues.
 
 ## Current state
 
-**Phase 3 — external-secrets deployed.** Phase 0 delivered the scaffold
+**Phase 4 — linkerd-crds deployed.** Phase 0 delivered the scaffold
 (Makefile, `bootstrap/`, `argocd/` with the app-of-apps pattern, the CI
 workflows, the service template, this docs set) and brought the local `kind`
 cluster up with ArgoCD. **Phase 1** lands cert-manager on the `local` profile
@@ -20,17 +20,22 @@ raft trio with TLS via a cert-manager leaf, an idempotent HA-aware seed, and a
 green smoke. **Phase 3** lands External Secrets Operator: it projects Vault KV
 into native Kubernetes `Secret`s through the `ClusterSecretStore vault`
 (k8s-auth, TLS via the `vault-tls` leaf) with a short ~5 min refresh, and ships
-a smoke proving a projected secret reaches `SecretSynced`. See [ci-cd.md](ci-cd.md) for the smoke design.
+a smoke proving a projected secret reaches `SecretSynced`. **Phase 4** lands
+linkerd-crds — the service-mesh CRDs (`linkerd.io` + `policy.linkerd.io`, plus
+the chart-default gateway `HTTPRoute`) in the `linkerd` namespace — a CRD-only
+Application with no workloads; it is the base the Linkerd control plane
+(Phase 9, wave 30) installs against. See [ci-cd.md](ci-cd.md) for the smoke design.
 
 | Fact | Value |
 | --- | --- |
 | Repository | `infra-kubernetes` (local, fully-local git serve; published to GitHub before promotion) |
-| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3) |
+| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4) |
 | `platform-root-local` | present, `Synced` + `Healthy` against the local git serve (`main`); Phase 0.0 `automated.enabled=false` override dropped |
-| `platform-local` ApplicationSet | present, three elements (`cert-manager` wave -20, `external-secrets` wave -10, `vault` wave 0) |
+| `platform-local` ApplicationSet | present, four elements (`cert-manager` wave -20, `external-secrets` + `linkerd-crds` wave -10, `vault` wave 0) |
 | cert-manager app | `cert-manager-local` `Synced` + `Healthy`; `sca-ca` ClusterIssuer `Ready`; leaf Certificate smoke green |
 | vault app | `vault-local` `Synced` + `Healthy`; HA raft trio, TLS via `vault-tls` leaf; `make smoke COMPONENT=vault` → initialized=true sealed=false; seed idempotent and HA-aware |
 | external-secrets app | `external-secrets-local` `Synced` + `Healthy`; `ClusterSecretStore vault` Ready (k8s-auth `external-secrets`, TLS via `vault-tls`); short `refreshInterval` (5m); `make smoke COMPONENT=external-secrets` → throwaway ExternalSecret `SecretSynced` + data verified |
+| linkerd-crds app | `linkerd-crds-local` `Synced`, namespace `linkerd` present, CRD-only app (no workloads); `servers`/`serverauthorizations`/`serviceprofiles` + policy group all `Established`; `make smoke COMPONENT=linkerd-crds` green |
 | git-local-serve | in-cluster git daemon (`git://<node>:9418/sca-infra.git`) `Ready` |
 | Observability / smoke CI | cluster smoke `pr-cluster.yml` **shipped** (Phase 1): selective on PRs as the **required `Smoke` check** on `main` + manual `workflow_dispatch`; no `push` smoke (see [ci-cd.md](ci-cd.md)) |
 | Security CI | checkov **baseline gate** active (Phase 1): `.github/checkov-baseline.json` documents the local-git-server pod findings; new IaC findings fail the PR; re-evaluated at Phase 18 (see [security.md](security.md)) |

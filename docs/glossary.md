@@ -24,10 +24,10 @@ live in [architecture.md](architecture.md).
 
 | Name                          | One-line role                                                                              |
 | ----------------------------- | ------------------------------------------------------------------------------------------ |
-| **cert-manager**              | Issues in-cluster TLS certificates (issuers, `Certificate` CR). Phase 1                    |
-| **Vault**                     | Secrets SSOT: KV-v2 + kubernetes auth; HA raft. Phase 2                                    |
-| **External Secrets Operator** | Projects Vault KV → native `Secret`s. Phase 3                                              |
-| **Linkerd**                   | Service mesh: mTLS identity, golden signals. CRDs Phase 4, control plane Phase 9           |
+| **cert-manager**              | Issues in-cluster TLS certificates (issuers, `Certificate` CR). Phase 1 (deployed) |
+| **Vault**                     | Secrets SSOT: KV-v2 + kubernetes auth; HA raft. Phase 2 (deployed) |
+| **External Secrets Operator** | Projects Vault KV → native `Secret`s. Phase 3 (deployed) |
+| **Linkerd**                   | Service mesh: mTLS identity, golden signals. CRDs deployed (Phase 4), control plane Phase 9 |
 | **CloudNativePG (CNPG)**      | PostgreSQL operator (`Cluster` CR). Phase 5, `postgres-app`/`keycloak-db` Phase 10         |
 | **Strimzi**                   | Kafka operator (KRaft); `Kafka` + `KafkaNodePool` CRs. Phases 6/11                         |
 | **redis-operator**            | Redis operator (`Redis` CR). Phases 7/12                                                   |

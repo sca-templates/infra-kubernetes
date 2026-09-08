@@ -26,6 +26,13 @@ spec:
             targetRevision: 2.10.0
             wave: "-10"
             path: external-secrets/manifests
+          - name: linkerd-crds
+            namespace: linkerd
+            chartRepo: https://helm.linkerd.io/stable
+            chart: linkerd-crds
+            targetRevision: 1.8.0
+            wave: "-10"
+            path: linkerd-crds/manifests
           - name: vault
             namespace: vault
             chartRepo: https://helm.releases.hashicorp.com

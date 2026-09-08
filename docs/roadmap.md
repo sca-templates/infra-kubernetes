@@ -72,7 +72,7 @@ worked in parallel.
 | [cert-manager](roadmap/cert-manager.md) | Security & Identity | -20 | — | [#6](https://github.com/sca-templates/infra-kubernetes/issues/6) | deployed |
 | [vault](roadmap/vault.md) | Security & Identity | 0 | M1 bootstrap · M2 seed · M2 integration | [#7](https://github.com/sca-templates/infra-kubernetes/issues/7) · [#24](https://github.com/sca-templates/infra-kubernetes/issues/24) · [#25](https://github.com/sca-templates/infra-kubernetes/issues/25) · [#26](https://github.com/sca-templates/infra-kubernetes/issues/26) | deployed |
 | [external-secrets](roadmap/external-secrets.md) | Security & Identity | -10 | — | [#8](https://github.com/sca-templates/infra-kubernetes/issues/8) | deployed |
-| [linkerd-crds](roadmap/linkerd-crds.md) | Edge & Mesh | -10 | — | [#9](https://github.com/sca-templates/infra-kubernetes/issues/9) | pending |
+| [linkerd-crds](roadmap/linkerd-crds.md) | Edge & Mesh | -10 | — | [#9](https://github.com/sca-templates/infra-kubernetes/issues/9) | deployed |
 | [cloudnative-pg](roadmap/cloudnative-pg.md) | Data | -10 | — | [#10](https://github.com/sca-templates/infra-kubernetes/issues/10) | pending |
 | [strimzi](roadmap/strimzi.md) | Data | -10 | — | [#11](https://github.com/sca-templates/infra-kubernetes/issues/11) | pending |
 | [redis-operator](roadmap/redis-operator.md) | Data | -10 | — | [#12](https://github.com/sca-templates/infra-kubernetes/issues/12) | pending |
@@ -97,6 +97,7 @@ lands (see the Work Log below).
 
 | Date | Project | Gate | Commit | Issue |
 | --- | --- | --- | --- | --- |
+| 2026-09-08 | linkerd-crds | deployed — chart `linkerd/linkerd-crds` 1.8.0 (helm.linkerd.io/stable) as a CRD-only app in ns `linkerd`, appset wave -10 across all 4 envs; `enableHttpRoutes: true` (chart default); smoke = the `linkerd.io` + `policy.linkerd.io` CRD groups present + `Established` (`make smoke COMPONENT=linkerd-crds`) | `feature/phase-4` (PR) | [#9](https://github.com/sca-templates/infra-kubernetes/issues/9) |
 | 2026-09-08 | external-secrets | deployed — ESO chart 2.10.0, `ClusterSecretStore vault` Ready (k8s-auth `external-secrets`, TLS via `vault-tls`), smoke = throwaway ExternalSecret pulling `secret/keycloak/admin` → `SecretSynced` + data verified; short `refreshInterval` (5m); appset wave -10 across all 4 envs | `feature/phase-3` (PR) | [#8](https://github.com/sca-templates/infra-kubernetes/issues/8) |
 | 2026-09-08 | vault | deployed — HA raft trio (leader + 2 standbys), TLS via cert-manager leaf (`vault-tls`, SANs for `vault-active` + headless), readiness/liveness probes HTTPS, seed idempotent HA-aware; `make smoke COMPONENT=vault` → initialized=true sealed=false | `feature/phase-2` (PR) | [#7](https://github.com/sca-templates/infra-kubernetes/issues/7) |
 | 2026-09-07 | Release triggers path-scoped (CI) | releases only for `feat`/`fix` touching the platform surface (`exclude-paths` in `.release-please-config.json`); release-please runs on `push` only; dispatch re-signs tags only with both inputs | branch (PR) | — |

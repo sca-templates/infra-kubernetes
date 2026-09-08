@@ -11,8 +11,9 @@ Portable GitOps source of truth for the `sca` infrastructure platform on
 Kubernetes. ArgoCD reconciles this repository; **nothing is deployed by hand**.
 This is a clean restart after the previous `infra-kubernetes` churned in
 `fix(...)` commits — one component, one commit, one reviewed gate per phase.
-ArgoCD is deployed (Phase 0) and cert-manager is deployed (Phase 1); the
-remaining 16 components are `planned`. The delivery plan lives in
+ArgoCD is deployed (Phase 0); cert-manager (Phase 1), Vault (Phase 2),
+external-secrets (Phase 3) and linkerd-crds (Phase 4) are deployed; the
+remaining 13 components are `planned`. The delivery plan lives in
 [docs/roadmap.md](docs/roadmap.md) and what is actually deployed lives in
 [docs/status.md](docs/status.md).
 
@@ -60,15 +61,16 @@ registry is `argocd/apps-<env>.yaml`. Promotion between environments passes a
 
 The catalog is **17 components** plus ArgoCD. `local` runs the full set;
 `dev`/`qa`/`prod` run the operator/security core plus the gateway and Keycloak.
-**Currently deployed: ArgoCD (Phase 0) and cert-manager (Phase 1); every other
+**Currently deployed: ArgoCD (Phase 0), cert-manager (Phase 1), Vault
+(Phase 2), external-secrets (Phase 3) and linkerd-crds (Phase 4); every other
 component is `planned (Phase N)`.** The status column in
 [docs/architecture.md](docs/architecture.md) is the source of truth for what is
 live.
 
 | Area | Components |
 | --- | --- |
-| Security and identity | cert-manager (deployed), Vault, External Secrets Operator, Keycloak |
-| Edge and mesh | Kong, Linkerd control plane |
+| Security and identity | cert-manager (deployed), Vault (deployed), External Secrets Operator (deployed), Keycloak |
+| Edge and mesh | linkerd-crds (deployed), Kong, Linkerd control plane |
 | Data | CloudNativePG (postgres-app, keycloak-db), Strimzi Kafka, Redis |
 | Observability | kube-prometheus-stack, Loki, Tempo, Alloy |
 | Delivery and resilience | MinIO (local-only), Velero |
