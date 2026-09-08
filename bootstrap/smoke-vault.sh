@@ -51,8 +51,8 @@ if [ "$initialized" != "true" ]; then
   echo "── smoke(vault): Vault not initialized — running idempotent seed (bootstrap/seed-vault.sh)"
   "$(dirname "$0")/seed-vault.sh"
   status_json="$(vault_status_json)"
-  initialized="$(printf '%s' "$status_json" | jq -r '.initialized // false')"
-  sealed="$(printf '%s' "$status_json" | jq -r '.sealed // empty')"
+  initialized="$(printf '%s' "$status_json" | jq -r '.initialized')"
+  sealed="$(printf '%s' "$status_json" | jq -r '.sealed')"
 fi
 
 if [ "$initialized" != "true" ] || [ "$sealed" != "false" ]; then
