@@ -40,6 +40,17 @@ for attempt in {1..60}; do
 done
 
 echo "── smoke(vault): pod ${NAMESPACE}/${POD} Running"
+for attempt in {1..60}; do
+  if kubectl -n "$NAMESPACE" get pod "$POD" >/dev/null 2>&1; then
+    break
+  fi
+  [ "$attempt" -eq 60 ] && {
+    echo "FAIL: pod ${NAMESPACE}/${POD} was never created (StatefulSet not converging)" >&2
+    kubectl -n "$NAMESPACE" get statefulset -o wide >&2 2>/dev/null || true
+    exit 1
+  }
+  sleep 2
+done
 kubectl -n "$NAMESPACE" wait --for=jsonpath='{.status.phase}'=Running "pod/$POD" --timeout="$TIMEOUT"
 
 echo "── smoke(vault): vault status"

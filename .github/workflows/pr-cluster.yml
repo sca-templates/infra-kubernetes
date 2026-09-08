@@ -98,6 +98,14 @@ jobs:
           SMOKE_COMPONENT: ${{ steps.resolve.outputs.component }}
           SMOKE_REF: ${{ steps.resolve.outputs.ref }}
 
+      - name: Upload smoke diagnose artifacts
+        if: always() && steps.resolve.outputs.component != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: smoke-diagnose-${{ steps.resolve.outputs.component }}
+          path: .generated/
+          if-no-files-found: warn
+
       - name: Teardown smoke cluster
         if: always() && steps.resolve.outputs.component != ''
         run: make cluster-down --ignore-errors 2>/dev/null || true

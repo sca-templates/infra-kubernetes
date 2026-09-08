@@ -75,7 +75,7 @@ ArgoCD and cert-manager (Phase 1) are deployed, the rest are `planned`.
 | --- | --- | --- | --- | --- | --- |
 | cert-manager | `cert-manager` | jetstack/cert-manager | -20 | 1 | deployed (Phase 1) |
 | vault | `vault` | hashicorp/vault | 0 | 2 | deployed (Phase 2) |
-| external-secrets | `external-secrets` | external-secrets/external-secrets | -10 | 3 | planned (Phase 3) |
+| external-secrets | `external-secrets` | external-secrets/external-secrets | -10 | 3 | deployed (Phase 3) |
 | linkerd-crds | `linkerd` | linkerd/linkerd-crds | -10 | 4 | planned (Phase 4) |
 | cloudnative-pg | `cloudnative-pg` | cloudnative-pg/cloudnative-pg | -10 | 5 | planned (Phase 5) |
 | strimzi | `strimzi` | strimzi/strimzi-kafka-operator | -10 | 6 | planned (Phase 6) |

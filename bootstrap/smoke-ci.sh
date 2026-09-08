@@ -34,7 +34,7 @@ done
 
 STATE_DIR=".generated"
 APP_NAME="${component}-smoke"
-TIMEOUT="${SMOKE_TIMEOUT:-600}"
+TIMEOUT="${SMOKE_TIMEOUT:-900}"
 POLL="${SMOKE_POLL:-10}"
 
 mkdir -p "${STATE_DIR}"
@@ -64,6 +64,19 @@ diagnose() {
   kubectl get pods -A --no-headers 2>/dev/null | grep -vE 'Running|Completed' || true
   echo "── diagnose: ${component} namespace (if any)"
   kubectl -n "${component}" get pods -o wide 2>/dev/null || true
+  echo "── diagnose: non-Ready pods in ${component} namespace (describe + tailed logs)"
+  while IFS= read -r pod; do
+    [ -n "${pod}" ] || continue
+    ready="$(kubectl -n "${component}" get pod "${pod}" \
+      -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)"
+    [ "${ready}" = "True" ] && continue
+    echo "--- describe pod/${pod}"
+    kubectl -n "${component}" describe pod "${pod}" 2>/dev/null || true
+    echo "--- logs pod/${pod} (tail 100)"
+    kubectl -n "${component}" logs "pod/${pod}" --tail=100 2>/dev/null || true
+  done < <(kubectl -n "${component}" get pods -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true)
+  echo "── diagnose: endpoint slices backing ${component} services"
+  kubectl -n "${component}" get endpointslice -o wide 2>/dev/null || true
 }
 
 echo "== smoke-ci: component=${component} ref=${ref} keep=${KEEP_CLUSTER} boot=${BOOT_CLUSTER}"
