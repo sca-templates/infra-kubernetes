@@ -1,0 +1,4 @@
+# vault — local profile (developer kind cluster: 1 replica, minimal resources).
+# Matches the base defaults; declared explicitly for tier symmetry.
+
+replicaCount: 1

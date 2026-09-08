@@ -1,0 +1,4 @@
+# vault — qa profile (HA: 3 replicas, PDBs and anti-affinity from the
+# chart's HA settings).
+
+replicaCount: 3

@@ -1,0 +1,3 @@
+# vault — dev profile (reduced HA: 1 replica).
+
+replicaCount: 1

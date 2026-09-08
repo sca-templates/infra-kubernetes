@@ -1,0 +1,3 @@
+# vault — prod profile (full HA: 3 replicas).
+
+replicaCount: 3
