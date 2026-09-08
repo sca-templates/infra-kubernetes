@@ -92,9 +92,11 @@ jobs:
         if: steps.resolve.outputs.component != ''
         run: |
           export PATH="${HOME}/.local/bin:${PATH}"
-          bootstrap/smoke-ci.sh "${{ steps.resolve.outputs.component }}" "${{ steps.resolve.outputs.ref }}"
+          bootstrap/smoke-ci.sh "${SMOKE_COMPONENT}" "${SMOKE_REF}"
         env:
           GIT_REPO_URL: https://github.com/${{ github.repository }}
+          SMOKE_COMPONENT: ${{ steps.resolve.outputs.component }}
+          SMOKE_REF: ${{ steps.resolve.outputs.ref }}
 
       - name: Teardown smoke cluster
         if: always() && steps.resolve.outputs.component != ''

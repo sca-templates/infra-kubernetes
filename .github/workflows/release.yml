@@ -98,8 +98,9 @@ jobs:
 
       - name: Sign and push release tag
         run: |
-          TAG="${{ inputs.tag_name || needs.release.outputs.tag_name }}"
           test -n "$TAG"
-          SHA="${{ inputs.commit_sha || github.sha }}"
           git tag -f -s -m "${TAG}" "${TAG}" "${SHA}"
           git push -f origin "refs/tags/${TAG}"
+        env:
+          TAG: ${{ inputs.tag_name || needs.release.outputs.tag_name }}
+          SHA: ${{ inputs.commit_sha || github.sha }}
