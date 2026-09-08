@@ -1,0 +1,50 @@
+# vault — base values (shared across environments; per-env tier overrides live
+# in envs/<env>/vault.yaml).
+# Official chart: hashicorp/vault, https://helm.releases.hashicorp.com.
+# Chart pin (targetRevision) is set in argocd/apps-<env>.yaml.
+#
+# Vault runs in HA mode with integrated Raft storage (no Consul, per ADR-001).
+# TLS for the Vault listener comes from cert-manager: a Certificate named
+# vault-tls (issued by the sca-ca ClusterIssuer) is provisioned from
+# infrastructure/vault/manifests/ and mounted by the chart below.
+
+injector:
+  enabled: false
+
+server:
+  affinity: ""
+  ha:
+    enabled: true
+    replicas: 3
+    raft:
+      enabled: true
+      config: |
+        ui = true
+
+        listener "tcp" {
+          tls_disable     = 0
+          address         = "[::]:8200"
+          cluster_address = "[::]:8201"
+          tls_cert_file     = "/vault/userconfig/vault-tls/tls.crt"
+          tls_key_file      = "/vault/userconfig/vault-tls/tls.key"
+          tls_client_ca_file = "/vault/userconfig/vault-tls/ca.crt"
+        }
+
+        storage "raft" {
+          path = "/vault/data"
+        }
+
+        service_registration "kubernetes" {}
+  extraVolumes:
+    - type: secret
+      name: vault-tls
+  dataStorage:
+    enabled: true
+    size: 1Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+ui:
+  enabled: true

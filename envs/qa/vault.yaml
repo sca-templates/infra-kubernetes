@@ -1,4 +1,15 @@
 # vault — qa profile (HA: 3 replicas, PDBs and anti-affinity from the
-# chart's HA settings).
+# chart's HA settings; larger raft data volume).
 
 replicaCount: 3
+
+server:
+  dataStorage:
+    size: 10Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
