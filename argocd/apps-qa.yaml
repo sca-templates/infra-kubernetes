@@ -19,6 +19,13 @@ spec:
             targetRevision: v1.21.1
             wave: "-20"
             path: cert-manager/manifests
+          - name: vault
+            namespace: vault
+            chartRepo: https://helm.releases.hashicorp.com
+            chart: vault
+            targetRevision: 0.34.1
+            wave: "0"
+            path: vault/manifests
   template:
     metadata:
       name: '{{.name}}-qa'

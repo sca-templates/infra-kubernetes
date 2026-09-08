@@ -1,0 +1,39 @@
+# vault-tls — leaf Certificate for the Vault listener, issued by the sca-ca
+# ClusterIssuer (Phase 1). The resulting Secret (vault-tls) is mounted by the
+# Vault chart (see infrastructure/vault/values-base.yaml server.extraVolumes).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: vault-tls
+  namespace: vault
+  annotations:
+    # Within the vault Application, apply the TLS Certificate well before the
+    # chart's HA StatefulSet (default wave 0) so the vault-tls Secret exists
+    # before the pod tries to mount it. The sca-ca ClusterIssuer it depends on
+    # lives in the cert-manager Application (wave -20), already synced.
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  secretName: vault-tls
+  issuerRef:
+    name: sca-ca
+    kind: ClusterIssuer
+  dnsNames:
+    - vault
+    - vault.vault
+    - vault.vault.svc
+    - vault.vault.svc.cluster.local
+    # HA: the chart's leader Service (server.ha.apiAddr) is where standby
+    # nodes and API clients get redirected, and retry_join peers talk to the
+    # headless services below, so the leaf must also cover these names.
+    - vault-active
+    - vault-active.vault
+    - vault-active.vault.svc
+    - vault-active.vault.svc.cluster.local
+    - vault-0.vault-internal.vault.svc.cluster.local
+    - vault-1.vault-internal.vault.svc.cluster.local
+    - vault-2.vault-internal.vault.svc.cluster.local
+  duration: 2160h # 90d
+  renewBefore: 360h # 15d
+  privateKey:
+    algorithm: RSA
+    size: 2048

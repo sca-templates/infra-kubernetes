@@ -62,8 +62,8 @@ diagnose() {
   kubectl get application "${APP_NAME}" -n argocd -o jsonpath='{.status.operationState.phase}{" — "}{.status.operationState.message}{"\n"}' 2>/dev/null || true
   echo "── diagnose: pods (all namespaces not Running/Completed)"
   kubectl get pods -A --no-headers 2>/dev/null | grep -vE 'Running|Completed' || true
-  echo "── diagnose: cert-manager namespace (if any)"
-  kubectl -n cert-manager get pods -o wide 2>/dev/null || true
+  echo "── diagnose: ${component} namespace (if any)"
+  kubectl -n "${component}" get pods -o wide 2>/dev/null || true
 }
 
 echo "== smoke-ci: component=${component} ref=${ref} keep=${KEEP_CLUSTER} boot=${BOOT_CLUSTER}"
@@ -78,12 +78,12 @@ fi
 echo "── apply smoke ApplicationSet: make smoke-app COMPONENT=${component} REF=${ref}"
 make smoke-app COMPONENT="${component}" REF="${ref}"
 
-echo "── wait for Application/${APP_NAME} Synced+Healthy (timeout ${TIMEOUT}s)"
+echo "── wait for Application/${APP_NAME} Synced (any health; timeout ${TIMEOUT}s)"
 deadline=$(( $(date +%s) + TIMEOUT ))
 announced=0
 while : ; do
   now="$(date +%s)"
-  [ "${now}" -lt "${deadline}" ] || { echo "FAIL: Application/${APP_NAME} did not converge within ${TIMEOUT}s" >&2; diagnose; exit 1; }
+  [ "${now}" -lt "${deadline}" ] || { echo "FAIL: Application/${APP_NAME} did not become Synced within ${TIMEOUT}s" >&2; diagnose; exit 1; }
 
   # The ApplicationSet generated <name>-smoke asynchronously; the Application may
   # not exist for a few seconds after `make smoke-app` — that is normal, keep
@@ -101,24 +101,50 @@ while : ; do
   [ -n "${sync_health}" ] || { sleep "${POLL}"; continue; }
 
   status="$(printf '%s\n' "${sync_health}" | awk '{print $1}')"
-  health="$(printf '%s\n' "${sync_health}" | awk '{print $2}')"
 
-  # Health `Missing` is transient: a freshly generated Application reports it
-  # while ArgoCD has not assessed health yet — keep polling instead of failing.
-  # Only sync `Missing` (source/branch/path/chart not found) or an app that is
-  # Synced but Degraded are real failures.
+  # Sync `Missing` (source/branch/path/chart not found) is a real failure.
+  # Health is deliberately NOT a gate here: stateful components (e.g. Vault)
+  # are born sealed/uninitialized and only become Healthy *after* their own
+  # smoke seeds them (smoke-vault.sh → seed-vault.sh). Requiring Healthy before
+  # the smoke would deadlock that bootstrap, so converge on `Synced` first and
+  # let the component smoke assert real readiness; phase 2 re-checks Healthy.
   if [ "${status}" = "Missing" ]; then
     echo "FAIL: Application/${APP_NAME} sync Missing (source not found)" >&2; diagnose; exit 1
   fi
-  case "${status}/${health}" in
-    Synced/Healthy) echo "[OK] Application/${APP_NAME} is Synced/Healthy"; break ;;
-    Synced/Degraded)
-      echo "FAIL: Application/${APP_NAME} synced but Degraded (${sync_health})" >&2; diagnose; exit 1 ;;
-  esac
+  if [ "${status}" = "Synced" ]; then
+    echo "[OK] Application/${APP_NAME} is Synced (health: $(printf '%s\n' "${sync_health}" | awk '{print $2}'))"
+    break
+  fi
   sleep "${POLL}"
 done
 
 echo "── run smoke: make smoke COMPONENT=${component}"
 make smoke COMPONENT="${component}"
+
+# Phase 2 — after the component smoke bootstrapped the app (e.g. Vault seed),
+# it must converge to Healthy. This is the real Health gate, deferred until the
+# smoke had a chance to make the component healthy.
+echo "── wait for Application/${APP_NAME} Synced/Healthy post-smoke (timeout ${TIMEOUT}s)"
+deadline=$(( $(date +%s) + TIMEOUT ))
+while : ; do
+  now="$(date +%s)"
+  [ "${now}" -lt "${deadline}" ] || { echo "FAIL: Application/${APP_NAME} did not converge to Healthy after smoke within ${TIMEOUT}s" >&2; diagnose; exit 1; }
+
+  health=""
+  if output="$(kubectl get application "${APP_NAME}" -n argocd --no-headers \
+      -o custom-columns=SYNC:.status.sync.status,HEALTH:.status.health.status 2>/dev/null)"; then
+    health="${output}"
+  fi
+  [ -n "${health}" ] || { sleep "${POLL}"; continue; }
+  status="$(printf '%s\n' "${health}" | awk '{print $1}')"
+  health_status="$(printf '%s\n' "${health}" | awk '{print $2}')"
+  [ "${status}" = "Missing" ] && { echo "FAIL: Application/${APP_NAME} sync Missing post-smoke" >&2; diagnose; exit 1; }
+  case "${status}/${health_status}" in
+    Synced/Healthy) echo "[OK] Application/${APP_NAME} is Synced/Healthy post-smoke"; break ;;
+    Synced/Degraded)
+      echo "FAIL: Application/${APP_NAME} synced but Degraded post-smoke (${health})" >&2; diagnose; exit 1 ;;
+  esac
+  sleep "${POLL}"
+done
 
 echo "[OK] smoke-ci: ${component} smoke passed (ref=${ref})"

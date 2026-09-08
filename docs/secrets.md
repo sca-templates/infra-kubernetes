@@ -53,12 +53,18 @@ script adapts as components land).
 | `secret/velero/credentials` | Phase 18 | Velero object-store credentials |
 | `secret/platform/alertmanager` | Phase 14 | Alertmanager routing config (`useExistingSecret`) |
 
-Nothing in the inventory is written yet — Vault arrives at Phase 2.
+Nothing above is written by Vault itself yet — Vault arrives at Phase 2 and
+`bootstrap/seed-vault.sh` populates the catalog's placeholder secrets on the
+`local` profile (see below); each consuming component's real, env-scoped path is
+written by the phase that lands it.
 
 ## Seed script
 
 `bootstrap/seed-vault.sh` populates Vault after the pod is `Running` (wave 10;
-CI/manual, **not** an ArgoCD hook). It is:
+CI/manual, **not** an ArgoCD hook). Since Phase 2 it is **HA-aware**: it
+initializes on one concrete node, unseals every raft peer (waiting for each to
+auto-join), and directs writes at the elected leader via the `vault-active`
+service. It is also:
 
 - **Idempotent**: re-runs converge to the same state, no cascade of new
   versions.

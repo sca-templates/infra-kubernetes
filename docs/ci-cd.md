@@ -111,6 +111,14 @@ The whole boot → apply → wait → run → diagnose → teardown cycle lives 
   against an already-converged cluster; the framework (boot, apply, wait,
   diagnose, teardown) is shared and only the component-specific smoke command is
   added per phase.
+- **Two-phase convergence gate**: the framework first waits for the smoke
+  `Application` to become **`Synced`** (any health), runs the component smoke,
+  then waits for **`Synced/Healthy`**. Health is deliberately *not* a pre-smoke
+  gate: stateful components (e.g. Vault) are born sealed/uninitialized and only
+  become `Healthy` after their own smoke seeds them (`smoke-vault.sh` →
+  `seed-vault.sh`); requiring `Healthy` first would deadlock their bootstrap.
+  Post-smoke `Healthy` is the real gate, so a genuinely broken chart/CR still
+  fails the PR.
 
 ### Environment profile: `local` (not `qa`)
 

@@ -1,0 +1,17 @@
+# vault — qa profile (HA: 3 replicas, PDBs and anti-affinity from the
+# chart's HA settings; larger raft data volume). `server.ha.replicas` matches
+# the base default (3), declared explicitly for tier symmetry.
+
+server:
+  ha:
+    replicas: 3
+
+  dataStorage:
+    size: 10Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
