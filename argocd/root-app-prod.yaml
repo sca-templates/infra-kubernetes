@@ -11,7 +11,7 @@ spec:
   project: default
   source:
     repoURL: "{{GIT_REPO_URL}}"
-    targetRevision: main
+    targetRevision: {{GIT_TARGET_BRANCH}}
     path: argocd
     directory:
       include: "{apps-prod}.yaml"

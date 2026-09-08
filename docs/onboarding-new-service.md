@@ -3,7 +3,7 @@
 How to add a new microservice to the platform using the shipped template, and
 the gates it must pass. This doubles as the per-component **add checklist**:
 any catalog component (Phases 1–18) follows the same skeleton — chart or CRs,
-env overlays, `ExternalSecret` where needed, one commit per component.
+env overlays, `ExternalSecret` where needed, landed via reviewed PRs.
 
 ## 1. Scaffold the chart from the template
 
@@ -61,8 +61,8 @@ Merge is allowed only when the component passes its road-gate:
   "`psql SELECT 1`", and so on — each phase's gate is in
   [status.md](status.md)).
 - `make status` shows no new `Degraded`.
-- One commit, human-reviewed. If it does not turn green: **roll back**, never
-  `fix`-chain.
+- Landed via one or more reviewed PRs (grouping is a judgment call). If it
+  does not turn green: **roll back**, never `fix`-chain.
 
 ## 5. Onboarding → platform
 

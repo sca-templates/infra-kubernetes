@@ -76,9 +76,10 @@ Mirrors `AGENTS.md` §9 and `docs/workflow.md`:
 
 ## Armor rules (verbatim)
 
-- **One phase/component = one commit = one PR = one review.** A component that
-  does not turn green **rolls back** — no `fix` chains, no ad-hoc
-  `ignoreDifferences`/SSA patches.
+- **Changes land via reviewed PRs.** A component often ships as a single PR,
+  but the number of PRs/commits is a judgment call driven by the change. A
+  component that does not turn green **rolls back** — no `fix` chains, no
+  ad-hoc `ignoreDifferences`/SSA patches.
 - **No global `ServerSideApply`.** Kong runs as a dedicated Application with no
   SSA.
 - **ESO uses a short (`~5 min`) `refreshInterval` in local** — never restart

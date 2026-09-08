@@ -49,6 +49,7 @@ kind-export-*/
 
 ### Rendered / debugging artifacts ###
 .generated/
+.git-local/
 *.tgz
 
 ### Logs (whole directory) ###

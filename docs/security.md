@@ -1,10 +1,11 @@
 # Security Posture
 
 The security controls wired into the repository and its CI. This is a
-**state document**: controls shipped in Phase 0.0 exist and run in CI; anything
-marked *planned* (checkov baseline enforcement, cluster smoke) is not active
-yet. For secret handling see [secrets.md](secrets.md); for the CI workflow map
-see [ci-cd.md](ci-cd.md).
+**state document**: controls shipped in Phase 0.0 exist and run in CI; reality
+is reported as it is. From Phase 1 the checkov **baseline** gates new IaC
+findings; the cluster-smoke gate stays planned until stable (see
+[ci-cd.md](ci-cd.md)). For secret handling see [secrets.md](secrets.md); for
+the CI workflow map see [ci-cd.md](ci-cd.md).
 
 ## CI security controls
 
@@ -13,7 +14,7 @@ see [ci-cd.md](ci-cd.md).
 | gitleaks | security.yml | Secrets/password scan on push and PR; blocks on findings |
 | checkov (static IaC) | security.yml | IaC misconfiguration scan of YAML manifests |
 | osv-scanner (SCA) | security.yml | Open-source dependency vulnerability scan on push + PR; honours `.github/osv-scanner.toml` ignores |
-| checkov baseline | — | Exists in the repo but is **re-examined** before enforcement; reason: the previous attempt's baseline hid real findings while its cluster smoke was broken |
+| checkov baseline | security.yml | `.github/checkov-baseline.json` gates **new** findings since Phase 1 — the pod on `bootstrap/local-git-server.yaml` is documented (local-only tooling); anything else fails the PR as it would without the baseline |
 | CodeQL | codeql.yml | Static analysis on push + PR + weekly schedule |
 | OpenSSF Scorecard | scorecard.yml | Attestation on push + weekly; feeds the README badge |
 | Pin guards | security.yml | Fails any chart reference or image tag that is `latest` or floating |
@@ -90,12 +91,14 @@ fixed `asteval` or `ecdsa` publishes a fix.
 - **Sign-offs**: prod sync is manual with a human go/no-go in the deploy
   window; nothing is deployed by hand after bootstrap.
 
-## Baseline re-examination (planned)
+## Baseline re-evaluation (Phase 18)
 
-Before the checkov baseline becomes a merge gate, it is re-derived from a
-**green** platform (post Phase 18 smoke) and its entries are annotated with
-owners. Until then, checkov runs online but the baseline is advisory: real
-findings surface as PR comments, not silent baseline entries.
+The checkov baseline (`.github/checkov-baseline.json`) gates new findings from
+Phase 1: entries are documented, intentional manifests whose findings are
+accepted and recorded. The baseline is **re-evaluated** post Phase 18 from a
+green platform and its entries annotated with owners. Until then the only way a
+new entry appears is a reviewed PR that regenerates the baseline — new findings
+never pass silently.
 
 ## Settings checklist (out of repo)
 

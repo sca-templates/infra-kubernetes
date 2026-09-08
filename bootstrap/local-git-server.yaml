@@ -1,0 +1,41 @@
+# git-local-serve — in-cluster git server for the fully-local ArgoCD loop.
+# Served on the kind node network (hostNetwork) so both repo-server (in-cluster)
+# and the host (`make local-git-update`) can reach it at git://<node-ip>:9418.
+# The bare repo lives on the node filesystem under /srv/sca-infra.git (seeded by
+# `make local-git-up`); receive-pack is on so host pushes update it in place.
+# Local tooling only — not part of the ArgoCD platform catalog.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: git-local-serve
+  namespace: git-serve
+  labels:
+    app: git-local-serve
+spec:
+  hostNetwork: true
+  containers:
+    - name: git
+      image: alpine:3.21
+      command:
+        - /bin/sh
+        - -c
+        - |
+          apk add --no-cache git-daemon >/dev/null 2>&1
+          git config --global --add safe.directory /srv/sca-infra.git
+          exec git daemon \
+            --base-path=/srv \
+            --export-all \
+            --reuseaddr \
+            --enable=upload-pack \
+            --enable=receive-pack \
+            --listen=0.0.0.0 \
+            --port=9418
+      volumeMounts:
+        - name: git-repo
+          mountPath: /srv
+  volumes:
+    - name: git-repo
+      hostPath:
+        path: /srv
+        type: DirectoryOrCreate
+  restartPolicy: Always

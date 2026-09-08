@@ -13,8 +13,8 @@ repo.
 - ArgoCD app-of-apps: one root Application per environment renders an
   ApplicationSet that generates one Application per component.
 - A **clean restart** of the previous `infra-kubernetes` (which churned in
-  `fix` commits): one component per commit, a human-reviewed gate per phase,
-  rollback over forward-fix.
+  `fix` commits): a human-reviewed gate per logical change, rollback over
+  forward-fix.
 - A **template**: it must be clonable standalone. Zero references to local
   paths outside the repo; sibling knowledge is always an external link.
 
@@ -103,7 +103,9 @@ guards ([docs/security.md](docs/security.md)).
 
 | Command | What it does |
 | --- | --- |
-| `make prereqs` | Install pinned kubectl/helm/kind into `~/.local/bin` (idempotent) |
+| `make prereqs` | Install pinned kubectl/helm/kind into `~/.local/bin` (idempotent, sha256-verified) — `bootstrap/sca.sh prerrequisites` |
+| `make doctor` | Read-only platform health check (toolchain, PATH, docker, cluster, ArgoCD apps, `.env` seam, git source) |
+| `make install-cli` | Symlink `bootstrap/sca.sh` → `~/.local/bin/sca` for direct `sca prereqs` / `sca doctor` / `sca version` |
 | `make cluster-up` | Create the local `kind` cluster from `bootstrap/kind-config.yaml` |
 | `make cluster-down` | Delete the local `kind` cluster (keeps nothing) |
 | `make bootstrap` | Install ArgoCD + apply the root Application for `$ENV` |
@@ -116,13 +118,20 @@ guards ([docs/security.md](docs/security.md)).
 The Makefile is a **thin wrapper**: after bootstrap, deployments happen
 exclusively via `git push` → ArgoCD.
 
+**OS support**: Linux (any distro) and macOS for the toolchain; **Windows is
+only supported via WSL2** (this platform is POSIX — no native Windows shell
+support; `sca` fails fast with a pointer to WSL2).
+
 ## 7. Conventions (strict)
 
 - English only: content, commits, PR descriptions.
 - Conventional commits: `feat(platform): …`, `feat(vault): …`,
   `docs(readme): …`.
-- **One component = one commit = one PR = one review.** A blocked component
-  rolls back; no `fix` chains, no ad-hoc `ignoreDifferences`/SSA patches.
+- **Changes land via reviewed PRs.** A component often ships as a single PR,
+  but the number of PRs and commits is a judgment call driven by the change —
+  the work is dynamic and grouping is not a rule. A blocked change rolls back
+  rather than being patched forward with `fix` chains; nothing is deployed by
+  hand after `make bootstrap`.
 - Changes land through PRs (initial population excepted, straight to `main`).
 - **Git writes are the user's**: do not `git commit`/`git push`/reset/amend or
   stage anything on your own. Draft commits/messages only; ask before any git
@@ -164,3 +173,14 @@ Base URL: `https://raw.githubusercontent.com/sca-templates/sca-docs/main/<path>`
 | ESO wedge (local) | Old long-refresh pattern | Do not restart ESO by hand; short refresh (~5 min) prevents recurrence |
 
 Full runbooks live in `docs/workflow.md`.
+
+<!-- CODEGRAPH_START -->
+## CodeGraph
+
+In repositories indexed by CodeGraph (a `.codegraph/` directory exists at the repo root), reach for it BEFORE grep/find or reading files when you need to understand or locate code:
+
+- **MCP tool** (when available): `codegraph_explore` answers most code questions in one call — the relevant symbols' verbatim source plus the call paths between them, including dynamic-dispatch hops grep can't follow. Name a file or symbol in the query to read its current line-numbered source. If it's listed but deferred, load it by name via tool search.
+- **Shell** (always works): `codegraph explore "<symbol names or question>"` prints the same output.
+
+If there is no `.codegraph/` directory, skip CodeGraph entirely — indexing is the user's decision.
+<!-- CODEGRAPH_END -->

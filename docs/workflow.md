@@ -11,9 +11,10 @@ cluster. Companion to [architecture.md](architecture.md) (the *state*) and
   from this repo; sync policies follow ADR-003.
 - **Nothing is deployed by hand after `make bootstrap`.** A change becomes a
   deployment by landing in `main`; ArgoCD does the rest.
-- One component = one commit, one PR, one review. A component that does not
-  turn green **rolls back** (`git revert`-style), it is never patched forward
-  with `fix` chains.
+- Changes land via reviewed PRs. A component often ships as a single PR, but
+  the number of PRs/commits is a judgment call driven by the change (grouping
+  is not a rule). A component that does not turn green **rolls back**
+  (`git revert`-style), it is never patched forward with `fix` chains.
 
 ## Change → deploy flow
 
@@ -31,7 +32,9 @@ graph LR
 
 1. **Author**: edit only the files the change owns (component + its env
    overlays), run `make validate-static`, commit with a conventional message
-   (`feat(vault): …`, `fix(kong): …`).
+   per logical change (`feat(vault): …`, `fix(kong): …`). Group the related
+   commits into one or more reviewed PRs as the change dictates — grouping is
+   a judgment call, not a fixed rule.
 2. **CI**: static suite always; from Phase 1 a *selective* cluster smoke of the
    touched component also runs (ephemeral `kind`, profile `local`) — see
    [ci-cd.md](ci-cd.md).

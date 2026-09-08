@@ -11,7 +11,14 @@ spec:
     - missingkey=error
   generators:
     - list:
-        elements: []
+        elements:
+          - name: cert-manager
+            namespace: cert-manager
+            chartRepo: https://charts.jetstack.io
+            chart: cert-manager
+            targetRevision: v1.21.1
+            wave: "-20"
+            path: cert-manager/manifests
   template:
     metadata:
       name: '{{.name}}-qa'
@@ -30,10 +37,10 @@ spec:
               - '$values/infrastructure/{{.name}}/values-base.yaml'
               - '$values/envs/qa/{{.name}}.yaml'
         - repoURL: "{{GIT_REPO_URL}}"
-          targetRevision: main
+          targetRevision: {{GIT_TARGET_BRANCH}}
           ref: values
         - repoURL: "{{GIT_REPO_URL}}"
-          targetRevision: main
+          targetRevision: {{GIT_TARGET_BRANCH}}
           path: infrastructure/{{.path}}
           directory:
             recurse: true

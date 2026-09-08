@@ -1,0 +1,93 @@
+# Copyright (c) 2026 sca-templates contributors
+# SPDX-License-Identifier: MIT
+# =============================================================================
+# infra-kubernetes cluster smoke — validate the platform still works on an
+# ephemeral kind cluster (Phase 1). Ran by bootstrap/smoke-ci.sh, which owns the
+# boot/apply/wait/run/diagnose/teardown cycle so each component only adds its
+# smoke command (bootstrap/smoke-<component>.sh).
+#
+# Triggers:
+#   - pull_request:  selective smoke of the touched component (profile `local`).
+#   - push to main:  vigilance smoke of the deployed baseline (cert-manager).
+#
+# Informative by design (docs/ci-cd.md): it is NOT a required check until it is
+# stable on 2-3 components. To make it blocking, add `pr-cluster` to the
+# branch-protection required checks on main (do not change this file).
+# Same-repo PRs only (coherent with main-sync.yml); fork PRs are skipped.
+# =============================================================================
+
+name: Cluster Smoke
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kind-smoke:
+    name: Smoke
+    runs-on: ubuntu-latest
+    # Fork PRs cannot resolve the head ref on the upstream repo (main-sync skips
+    # forks too); only run the selective smoke for same-repo PRs.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Install pinned toolchain
+        run: |
+          make prereqs >/dev/null
+          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+
+      - name: Resolve smoke component and ref
+        id: resolve
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ]; then
+            # Vigilance: smoke the deployed baseline on main.
+            echo "component=cert-manager" >> "${GITHUB_OUTPUT}"
+            echo "ref=main" >> "${GITHUB_OUTPUT}"
+          else
+            # Selective: map changed paths to the touched component.
+            changed="$(git diff --name-only "${PR_BASE_SHA}...${PR_HEAD_SHA}")"
+            component=""
+            for c in infrastructure/*/; do
+              [ -d "$c" ] || continue
+              c="${c%/}"; c="${c##*/}"
+              if printf '%s\n' "$changed" | grep -qE "(^|/)${c}(/|\.yaml$|\.yml$)"; then
+                component="$c"
+                break
+              fi
+            done
+            if [ -z "$component" ] && printf '%s\n' "$changed" | grep -qE "^envs/[^/]+/[^/]+\.ya?ml$"; then
+              component="$(printf '%s\n' "$changed" | grep -oE '^envs/[^/]+/[^/]+\.ya?ml$' | head -1 | sed -E 's|^envs/[^/]+/([^/]+)\.ya?ml$|\1|')"
+            fi
+            [ -n "$component" ] || { echo "No platform component touched; skipping cluster smoke."; echo "component=" >> "${GITHUB_OUTPUT}"; exit 0; }
+            echo "component=${component}" >> "${GITHUB_OUTPUT}"
+            echo "ref=${PR_HEAD_REF}" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Cluster smoke
+        if: steps.resolve.outputs.component != ''
+        run: |
+          export PATH="${HOME}/.local/bin:${PATH}"
+          bootstrap/smoke-ci.sh "${{ steps.resolve.outputs.component }}" "${{ steps.resolve.outputs.ref }}"
+        env:
+          GIT_REPO_URL: https://github.com/${{ github.repository }}
+
+      - name: Teardown smoke cluster
+        if: always() && steps.resolve.outputs.component != ''
+        run: make cluster-down --ignore-errors 2>/dev/null || true

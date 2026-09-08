@@ -1,0 +1,9 @@
+# cert-manager — dev profile (reduced HA: 2 replicas per component).
+
+replicaCount: 2
+
+webhook:
+  replicaCount: 2
+
+cainjector:
+  replicaCount: 2

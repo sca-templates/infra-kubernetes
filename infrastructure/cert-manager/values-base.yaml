@@ -1,0 +1,18 @@
+# cert-manager — base values (shared across environments; per-env tier overrides
+# live in envs/<env>/cert-manager.yaml).
+# Official chart: jetstack/cert-manager, https://charts.jetstack.io.
+# Chart pin (targetRevision) is set in argocd/apps-<env>.yaml.
+installCRDs: true
+
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+
+webhook:
+  replicaCount: 1
+
+cainjector:
+  replicaCount: 1

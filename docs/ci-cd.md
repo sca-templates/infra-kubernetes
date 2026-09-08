@@ -2,9 +2,9 @@
 
 What GitHub Actions do — and deliberately do **not** — do for this
 repository. Phase 0 ships the static workflows plus the release automation
-(still **no** cluster smoke); the cluster-smoke workflow (`pr-cluster.yml`)
-**returns at Phase 1**, when the first real component lands, and is rebuilt
-from scratch. See [security.md](security.md) for the security controls these
+(no cluster smoke); **Phase 1 ships the cluster-smoke workflow
+(`pr-cluster.yml`)**, rebuilt from scratch and run on an ephemeral `kind`
+cluster. See [security.md](security.md) for the security controls these
 workflows carry, [versioning.md](versioning.md) for how releases, tags and the
 CHANGELOG are produced, and [workflow.md](workflow.md) for how a merge becomes
 a deployment.
@@ -23,12 +23,30 @@ a deployment.
 ### Scope semantics
 
 - `validate.yml` runs the same checks locally via `make validate-static`
-  (`bootstrap/prereqs.sh` installs the pinned CLI; no cluster required).
+  (`bootstrap/sca.sh` installs the pinned CLI; no cluster required).
 - `security.yml` guards run against the whole tree on every PR; the checkov
-  **baseline** is re-examined before it is enforced (see
+  **baseline** (`.github/checkov-baseline.json`) gates new findings — existing
+  entries are documented, intentional manifests (see
   [security.md](security.md)).
 - Workflows are scoped to the paths they own (docs/CI config), so a pure
   documentation PR does not re-run IaC scanning unnecessarily.
+
+## Local toolchain CLI
+
+`bootstrap/sca.sh` is the POSIX platform CLI (Linux distro-agnostic, macOS and
+WSL2; Windows-native fails fast — use WSL2). The Makefile targets are thin
+wrappers around it; `make install-cli` symlinks it as `~/.local/bin/sca`.
+
+| Command | What it does |
+| --- | --- |
+| `sca prereqs` | Install pinned kubectl/helm/kind into `~/.local/bin` — idempotent, sha256-verified, no sudo. Detects OS/arch (linux/darwin, amd64/arm64) and picks the matching upstream URLs; external deps (git, docker) are reported with install hints but never installed |
+| `sca doctor` | Read-only health: toolchain versions vs pins, PATH, docker, git, git source reachability, cluster, ArgoCD app sync/health, and the `.env` seam. Never mutates — run it first when something is off |
+| `sca version` | Print the pinned toolchain versions |
+
+Versions are pinned once in `bootstrap/versions.sh` (sourced by `sca.sh`);
+`.env`/environment overrides still win. The darwin install path follows the
+upstream URL patterns but is not yet exercised on hardware — see the pin
+guards in [security.md](security.md).
 
 ### Release workflow
 
@@ -50,14 +68,27 @@ The workflow is the only one that holds repository secrets
 PRs/tags are authored by `sca-bot-release[bot]` and still trigger the required
 checks.
 
-## Cluster smoke (`pr-cluster.yml`, returns at Phase 1)
+## Cluster smoke (`pr-cluster.yml`, Phase 1)
 
-`pr-cluster.yml` is **deliberately absent** from Phase 0: the previous
-attempt's cluster-smoke CI had become a stack of hacks (trimmed manifests,
-self-heal disabled) and burned a week in `fix` churn. It **returns at Phase 1**,
-when cert-manager (the first real component) lands, so each subsequent
-component is validated incrementally in a live `kind` cluster as it ships.
-See the [roadmap](roadmap.md) for the Phase 1 gate and its smoke.
+`pr-cluster.yml` is **absent** from Phase 0 because the previous attempt's
+cluster-smoke CI had become a stack of hacks (trimmed manifests, self-heal
+disabled) and burned a week in `fix` churn. It lands at **Phase 1** with
+cert-manager, so each subsequent component is validated incrementally in a
+live `kind` cluster as it ships, and the deployed baseline is continuously
+monitored. See the [roadmap](roadmap.md) for the Phase 1 gate and its smoke.
+
+**Triggers:**
+
+- **`pull_request`** — selective smoke of the touched component (profile
+  `local`), so a change is validated before it merges. Same-repo PRs only
+  (fork PRs are skipped, coherent with `main-sync.yml`).
+- **`push` to `main`** — vigilance smoke of the deployed baseline
+  (`cert-manager`, `REF=main`), confirming the platform keeps working as
+  components land. This is the "is it still healthy" guard.
+
+The whole boot → apply → wait → run → diagnose → teardown cycle lives in
+`bootstrap/smoke-ci.sh`; each component adds only its own smoke command
+(`bootstrap/smoke-<component>.sh`, dispatched by `smoke-target.sh`).
 
 ### Design properties
 
@@ -94,10 +125,12 @@ The smoke runs the **`local`** profile (1 replica, auto-sync + prune), never
   gated by `promote-test` ([workflow.md](workflow.md)), which loads the target
   env overlay on a local `kind` cluster. The smoke validates correctness;
   `promote-test` validates the env overlay against a real protectable surface.
-- **Merge gate remains**: until the smoke is stable on 2–3 components it runs
-  as an **informative** check, not blocking; it becomes a required check only
-  for the paths it covers once stable, so infra-only doc changes are not
-  blocked by a cluster boot.
+- **Merge gate**: the smoke runs as an **informative** check — it is not a
+  required check until stable on 2–3 components. Making it blocking is a
+  branch-protection change on `main` (add `pr-cluster` to the required checks
+  for the paths it covers), **not** a change to this file. Until then a failed
+  smoke reports but does not block a human merge; once stable it becomes a
+  required check, so infra-only doc changes are not blocked by a cluster boot.
 
 ### Release gate
 

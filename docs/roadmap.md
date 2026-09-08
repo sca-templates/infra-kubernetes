@@ -55,18 +55,20 @@ worked in parallel.
 > automatically — no per-component wiring is needed.
 >
 > **CI note (cluster smoke):** the cluster smoke (`pr-cluster.yml`) is a
-> Phase 1 deliverable that lands with cert-manager and then runs
+> Phase 1 deliverable that landed with cert-manager and runs
 > automatically for every subsequent component — each project's "one
 > functional smoke" (in the per-project gate above) becomes the `pr-cluster`
 > smoke command. No per-component workflow wiring is needed beyond the
-> component's smoke command in `bootstrap/smoke-target.sh`. Profile: `local`
-> (see [ci-cd.md](ci-cd.md)).
+> component's smoke command in `bootstrap/smoke-target.sh`. It smokes the
+> touched component on PRs and the deployed baseline on `push: main`
+> (vigilance); it is informative until stable on 2–3 components. Profile:
+> `local` (see [ci-cd.md](ci-cd.md)).
 
 ## Projects (index)
 
 | Project | Area | Wave | Milestones | Issues | Status |
 | --- | --- | --- | --- | --- | --- |
-| [cert-manager](roadmap/cert-manager.md) | Security & Identity | -20 | — | [#6](https://github.com/sca-templates/infra-kubernetes/issues/6) | pending |
+| [cert-manager](roadmap/cert-manager.md) | Security & Identity | -20 | — | [#6](https://github.com/sca-templates/infra-kubernetes/issues/6) | deployed |
 | [vault](roadmap/vault.md) | Security & Identity | 0 | M1 bootstrap · M2 seed · M2 integration | [#7](https://github.com/sca-templates/infra-kubernetes/issues/7) · [#24](https://github.com/sca-templates/infra-kubernetes/issues/24) · [#25](https://github.com/sca-templates/infra-kubernetes/issues/25) · [#26](https://github.com/sca-templates/infra-kubernetes/issues/26) | pending |
 | [external-secrets](roadmap/external-secrets.md) | Security & Identity | -10 | — | [#8](https://github.com/sca-templates/infra-kubernetes/issues/8) | pending |
 | [linkerd-crds](roadmap/linkerd-crds.md) | Edge & Mesh | -10 | — | [#9](https://github.com/sca-templates/infra-kubernetes/issues/9) | pending |
@@ -102,7 +104,9 @@ lands (see the Work Log below).
 | 2026-09-04 | Release gating fix (CI) | release PRs pass static gates | `3c658fe` (squash of PR #34) | — |
 | 2026-09-04 | Release automation (CI) | static gates green | `26359b6` (squash of PR #32) | — |
 | 2026-09-01 | Knowledge base (docs) | scaffold + docs green | `dbbf5f4` | — |
-| *next* | cert-manager | *pending* | | [#6](https://github.com/sca-templates/infra-kubernetes/issues/6) |
+| 2026-09-06 | cert-manager | deployed — `sca-ca` ClusterIssuer Ready, leaf Certificate smoke green, all 4 env overlays + appset wave -20 | `feature/phase-1` (PR) | [#6](https://github.com/sca-templates/infra-kubernetes/issues/6) |
+| 2026-09-06 | Cluster smoke (CI) | `pr-cluster.yml` shipped — selective on PRs + vigilance on `push: main`, informative until stable; `bootstrap/smoke-ci.sh` owns boot→apply→wait→run→diagnose→teardown | `feature/phase-1` (PR) | — |
+| 2026-09-06 | checkov baseline gate (CI) | `.github/checkov-baseline.json` records the local-git-server pod findings; `security.yml` gates **new** IaC findings from Phase 1, re-evaluated at Phase 18 | `feature/phase-1` (PR) | — |
 
 Phases 0.x scaffold the repository and are not delivery projects; they are
 recorded here for continuity. From Phase 1, each row is appended in the same
@@ -117,8 +121,10 @@ pre-release history as a signed baseline — see
   tracked on the board, may carry a milestone/project label only when it
   applies, and are **not forced into this roadmap**. They resolve
   independently and do not block promotion.
-- **One project = one component = one commit = one PR = one review.** A
-  component that does not turn green **rolls back** — no fix chains, no ad-hoc
+- **One project = one component, landed via reviewed PRs.** A component often
+  ships as a single PR, but the number of PRs/commits is a judgment call
+  driven by the change — grouping is not a rule. A component that does not
+  turn green **rolls back** — no fix chains, no ad-hoc
   `ignoreDifferences`/SSA patches, nothing deployed by hand after
   `make bootstrap`.
 - **Milestones are optional** — a project without natural phases has its issues
