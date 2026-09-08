@@ -14,16 +14,45 @@ SECRETS_DIR="${SECRETS_DIR:-.secrets}"
 INIT_FILE="${SECRETS_DIR}/init-keys.json"
 ROOT_FILE="${SECRETS_DIR}/root-token"
 POD_WAIT="${VAULT_WAIT_TIMEOUT:-180s}"
+# HA raft: write operations must reach the active leader. The chart's
+# vault-active Service follows the elected leader; the leaf certificate covers
+# it (see infrastructure/vault/manifests/vault-tls-certificate.yaml).
+VAULT_HTTPS="https://vault-active.vault.svc.cluster.local:8200"
+# HA raft: the API Service (vault) load-balances votes; init/unseal must hit a
+# concrete node. Use each Pod's loopback so we never depend on the Service or
+# on DNS names outside the leaf certificate.
+VAULT_POD_HTTPS="https://127.0.0.1:8200"
 
 mkdir -p "$SECRETS_DIR"
 chmod 700 "$SECRETS_DIR"
 
 vault_exec() {
+  # Operate on the API Service, which serves the active leader (or redirects to
+  # it). Used for writes that need the leader: KV, auth, policies, roles.
   kubectl -n "$NAMESPACE" exec "$POD" -- env \
-    VAULT_ADDR=https://vault.vault.svc.cluster.local:8200 \
+    VAULT_ADDR="$VAULT_HTTPS" \
     VAULT_CACERT=/vault/userconfig/vault-tls/ca.crt \
     VAULT_TOKEN="$VAULT_TOKEN" vault "$@"
 }
+
+vault_pod_exec() {
+  # Operate on one concrete node (init/unseal/status) via its loopback. The
+  # leaf certificate is issued for vault*.vault.svc.cluster.local, not for pod
+  # IPs, so disable verification for this local, same-node call.
+  local pod="$1"
+  shift
+  kubectl -n "$NAMESPACE" exec "$pod" -- env \
+    VAULT_ADDR="$VAULT_POD_HTTPS" \
+    VAULT_CACERT=/vault/userconfig/vault-tls/ca.crt \
+    VAULT_TLS_SERVER_NAME=vault.vault.svc.cluster.local \
+    VAULT_TOKEN="$VAULT_TOKEN" vault "$@"
+}
+
+# Pods that must be unsealed in an HA raft cluster. Derive from the
+# StatefulSet ordinal range rather than hardcoding three.
+VAULT_REPLICAS="$(
+  kubectl -n "$NAMESPACE" get statefulset vault -o jsonpath='{.spec.replicas}' 2>/dev/null || echo 1
+)"
 
 # ArgoCD creates the Vault pod asynchronously after bootstrap, so it may not
 # exist yet. Poll until it appears (kubectl wait fails instantly on a missing
@@ -71,10 +100,7 @@ kubectl -n "$NAMESPACE" wait --for=jsonpath='{.status.phase}'=Running pod/"$POD"
 # CI node the listener can take minutes to come up.
 echo "── Waiting for Vault API to accept connections"
 for attempt in {1..150}; do
-  status_json="$(kubectl -n "$NAMESPACE" exec "$POD" -- env \
-       VAULT_ADDR=https://vault.vault.svc.cluster.local:8200 \
-       VAULT_CACERT=/vault/userconfig/vault-tls/ca.crt \
-       vault status -format=json 2>/dev/null || true)"
+  status_json="$(vault_pod_exec "$POD" status -format=json 2>/dev/null || true)"
   if [ -n "${status_json}" ] && printf '%s' "${status_json}" | jq -e 'has("sealed")' >/dev/null 2>&1; then
     echo "  Vault API is up (sealed: $(printf '%s' "${status_json}" | jq -r '.sealed'))"
     break
@@ -91,11 +117,8 @@ for attempt in {1..150}; do
 done
 
 if [ ! -s "$INIT_FILE" ]; then
-  echo "── Initializing Vault"
-  kubectl -n "$NAMESPACE" exec "$POD" -- env \
-    VAULT_ADDR=https://vault.vault.svc.cluster.local:8200 \
-    VAULT_CACERT=/vault/userconfig/vault-tls/ca.crt \
-    vault operator init -key-shares=1 -key-threshold=1 -format=json > "$INIT_FILE"
+  echo "── Initializing Vault (on ${POD})"
+  vault_pod_exec "$POD" operator init -key-shares=1 -key-threshold=1 -format=json > "$INIT_FILE"
   chmod 600 "$INIT_FILE"
 fi
 
@@ -109,16 +132,38 @@ printf '%s\n' "$ROOT_TOKEN" > "$ROOT_FILE"
 chmod 600 "$ROOT_FILE"
 export VAULT_TOKEN="$ROOT_TOKEN"
 
-if ! vault_exec status -format=json 2>/dev/null | jq -e '.sealed == false' >/dev/null; then
-  echo "── Unsealing Vault"
-  vault_exec operator unseal "$UNSEAL_KEY" >/dev/null
-fi
+# HA raft: every node must be unsealed with the same key to reach quorum. The
+# non-initialized peers auto-join the cluster via their storage retry_join
+# block once the first node answers, then accept their unseal key.
+for ordinal in $(seq 0 $((VAULT_REPLICAS - 1))); do
+  replica="vault-${ordinal}"
+  sealed_json="$(vault_pod_exec "$replica" status -format=json 2>/dev/null || true)"
+  if printf '%s' "${sealed_json}" | jq -e '.sealed == false' >/dev/null 2>&1; then
+    echo "  (${replica} already unsealed)"
+    continue
+  fi
+  # A fresh peer is not initialized until it auto-joins the raft cluster; only
+  # then does it accept the unseal key (400 "not initialized" otherwise).
+  for join_attempt in {1..30}; do
+    if printf '%s' "${sealed_json}" | jq -e '.initialized == true' >/dev/null 2>&1; then
+      break
+    fi
+    [ "$join_attempt" -eq 30 ] && {
+      echo "ERROR: ${replica} never joined the raft cluster (still not initialized)" >&2
+      exit 1
+    }
+    sleep 2
+    sealed_json="$(vault_pod_exec "$replica" status -format=json 2>/dev/null || true)"
+  done
+  echo "── Unsealing Vault (${replica})"
+  vault_pod_exec "$replica" operator unseal "$UNSEAL_KEY" >/dev/null
+done
 
 for attempt in {1..60}; do
-  if vault_exec status -format=json 2>/dev/null | jq -e '.sealed == false and .initialized == true' >/dev/null; then
+  if vault_exec status -format=json 2>/dev/null | jq -e '.sealed == false and .initialized == true and (.leader_address != null)' >/dev/null; then
     break
   fi
-  [ "$attempt" -eq 60 ] && { echo "ERROR: Vault did not become unsealed"; exit 1; }
+  [ "$attempt" -eq 60 ] && { echo "ERROR: Vault cluster did not become unsealed/active"; exit 1; }
   sleep 2
 done
 
@@ -134,7 +179,7 @@ fi
 
 echo "── Configuring Kubernetes auth"
 kubectl -n "$NAMESPACE" exec "$POD" -- env \
-  VAULT_ADDR=https://vault.vault.svc.cluster.local:8200 \
+  VAULT_ADDR="$VAULT_HTTPS" \
   VAULT_CACERT=/vault/userconfig/vault-tls/ca.crt \
   VAULT_TOKEN="$VAULT_TOKEN" sh -c 'vault write auth/kubernetes/config \
     token_reviewer_jwt="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
@@ -142,7 +187,7 @@ kubectl -n "$NAMESPACE" exec "$POD" -- env \
     kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt' >/dev/null
 
 kubectl -n "$NAMESPACE" exec -i "$POD" -- env \
-  VAULT_ADDR=https://vault.vault.svc.cluster.local:8200 \
+  VAULT_ADDR="$VAULT_HTTPS" \
   VAULT_CACERT=/vault/userconfig/vault-tls/ca.crt \
   VAULT_TOKEN="$VAULT_TOKEN" vault policy write external-secrets - >/dev/null <<'POLICY'
 path "secret/data/*" {
