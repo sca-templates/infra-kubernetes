@@ -96,7 +96,11 @@ monitored. See the [roadmap](roadmap.md) for the Phase 1 gate and its smoke.
 
 The whole boot → apply → wait → run → diagnose → teardown cycle lives in
 `bootstrap/smoke-ci.sh`; each component adds only its own smoke command
-(`bootstrap/smoke-<component>.sh`, dispatched by `smoke-target.sh`).
+(`bootstrap/smoke-<component>.sh`, dispatched by `smoke-target.sh`). Wait steps
+default to a 900s timeout (`SMOKE_TIMEOUT`, overridable). On failure the
+diagnose step captures the Application/ApplicationSet state, pod describe +
+logs and EndpointSlices, and the workflow uploads `.generated/` as an artifact
+(`if: always()`), so a non-green run is self-explanatory.
 
 ### Design properties
 
@@ -120,6 +124,14 @@ The whole boot → apply → wait → run → diagnose → teardown cycle lives 
   Post-smoke `Healthy` is the real gate, so a genuinely broken chart/CR still
   fails the PR.
 
+  ArgoCD syncs synchronously (no `-Async` on the smoke ApplicationSet), so a
+  `Deployment` that is slow becoming `Ready` blocks `Synced`. The cert-controller
+  in external-secrets is the classic case: its `/readyz` waits on asynchronous
+  CRD/webhook injection reconciles that can take minutes on a cold boot. The
+  `local`/`dev` overlays therefore disable that readiness probe (the controller
+  serves no traffic; the component smoke asserts real readiness) while `qa`/`prod`
+  keep it.
+
 ### Environment profile: `local` (not `qa`)
 
 The smoke runs the **`local`** profile (1 replica, auto-sync + prune), never
@@ -128,7 +140,7 @@ The smoke runs the **`local`** profile (1 replica, auto-sync + prune), never
 | Criterion | `local` (1 replica, auto+prune) | `qa` (3 replicas, PDB, anti-affinity, no-prune) |
 | --- | --- | --- |
 | Fits a CI runner (2 vCPU / 7 GB kind) | Yes | No — HA (3 replicas + anti-affinity) overflows it / OOM |
-| Converges within the wait timeout (~5 min) | Yes | Slower; risks false-fail timeouts |
+| Converges within the wait timeout (up to 15 min) | Yes | Slower; risks false-fail timeouts |
 | Actually exercises HA / anti-affinity | — | **No**: a 1-node kind cannot; validating "HA" there is false confidence |
 | Reproducible between PRs | Prune → clean, identical state each run | `no-prune` → residual state accumulates |
 | What it proves | "applies and works (local)" | "resists HA" — that is `promote-test`'s job, on real envs |
