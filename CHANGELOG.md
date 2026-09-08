@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/sca-templates/infra-kubernetes/compare/v0.1.1...v0.2.0) (2026-09-08)
+
+
+### Features
+
+* **platform:** deploy cert-manager and cluster smoke CI (Phase 1) ([#42](https://github.com/sca-templates/infra-kubernetes/issues/42)) ([aaa0f75](https://github.com/sca-templates/infra-kubernetes/commit/aaa0f75521bef1366bb24aeb92300a013ede5f27))
+
 ## [0.1.1](https://github.com/sca-templates/infra-kubernetes/compare/v0.1.0...v0.1.1) (2026-09-05)
 
 
