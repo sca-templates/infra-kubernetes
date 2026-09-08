@@ -74,7 +74,7 @@ diagnose() {
     kubectl -n "${component}" describe pod "${pod}" 2>/dev/null || true
     echo "--- logs pod/${pod} (tail 100)"
     kubectl -n "${component}" logs "pod/${pod}" --tail=100 2>/dev/null || true
-  done < <(kubectl -n "${component}" get pods -o name 2>/dev/null || true)
+  done < <(kubectl -n "${component}" get pods -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true)
   echo "── diagnose: endpoint slices backing ${component} services"
   kubectl -n "${component}" get endpointslice -o wide 2>/dev/null || true
 }
