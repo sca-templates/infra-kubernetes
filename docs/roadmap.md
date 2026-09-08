@@ -110,6 +110,7 @@ lands (see the Work Log below).
 | 2026-09-06 | Cluster smoke (CI) | `pr-cluster.yml` shipped — selective on PRs + vigilance on `push: main`, informative until stable; `bootstrap/smoke-ci.sh` owns boot→apply→wait→run→diagnose→teardown | `feature/phase-1` (PR) | — |
 | 2026-09-06 | checkov baseline gate (CI) | `.github/checkov-baseline.json` records the local-git-server pod findings; `security.yml` gates **new** IaC findings from Phase 1, re-evaluated at Phase 18 | `feature/phase-1` (PR) | — |
 | 2026-09-08 | Cluster smoke (CI) | `pr-cluster.yml` now PR-only + manual `workflow_dispatch`, required `Smoke` branch-protection check on `main` (no `push` smoke); wait tolerates unassessed (`Missing`) health | branch | — |
+| 2026-09-08 | App-of-apps on local serve (Phase 1) | `bootstrap/render-served-apps.sh` renders `argocd/apps-local.yaml` onto the git serve so the root app parses it (`ComparisonError` cleared); Phase 0.0 `automated.enabled=false` override dropped; `platform-root-local` `Synced` + `Healthy`, cert-manager smoke green | branch | — |
 
 Phases 0.x scaffold the repository and are not delivery projects; they are
 recorded here for continuity. From Phase 1, each row is appended in the same

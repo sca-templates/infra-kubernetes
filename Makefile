@@ -131,7 +131,7 @@ local-git-up: ## Stand up the fully-local git serve (bare mirror + git daemon + 
 
 .PHONY: local-git-update
 local-git-update: ## Mirror local HEAD into the local git serve (after each commit)
-	GIT_TARGET_BRANCH="$(GIT_TARGET_BRANCH)" bootstrap/local-git-update.sh
+	GIT_REPO_URL="$(GIT_REPO_URL)" GIT_TARGET_BRANCH="$(GIT_TARGET_BRANCH)" bootstrap/local-git-update.sh
 
 .PHONY: local-git-down
 local-git-down: ## Stop the local git serve (keeps the bare mirror)

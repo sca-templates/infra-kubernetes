@@ -12,7 +12,8 @@ GIT_REPO_URL="${GIT_REPO_URL:-}"
 
 [ -n "$GIT_REPO_URL" ] || { echo 'ERROR: GIT_REPO_URL is empty — run make local-git-up first'; exit 1; }
 
-echo "── mirroring HEAD → ${GIT_TARGET_BRANCH} on ${GIT_REPO_URL}"
-git push --force "${GIT_REPO_URL}" "HEAD:refs/heads/${GIT_TARGET_BRANCH}"
+echo "── mirroring HEAD → ${GIT_TARGET_BRANCH} on ${GIT_REPO_URL} (rendered ArgoCD files)"
+GIT_REPO_URL="${GIT_REPO_URL}" GIT_TARGET_BRANCH="${GIT_TARGET_BRANCH}" \
+  "$(dirname "$0")/render-served-apps.sh" "${GIT_REPO_URL}"
 
 echo "[OK] local serve ${GIT_TARGET_BRANCH} is now $(git rev-parse --short HEAD)"
