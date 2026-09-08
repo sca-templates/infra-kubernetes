@@ -97,6 +97,7 @@ lands (see the Work Log below).
 
 | Date | Project | Gate | Commit | Issue |
 | --- | --- | --- | --- | --- |
+| 2026-09-07 | Release triggers path-scoped (CI) | releases only for `feat`/`fix` touching the platform surface (`exclude-paths` in `.release-please-config.json`); release-please runs on `push` only; dispatch re-signs tags only with both inputs | branch (PR) | — |
 | 2026-09-05 | Release automation swap (CI) | release PRs/tags authored by `sca-bot-release[bot]` GitHub App token | `chore/release-app` (PR) | — |
 | 2026-09-05 | PR branch sync (CI) | queued PRs auto-merged with new `main` | `2b9da65` (squash of PR #38) | — |
 | 2026-09-05 | Release gate (CI) | human PRs blocked while a release PR is open | `a2e7937` (squash of PR #39) | — |

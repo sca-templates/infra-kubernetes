@@ -4,11 +4,16 @@
 # infra-kubernetes release — GitHub Releases + CHANGELOG + signed tags
 # =============================================================================
 #
-# release-please (conventional commits) opens a release PR for every `feat` or
-# `fix` merged to main. When that PR (or any release-marked commit) lands, the
-# tag and GitHub Release are created here, then sign-tag re-signs the tag with
-# the dedicated release-bot GPG key (replacing the API-created lightweight ref
-# with an annotated, signed one at the same commit).
+# release-please (conventional commits) opens a release PR for `feat`/`fix`
+# commits that reach the deployed platform. It runs on every push to `main`,
+# but commits are path-scoped: one whose files all fall under an
+# `exclude-paths` directory in .release-please-config.json (CI/tooling/docs)
+# is dropped before parsing, so it never opens a release PR. When a release PR
+# lands, the tag and GitHub Release are created here, then sign-tag re-signs
+# the tag with the dedicated release-bot GPG key (replacing the API-created
+# lightweight ref with an annotated, signed one at the same commit). A manual
+# `workflow_dispatch` never runs release-please: it only re-signs an existing
+# tag, and only when both `tag_name` and `commit_sha` are provided.
 #
 # A dedicated installation token is required: resources opened via the default
 # GITHUB_TOKEN do not trigger workflow runs, so the release PR would never run
@@ -43,6 +48,7 @@ concurrency:
 jobs:
   release:
     name: Release please
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     outputs:
       releases_created: ${{ steps.release.outputs.releases_created }}
@@ -69,7 +75,10 @@ jobs:
   sign-tag:
     name: Sign release tag
     needs: release
-    if: needs.release.outputs.releases_created == 'true' || github.event_name == 'workflow_dispatch'
+    if: >-
+      always() &&
+      ((github.event_name == 'push' && needs.release.outputs.releases_created == 'true') ||
+       (github.event_name == 'workflow_dispatch' && inputs.tag_name != '' && inputs.commit_sha != ''))
     runs-on: ubuntu-latest
     steps:
       - name: Mint sca-bot-release token

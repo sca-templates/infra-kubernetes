@@ -17,7 +17,7 @@ a deployment.
 | Security | `.github/workflows/security.yml` | push + PR | gitleaks, checkov (static IaC), osv-scanner (SCA), pin guards (no `latest` tags/charts) |
 | CodeQL | `.github/workflows/codeql.yml` | push + PR + schedule | GitHub CodeQL static analysis on the repo languages |
 | Scorecard | `.github/workflows/scorecard.yml` | push + schedule | OpenSSF Scorecard attestation + badge |
-| Release | `.github/workflows/release.yml` | push to `main` | release-please opens release PRs, tags (+ signed annotated tags) and GitHub Releases; drives `CHANGELOG.md`; a manual `workflow_dispatch` (`tag_name` + `commit_sha`) re-signs an existing tag (see [versioning.md](versioning.md)) |
+| Release | `.github/workflows/release.yml` | push to `main` | release-please opens release PRs/tags (+ signed annotated tags) and GitHub Releases for `feat`/`fix` commits touching the **platform surface** — commits confined to the `exclude-paths` directories (`.github`, `bootstrap`, `0.Project_info`) are dropped (see [versioning.md](versioning.md)); drives `CHANGELOG.md`; a manual `workflow_dispatch` never runs release-please and only re-signs an existing tag when `tag_name` + `commit_sha` are both provided |
 | Release gate | `.github/workflows/release-gate.yml` | PR + manual | blocks human PRs while a release-please PR is open (`release-gate` required check) |
 
 ### Scope semantics
@@ -52,12 +52,18 @@ guards in [security.md](security.md).
 
 `release.yml` has two jobs:
 
-- **release-please** — computes the next version, opens or updates the release
-  PR, and on merge creates the tag and the GitHub Release.
+- **release-please** — runs **only on a push to `main`** (a manual dispatch
+  never runs it); computes the next version, opens or updates the release PR,
+  and on merge creates the tag and the GitHub Release. Commits whose files all
+  fall under an `exclude-paths` directory are dropped before parsing, so a
+  CI/tooling/docs-only push releases nothing.
 - **sign-tag** — re-creates the tag as an annotated tag signed by the
-  release-bot GPG key on the same commit. It runs on every release **or** on a
-  manual `workflow_dispatch` (`tag_name` + `commit_sha`), which is how an
-  already-published lightweight tag is promoted to signed (used for `v0.1.0`).
+  release-bot GPG key on the same commit. It runs when a release was created
+  on `main`, **or** on a manual `workflow_dispatch` that provides **both**
+  `tag_name` and `commit_sha` (how an already-published lightweight tag is
+  promoted to signed — used for `v0.1.0`). An empty dispatch does nothing; the
+  job is guarded with `always()` because release-please is skipped on
+  dispatch.
 
 The workflow is the only one that holds repository secrets
 (`APP_ID`, `APP_PRIVATE_KEY`, `RELEASE_GPG_PRIVATE_KEY`) — see

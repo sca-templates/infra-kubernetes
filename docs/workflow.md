@@ -88,10 +88,13 @@ a deliberate, documented deviation (the [Deviations log](architecture.md#deviati
   `release-please--branches--`. A push whose branch is not on the list is
   rejected (`422`).
 - **A branch name never decides whether a release happens.** release-please
-  only bumps on squashed `feat`/`fix` commits (minor/patch); `docs`,
-  `chore`, `test`, `ci`, `build`, `style` and `refactor` merges never open a
-  release PR. Keep those types off `feat`/`fix` titles and no tag appears —
-  the "immunity" is the commit type, not the branch.
+  only bumps on `feat`/`fix` commits that reach the deployed platform: the
+  type must be `feat`/`fix` **and** at least one file must fall outside the
+  `exclude-paths` directories (`.github`, `bootstrap`, `0.Project_info`)
+  from `.release-please-config.json`. `docs`, `chore`, `test`,
+  `ci` and refactors never open a release PR either way. Keep unreleased work
+  off `feat`/`fix` titles **and** out of platform paths — the "immunity" is
+  the commit type plus the paths, not the branch.
 - **Open PRs update themselves.** After every push to `main`, the
   `main-sync` workflow merges the new `main` into each open PR's branch and
   pushes it back (same-repo only; conflicts are left untouched and reported
