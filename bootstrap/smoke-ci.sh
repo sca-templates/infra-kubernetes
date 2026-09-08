@@ -54,6 +54,8 @@ trap cleanup EXIT
 diagnose() {
   echo "── diagnose: Application/${APP_NAME}"
   kubectl get application "${APP_NAME}" -n argocd -o yaml 2>/dev/null | tee "${STATE_DIR}/${APP_NAME}-diagnose.yaml" || true
+  echo "── diagnose: ApplicationSet/platform-local-smoke"
+  kubectl get applicationset platform-local-smoke -n argocd -o yaml 2>/dev/null | tee "${STATE_DIR}/platform-local-smoke-diagnose.yaml" || true
   echo "── diagnose: app status.conditions"
   kubectl get application "${APP_NAME}" -n argocd -o jsonpath='{range .status.conditions[*]}{.type}: {.message}{"\n"}{end}' 2>/dev/null || true
   echo "── diagnose: operationState"
@@ -78,11 +80,25 @@ make smoke-app COMPONENT="${component}" REF="${ref}"
 
 echo "── wait for Application/${APP_NAME} Synced+Healthy (timeout ${TIMEOUT}s)"
 deadline=$(( $(date +%s) + TIMEOUT ))
+announced=0
 while : ; do
   now="$(date +%s)"
   [ "${now}" -lt "${deadline}" ] || { echo "FAIL: Application/${APP_NAME} did not converge within ${TIMEOUT}s" >&2; diagnose; exit 1; }
-  sync_health="$(kubectl get application "${APP_NAME}" -n argocd --no-headers 2>/dev/null \
-    -o custom-columns=SYNC:.status.sync.status,HEALTH:.status.health.status 2>/dev/null | tr -d ' ')"
+
+  # The ApplicationSet generated <name>-smoke asynchronously; the Application may
+  # not exist for a few seconds after `make smoke-app` — that is normal, keep
+  # polling until it appears (the deadline above still fail-closes).
+  sync_health=""
+  if output="$(kubectl get application "${APP_NAME}" -n argocd --no-headers \
+      -o custom-columns=SYNC:.status.sync.status,HEALTH:.status.health.status 2>/dev/null)"; then
+    sync_health="${output}"
+  elif [ "${announced}" = "0" ]; then
+    echo "── waiting for Application/${APP_NAME} to appear (ApplicationSet controller)..." >&2
+    announced=1
+  fi
+
+  # Not generated yet → keep waiting.
+  [ -n "${sync_health}" ] || { sleep "${POLL}"; continue; }
 
   status="$(printf '%s\n' "${sync_health}" | awk '{print $1}')"
   health="$(printf '%s\n' "${sync_health}" | awk '{print $2}')"
