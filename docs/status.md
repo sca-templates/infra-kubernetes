@@ -22,7 +22,7 @@ design.
 | --- | --- |
 | Repository | `infra-kubernetes` (local, fully-local git serve; published to GitHub before promotion) |
 | Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1) |
-| `platform-root-local` | present, `Synced` against the local git serve (`main`) |
+| `platform-root-local` | present, `Synced` + `Healthy` against the local git serve (`main`); Phase 0.0 `automated.enabled=false` override dropped |
 | `platform-local` ApplicationSet | present, one element (`cert-manager`, wave -20) |
 | cert-manager app | `cert-manager-local` `Synced` + `Healthy`; `sca-ca` ClusterIssuer `Ready`; leaf Certificate smoke green |
 | git-local-serve | in-cluster git daemon (`git://<node>:9418/sca-infra.git`) `Ready` |
@@ -35,7 +35,7 @@ design.
 
 | # | Limitation | Current behavior | To close |
 | --- | --- | --- | --- |
-| 1 | **Fully-local git serve (not GitHub)** | Local ArgoCD reconciles the in-cluster git serve (`git://<node>:9418`), not the GitHub repo; the native GitHub `GIT_REPO_URL` remains the default in the files | Publish the repo and swap `GIT_REPO_URL` back to GitHub to exercise the real source-of-truth path |
+| 1 | **Fully-local git serve (not GitHub)** | Local ArgoCD reconciles the in-cluster git serve (`git://<node>:9418`), not the GitHub repo; the serve carries a **rendered** `argocd/apps-local.yaml` (`bootstrap/render-served-apps.sh`), while the repo templates keep the `{{GIT_REPO_URL}}`/`{{GIT_TARGET_BRANCH}}` placeholders for the `make bootstrap` seam | Publish the repo and swap `GIT_REPO_URL` back to GitHub to exercise the real source-of-truth path; dev / qa / prod must render their `apps-<env>.yaml` the same way when those clusters bootstrap |
 | 2 | **dev / qa / prod clusters pending** | Not provisioned (terraform/ansible outside this repo) | Provision per env; promote via `promote-test` (see [workflow.md](workflow.md)) |
 | 3 | **Nothing seeded in Vault** | Vault seed script ships (`bootstrap/seed-vault.sh`) but is never run — no Vault yet | Runs at Phase 2; short ESO `refreshInterval` in local prevents the previous wedge |
 | 4 | **OpenSSF Best Practices badge — silver blocked** | All silver criteria are met except `contributors_unassociated` and `bus_factor` (≥2): the project has a single maintainer (`CODEOWNERS` = `@Santiago1010`) | Achieved once a second **unassociated** contributor joins and is reflected in `CODEOWNERS` + `.github/GOVERNANCE.md`; passing badge is already achievable (see [.github/GOVERNANCE.md](../.github/GOVERNANCE.md), [docs/ci-cd.md](ci-cd.md)) |

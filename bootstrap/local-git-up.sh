@@ -51,6 +51,10 @@ serve_url="git://${node_ip}:${PORT}/sca-infra.git"
 echo "── checking reachability of ${serve_url} from the host"
 git ls-remote "${serve_url}" >/dev/null 2>&1 || { echo "ERROR: cannot reach ${serve_url}"; exit 1; }
 
+echo "── rendering served argocd/apps-local.yaml (placeholders → serve values)"
+GIT_REPO_URL="${serve_url}" GIT_TARGET_BRANCH="${GIT_TARGET_BRANCH}" \
+  "$(dirname "$0")/render-served-apps.sh" "${serve_url}"
+
 upsert_env() {
   local key="$1" value="$2"
   if grep -q "^${key}=" .env 2>/dev/null; then
