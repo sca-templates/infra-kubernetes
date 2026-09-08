@@ -7,17 +7,17 @@ Project done when: `ClusterSecretStore vault` Ready; a projected Secret is
 
 No natural phases → issues directly under the project.
 
-- [ ] Issue #3 · Deploy `external-secrets/external-secrets` + `ClusterSecretStore`
+- [x] Issue #3 · Deploy `external-secrets/external-secrets` + `ClusterSecretStore`
   Depends on: vault (#2)
-  - [ ] `infrastructure/external-secrets/` values-base + overlays for 4 envs
-        - [ ] envs/local, dev, qa, prod
+  - [x] `infrastructure/external-secrets/` values-base + overlays for 4 envs
+        - [x] envs/local, dev, qa, prod
         - Commits: `feat(external-secrets): add chart reference and per-env overlays`
-  - [ ] registry appset element (wave -10)
+  - [x] registry appset element (wave -10)
         Commits: `feat(external-secrets): register in apps appset (wave -10)`
-  - [ ] `ClusterSecretStore vault` (k8s-auth) referencing Vault
+  - [x] `ClusterSecretStore vault` (k8s-auth) referencing Vault
         Commits: `feat(external-secrets): vault cluster secret store`
-  - [ ] smoke: one `ExternalSecret` pulling a KV secret → `Synced`
+  - [x] smoke: one `ExternalSecret` pulling a KV secret → `Synced`
         Commits: `test(external-secrets): kv projection smoke`
-  - [ ] docs: Work Log row + catalog Status → deployed
+  - [x] docs: Work Log row + catalog Status → deployed
         Commits: `docs(external-secrets): mark deployed`
   Issue done when: store `Ready` + external secret `Synced`.

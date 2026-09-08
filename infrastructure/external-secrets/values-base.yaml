@@ -1,0 +1,47 @@
+# external-secrets — base values (shared across environments; per-env tier
+# overrides live in envs/<env>/external-secrets.yaml).
+# Official chart: external-secrets/external-secrets, https://charts.external-secrets.io.
+# Chart pin (targetRevision) is set in argocd/apps-<env>.yaml; the image tag is
+# pinned here to the same version the chart ships (appVersion), never `latest`.
+#
+# External Secrets Operator (ESO, wave -10) projects Vault KV secrets into
+# native Kubernetes Secrets via the ClusterSecretStore vault
+# (infrastructure/external-secrets/manifests/). The kubernetes-auth role the
+# store authenticates with is provisioned by bootstrap/seed-vault.sh (Phase 2).
+
+replicaCount: 1
+
+# The SecretStore/ClusterSecretStore/ExternalSecret CRDs ship with this chart
+# (cert-manager style); the manifests/ directory holds the store CR itself.
+installCRDs: true
+
+image:
+  repository: ghcr.io/external-secrets/external-secrets
+  tag: "v2.10.0"
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  automount: true
+  # Name is derived from the release name (appset releaseName: '{{.name}}' =
+  # 'external-secrets'), matching the Vault kubernetes-auth role bound to
+  # bound_service_account_names=external-secrets / namespace external-secrets.
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+
+webhook:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+
+certController:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi

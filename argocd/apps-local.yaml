@@ -19,6 +19,13 @@ spec:
             targetRevision: v1.21.1
             wave: "-20"
             path: cert-manager/manifests
+          - name: external-secrets
+            namespace: external-secrets
+            chartRepo: https://charts.external-secrets.io
+            chart: external-secrets
+            targetRevision: 2.10.0
+            wave: "-10"
+            path: external-secrets/manifests
           - name: vault
             namespace: vault
             chartRepo: https://helm.releases.hashicorp.com
