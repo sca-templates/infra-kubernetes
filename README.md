@@ -11,8 +11,10 @@ Portable GitOps source of truth for the `sca` infrastructure platform on
 Kubernetes. ArgoCD reconciles this repository; **nothing is deployed by hand**.
 This is a clean restart after the previous `infra-kubernetes` churned in
 `fix(...)` commits — one component, one commit, one reviewed gate per phase.
-Nothing beyond ArgoCD is deployed yet; the roadmap is in
-[docs/roadmap.md](docs/roadmap.md).
+ArgoCD is deployed (Phase 0) and cert-manager is deployed (Phase 1); the
+remaining 16 components are `planned`. The delivery plan lives in
+[docs/roadmap.md](docs/roadmap.md) and what is actually deployed lives in
+[docs/status.md](docs/status.md).
 
 ## Quick Start (local)
 
@@ -28,8 +30,9 @@ make status
 - `make cluster-up` creates the pinned single-node `kind` cluster.
 - `make bootstrap` installs ArgoCD and applies the environment root
   Application. `GIT_REPO_URL` comes from `.env` (see `.env.example`); a live
-  URL is a Phase 1 requirement, until then the root app stays `OutOfSync` by
-  design.
+  URL is a Phase 1 requirement. In `local` the root app reconciles a fully-local
+  in-cluster git serve (`make local-git-up`) instead of GitHub — see
+  [docs/ci-cd.md](docs/ci-cd.md) — and is `Synced` + `Healthy` by design.
 - From then on, changes land via git push → ArgoCD reconcile.
 
 Before opening a pull request, run the validation suite
@@ -57,10 +60,14 @@ registry is `argocd/apps-<env>.yaml`. Promotion between environments passes a
 
 The catalog is **17 components** plus ArgoCD. `local` runs the full set;
 `dev`/`qa`/`prod` run the operator/security core plus the gateway and Keycloak.
+**Currently deployed: ArgoCD (Phase 0) and cert-manager (Phase 1); every other
+component is `planned (Phase N)`.** The status column in
+[docs/architecture.md](docs/architecture.md) is the source of truth for what is
+live.
 
 | Area | Components |
 | --- | --- |
-| Security and identity | cert-manager, Vault, External Secrets Operator, Keycloak |
+| Security and identity | cert-manager (deployed), Vault, External Secrets Operator, Keycloak |
 | Edge and mesh | Kong, Linkerd control plane |
 | Data | CloudNativePG (postgres-app, keycloak-db), Strimzi Kafka, Redis |
 | Observability | kube-prometheus-stack, Loki, Tempo, Alloy |
@@ -77,12 +84,18 @@ intentionally excluded.
 | Command | Description |
 | --- | --- |
 | `make prereqs` | Install the pinned local CLI toolchain |
+| `make doctor` | Read-only platform health check (toolchain, cluster, ArgoCD apps, seam) |
+| `make install-cli` | Symlink `bootstrap/sca.sh` → `~/.local/bin/sca` |
 | `make cluster-up` | Create the local `kind` cluster |
 | `make cluster-down` | Delete the local `kind` cluster |
 | `make bootstrap` | Install ArgoCD and apply the environment root Application |
 | `make status` | Show nodes, ArgoCD Applications and pod health |
 | `make validate-static` | Run Markdown, YAML and shell validation without a cluster |
 | `make validate` | Run static validation plus live cluster checks |
+| `make smoke COMPONENT=<name>` | Smoke a deployed component against a live cluster |
+| `make local-git-up` | Stand up the fully-local git serve (kind only) |
+| `make local-git-update` | Mirror local HEAD into the local git serve |
+| `make local-git-down` | Stop the local git serve |
 | `make port-forward APP=<name>` | Reach a platform UI/API locally (argocd, vault, keycloak, grafana, prometheus, …) |
 | `make clean` | Remove local state (`.env`, `.secrets/`, generated artifacts) |
 
