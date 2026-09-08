@@ -3,7 +3,8 @@
 The security controls wired into the repository and its CI. This is a
 **state document**: controls shipped in Phase 0.0 exist and run in CI; reality
 is reported as it is. From Phase 1 the checkov **baseline** gates new IaC
-findings; the cluster-smoke gate stays planned until stable (see
+findings and the cluster smoke is a required PR check (`Smoke` on `main`,
+branch protection) — see
 [ci-cd.md](ci-cd.md)). For secret handling see [secrets.md](secrets.md); for
 the CI workflow map see [ci-cd.md](ci-cd.md).
 
@@ -103,9 +104,10 @@ never pass silently.
 ## Settings checklist (out of repo)
 
 When publishing the repository to GitHub, enable inline: secret scanning and
-push protection; branch protection on `main` (require CI + review);
-CODEOWNERS for `argocd/` (optional, if the org wants it). This list lives here
-because it is configuration of the hosting side, not of this repository.
+push protection; branch protection on `main` (require review + status checks
+including `Smoke` for `pr-cluster.yml`); CODEOWNERS for `argocd/` (optional,
+if the org wants it). This list lives here because it is configuration of the
+hosting side, not of this repository.
 
 ## Runbook: leaked secret
 

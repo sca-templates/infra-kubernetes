@@ -60,9 +60,10 @@ worked in parallel.
 > functional smoke" (in the per-project gate above) becomes the `pr-cluster`
 > smoke command. No per-component workflow wiring is needed beyond the
 > component's smoke command in `bootstrap/smoke-target.sh`. It smokes the
-> touched component on PRs and the deployed baseline on `push: main`
-> (vigilance); it is informative until stable on 2–3 components. Profile:
-> `local` (see [ci-cd.md](ci-cd.md)).
+> touched component on PRs as the required `Smoke` check on `main`
+> (branch protection), with a manual `workflow_dispatch` for one-off
+> testing; there is no `push`-triggered smoke. Profile: `local` (see
+> [ci-cd.md](ci-cd.md)).
 
 ## Projects (index)
 
@@ -107,6 +108,7 @@ lands (see the Work Log below).
 | 2026-09-06 | cert-manager | deployed — `sca-ca` ClusterIssuer Ready, leaf Certificate smoke green, all 4 env overlays + appset wave -20 | `feature/phase-1` (PR) | [#6](https://github.com/sca-templates/infra-kubernetes/issues/6) |
 | 2026-09-06 | Cluster smoke (CI) | `pr-cluster.yml` shipped — selective on PRs + vigilance on `push: main`, informative until stable; `bootstrap/smoke-ci.sh` owns boot→apply→wait→run→diagnose→teardown | `feature/phase-1` (PR) | — |
 | 2026-09-06 | checkov baseline gate (CI) | `.github/checkov-baseline.json` records the local-git-server pod findings; `security.yml` gates **new** IaC findings from Phase 1, re-evaluated at Phase 18 | `feature/phase-1` (PR) | — |
+| 2026-09-08 | Cluster smoke (CI) | `pr-cluster.yml` now PR-only + manual `workflow_dispatch`, required `Smoke` branch-protection check on `main` (no `push` smoke); wait tolerates unassessed (`Missing`) health | branch | — |
 
 Phases 0.x scaffold the repository and are not delivery projects; they are
 recorded here for continuity. From Phase 1, each row is appended in the same

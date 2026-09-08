@@ -3,8 +3,8 @@
 What GitHub Actions do — and deliberately do **not** — do for this
 repository. Phase 0 ships the static workflows plus the release automation
 (no cluster smoke); **Phase 1 ships the cluster-smoke workflow
-(`pr-cluster.yml`)**, rebuilt from scratch and run on an ephemeral `kind`
-cluster. See [security.md](security.md) for the security controls these
+(`pr-cluster.yml`)**, rebuilt from scratch, run on an ephemeral `kind` cluster
+and gating PRs as the **required `Smoke` check** on `main`. See [security.md](security.md) for the security controls these
 workflows carry, [versioning.md](versioning.md) for how releases, tags and the
 CHANGELOG are produced, and [workflow.md](workflow.md) for how a merge becomes
 a deployment.
@@ -81,10 +81,12 @@ monitored. See the [roadmap](roadmap.md) for the Phase 1 gate and its smoke.
 
 - **`pull_request`** — selective smoke of the touched component (profile
   `local`), so a change is validated before it merges. Same-repo PRs only
-  (fork PRs are skipped, coherent with `main-sync.yml`).
-- **`push` to `main`** — vigilance smoke of the deployed baseline
-  (`cert-manager`, `REF=main`), confirming the platform keeps working as
-  components land. This is the "is it still healthy" guard.
+  (fork PRs are skipped, coherent with `main-sync.yml`). The `Smoke` check is a
+  **required** branch-protection check on `main`.
+- **`workflow_dispatch`** (manual) — one-off smoke of a component/ref
+  (`component` + `ref` inputs, defaults `cert-manager`/`main`) for testing
+  without opening a PR. Nothing else triggers the workflow; there is no
+  vigilance run on `push`.
 
 The whole boot → apply → wait → run → diagnose → teardown cycle lives in
 `bootstrap/smoke-ci.sh`; each component adds only its own smoke command
@@ -125,12 +127,13 @@ The smoke runs the **`local`** profile (1 replica, auto-sync + prune), never
   gated by `promote-test` ([workflow.md](workflow.md)), which loads the target
   env overlay on a local `kind` cluster. The smoke validates correctness;
   `promote-test` validates the env overlay against a real protectable surface.
-- **Merge gate**: the smoke runs as an **informative** check — it is not a
-  required check until stable on 2–3 components. Making it blocking is a
-  branch-protection change on `main` (add `pr-cluster` to the required checks
-  for the paths it covers), **not** a change to this file. Until then a failed
-  smoke reports but does not block a human merge; once stable it becomes a
-  required check, so infra-only doc changes are not blocked by a cluster boot.
+- **Merge gate**: the `Smoke` check is a **required branch-protection check on
+  `main`** (branch protection must include `Smoke` in the required status
+  checks). A PR that touches a platform component must pass the smoke to merge;
+  docs-only PRs (like the release-please PR, which touches only
+  `CHANGELOG.md`/`manifest`) resolve to no component and the smoke step skips
+  cleanly, so they are not blocked by a cluster boot. Manual one-off smokes run
+  via `workflow_dispatch`.
 
 ### Release gate
 

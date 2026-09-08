@@ -7,12 +7,12 @@
 # smoke command (bootstrap/smoke-<component>.sh).
 #
 # Triggers:
-#   - pull_request:  selective smoke of the touched component (profile `local`).
-#   - push to main:  vigilance smoke of the deployed baseline (cert-manager).
+#   - pull_request:       selective smoke of the touched component (profile
+#                         `local`). Required PR check on main (branch
+#                         protection must include `Smoke`); no push
+#                         watch/monitoring runs.
+#   - workflow_dispatch:  manual one-off smoke of a component/ref for testing.
 #
-# Informative by design (docs/ci-cd.md): it is NOT a required check until it is
-# stable on 2-3 components. To make it blocking, add `pr-cluster` to the
-# branch-protection required checks on main (do not change this file).
 # Same-repo PRs only (coherent with main-sync.yml); fork PRs are skipped.
 # =============================================================================
 
@@ -20,8 +20,16 @@ name: Cluster Smoke
 
 on:
   pull_request:
-  push:
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      component:
+        description: Component to smoke (subdir of infrastructure/)
+        type: string
+        default: cert-manager
+      ref:
+        description: Git ref/branch to smoke
+        type: string
+        default: main
 
 permissions:
   contents: read
@@ -36,7 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     # Fork PRs cannot resolve the head ref on the upstream repo (main-sync skips
     # forks too); only run the selective smoke for same-repo PRs.
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -56,10 +64,10 @@ jobs:
           PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "push" ]; then
-            # Vigilance: smoke the deployed baseline on main.
-            echo "component=cert-manager" >> "${GITHUB_OUTPUT}"
-            echo "ref=main" >> "${GITHUB_OUTPUT}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual: smoke the requested component/ref for testing.
+            echo "component=${{ inputs.component }}" >> "${GITHUB_OUTPUT}"
+            echo "ref=${{ inputs.ref }}" >> "${GITHUB_OUTPUT}"
           else
             # Selective: map changed paths to the touched component.
             changed="$(git diff --name-only "${PR_BASE_SHA}...${PR_HEAD_SHA}")"

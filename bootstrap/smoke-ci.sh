@@ -103,14 +103,17 @@ while : ; do
   status="$(printf '%s\n' "${sync_health}" | awk '{print $1}')"
   health="$(printf '%s\n' "${sync_health}" | awk '{print $2}')"
 
-  # 'Missing' app or clear failure → fail fast
+  # Health `Missing` is transient: a freshly generated Application reports it
+  # while ArgoCD has not assessed health yet — keep polling instead of failing.
+  # Only sync `Missing` (source/branch/path/chart not found) or an app that is
+  # Synced but Degraded are real failures.
   if [ "${status}" = "Missing" ]; then
-    echo "FAIL: Application/${APP_NAME} is Missing" >&2; diagnose; exit 1
+    echo "FAIL: Application/${APP_NAME} sync Missing (source not found)" >&2; diagnose; exit 1
   fi
   case "${status}/${health}" in
     Synced/Healthy) echo "[OK] Application/${APP_NAME} is Synced/Healthy"; break ;;
-    */Degraded | */Missing)
-      echo "FAIL: Application/${APP_NAME} ${sync_health}" >&2; diagnose; exit 1 ;;
+    Synced/Degraded)
+      echo "FAIL: Application/${APP_NAME} synced but Degraded (${sync_health})" >&2; diagnose; exit 1 ;;
   esac
   sleep "${POLL}"
 done

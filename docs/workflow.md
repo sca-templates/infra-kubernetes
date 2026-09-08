@@ -36,7 +36,8 @@ graph LR
    commits into one or more reviewed PRs as the change dictates — grouping is
    a judgment call, not a fixed rule.
 2. **CI**: static suite always; from Phase 1 a *selective* cluster smoke of the
-   touched component also runs (ephemeral `kind`, profile `local`) — see
+   touched component also runs as a required PR check (`Smoke` on `main`,
+   ephemeral `kind`, profile `local`) — see
    [ci-cd.md](ci-cd.md).
 3. **Review**: a human reviews the diff; the reviewer is the gate for "turns
    green" (the per-component DoD in [status.md](status.md)).
