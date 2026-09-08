@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/sca-templates/infra-kubernetes/compare/v0.2.0...v0.2.1) (2026-09-08)
+
+
+### Bug Fixes
+
+* **local-git-serve:** render served apps-local.yaml for local git serve ([#46](https://github.com/sca-templates/infra-kubernetes/issues/46)) ([660a604](https://github.com/sca-templates/infra-kubernetes/commit/660a604b4ce610b3599de6a541c5f6bf593c60e1))
+
 ## [0.2.0](https://github.com/sca-templates/infra-kubernetes/compare/v0.1.1...v0.2.0) (2026-09-08)
 
 
