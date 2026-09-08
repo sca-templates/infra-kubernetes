@@ -7,10 +7,11 @@ metadata:
   name: vault-tls
   namespace: vault
   annotations:
-    # Within the vault Application (app-wide wave 0), apply after the chart's
-    # HA StatefulSet and the sca-ca ClusterIssuer land (both at default wave 0,
-    # chart CRs applied before this raw manifest).
-    argocd.argoproj.io/sync-wave: "1"
+    # Within the vault Application, apply the TLS Certificate well before the
+    # chart's HA StatefulSet (default wave 0) so the vault-tls Secret exists
+    # before the pod tries to mount it. The sca-ca ClusterIssuer it depends on
+    # lives in the cert-manager Application (wave -20), already synced.
+    argocd.argoproj.io/sync-wave: "-10"
 spec:
   secretName: vault-tls
   issuerRef:
