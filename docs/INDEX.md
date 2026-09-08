@@ -39,7 +39,7 @@ here.
 | [status.md](status.md) | Current state, known accepted limitations, intentional exclusions | live cluster + `make status` |
 | [roadmap.md](roadmap.md) | The delivery plan index: dependency-graph timeline, shared DoD, project index, global Work Log, and out-of-plan rules; linked to GitHub Projects/Milestones/Issues. Per-project detail lives in [roadmap/](roadmap/), one file per component | GitHub board; [roadmap/](roadmap/) for per-project gates; `docs/status.md` for what is deployed |
 | [workflow.md](workflow.md) | GitOps model, change→deploy flow, per-env promotion with promote-test, escalation gate, troubleshooting | `argocd/*`, `Makefile` |
-| [ci-cd.md](ci-cd.md) | What the shipped GitHub Actions do; cluster-smoke plan (absent by design) | `.github/workflows/*.yml`, `Makefile` |
+| [ci-cd.md](ci-cd.md) | What the shipped GitHub Actions do; cluster-smoke workflow (`pr-cluster.yml`): selective on PRs as a required check, manual dispatch | `.github/workflows/*.yml`, `Makefile` |
 | [versioning.md](versioning.md) | Semver pre-1.0 scheme, release-please flow, signed release tags, CHANGELOG rules | `.github/workflows/release.yml`, `.release-please-*.json`, `.github/release-bot-gpg.pub` |
 | [security.md](security.md) | Security controls wired into CI: gitleaks, checkov baseline, pinning guards, settings checklist, leaked-secret runbook | `.github/workflows/security.yml`, `codeql.yml`, `scorecard.yml` |
 | [secrets.md](secrets.md) | Vault + ESO design, KV path inventory, seed script, short-refresh rationale, per-component secret flow | `bootstrap/seed-vault.sh` |

@@ -4,6 +4,12 @@
   "include-v-in-tag": true,
   "changelog-path": "CHANGELOG.md",
   "packages": {
-    ".": {}
+    ".": {
+      "exclude-paths": [
+        ".github",
+        "0.Project_info",
+        "bootstrap"
+      ]
+    }
   }
 }

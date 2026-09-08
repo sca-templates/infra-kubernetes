@@ -23,12 +23,24 @@ Because every phase lands as one `feat(platform): …` commit, **each released
 component produces one release**. The first release (`v0.1.0`) covers the whole
 pre-release history; subsequent components are additive minors.
 
+**Tipo *y* paths deciden el release.** Both the commit type and the paths it
+touches gate whether a release opens. The root package in
+`.release-please-config.json` carries
+`exclude-paths: [".github", "0.Project_info", "bootstrap"]`
+(exact directory names): a commit is dropped **only if every file it changes
+stays inside those directories** — CI tweaks, the smoke harness, docs and
+agent notes never open a release PR on their own; a commit that *also* touches
+the deployed surface (`infrastructure/`, `envs/`, `argocd/`, `charts/`) still
+releases. Root-level files (`Makefile`, `README.md`, …) are not under any
+directory and always count, so keep `feat`/`fix` off commits that only touch
+them (the path match works per directory, not per file).
+
 ## How a release happens
 
 1. A `feat`/`fix`/breaking commit is merged to `main`.
 2. The `Release` workflow runs; release-please opens a **release PR** that
    adds `CHANGELOG.md` (new version section), bumps
-   `.release-please-manifest.json` and `version.txt`, and targets `main`.
+   `.release-please-manifest.json`, and targets `main`.
 3. The release PR goes through the **same gates as any other PR**: `Validate`
    and `Security` run on it (a dedicated token minted from the
    `sca-bot-release` GitHub App, not the default `GITHUB_TOKEN`, is used
@@ -42,7 +54,8 @@ pre-release history; subsequent components are additive minors.
    git work tree (`f8d50f4`; the earlier version failed because it imported
    the key before checking anything out).
 
-`docs` / `chore` / `ci` merges never open a release PR.
+A merge opens no release PR when its type is `docs`/`chore`/`ci`/`test`, or
+when every file of its `feat`/`fix` falls under an `exclude-paths` directory.
 
 ### Ad-hoc versions
 
@@ -96,12 +109,14 @@ rewritten when a key rotates.
 ### Re-signing an existing tag
 
 The `Release` workflow also accepts a manual `workflow_dispatch` with two
-optional inputs, `tag_name` + `commit_sha`, to (re)sign an existing tag
-**without** creating a new release: the `sign-tag` job runs whenever
-`releases_created == 'true'` *or* the workflow is dispatched manually. The
-initial `v0.1.0` tag was released before the signing job existed; it was
-promoted from the API-created lightweight ref to the signed annotated tag with
-exactly this dispatch, pinned to commit `0e39a99`.
+inputs, `tag_name` + `commit_sha`, to (re)sign an existing tag **without**
+creating a new release. A manual dispatch never runs release-please; the
+`sign-tag` job runs when a release was created on `main` or — on dispatch —
+only if **both** inputs are provided (an empty dispatch now does nothing
+instead of failing the job). The initial `v0.1.0` tag was released before the
+signing job existed; it was promoted from the API-created lightweight ref to
+the signed annotated tag with exactly this dispatch, pinned to commit
+`0e39a99`.
 
 ## CHANGELOG.md
 

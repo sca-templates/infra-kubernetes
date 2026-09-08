@@ -1,10 +1,16 @@
-# Pull Request — Phase <N> (<component>)
+# Pull Request — <scope>
 
-## Summary
+## Context
 
-<!-- One sentence: what and why. -->
+<!-- What and why. Link the phase row or issue when one exists. -->
 
-## Phase reference
+## Type of change
+
+- [ ] Phase delivery (P<N> / component)
+- [ ] Bug fix (add a regression test when a suite covers the area)
+- [ ] Docs / CI / chore (no runtime change)
+
+## Phase reference (phase delivery only)
 
 - `docs/roadmap.md` row: <!-- link or paste -->
 - Local preview branch: <!-- branch name used for preview -->
@@ -14,11 +20,15 @@
 
 <!-- List files, components, environment impact. -->
 
-## DoD gate evidence
+## Validation
 
-<!-- Paste output of each command. Checkboxes mark completion. -->
+- [ ] `make validate-static` green
+- [ ] Static CI green (gitleaks, checkov, pin guards, CodeQL, actionlint) — or N/A
+- [ ] Smoke run for the changed component via `pr-cluster.yml` — or N/A
+- [ ] Live cluster probes passed — or limitation documented
 
-- [ ] `make status` — no new Degraded
+## DoD gate evidence (phase delivery only)
+
 - [ ] `kubectl get applications -n argocd` — app Synced/Healthy
 - [ ] `kubectl get pods -n <ns>` — pods Ready 2+ min
 - [ ] `kubectl get externalsecret -A` — SecretSynced (if applicable)
@@ -48,19 +58,20 @@
 
 </details>
 
-## Docs
+## Docs (updated when behavior or topology changes)
 
 - [ ] `docs/roadmap.md` Work Log row appended
 - [ ] `docs/status.md` updated
 - [ ] `docs/architecture.md` Status column flipped
-- [ ] All four env overlays updated (or local-only documented)
-- [ ] `README.md` / `AGENTS.md` updated if behavior changes
+- [ ] All four `envs/<env>/<component>.yaml` overlays updated (or local-only documented)
 
 ## Checklist
 
 - [ ] Content in English
+- [ ] Commit(s) signed off with `git commit -s` (DCO)
 - [ ] No secrets, kubeconfigs, or generated artifacts
 - [ ] Conventional commit (`feat(<scope>): ...`)
-- [ ] Sync-waves respected (operators before CRs, Vault before ESO, datastores before consumers; new component wave >=10 apart)
-- [ ] Security workflows green (gitleaks, checkov, pin guards)
+- [ ] Sync-waves respected (operators before CRs, Vault before ESO, datastores before consumers; new component wave ≥10 apart)
+- [ ] Security workflows green (gitleaks, checkov, pin guards) and CodeQL clean
+- [ ] Rollback, not fix-chains: if the change fails its gate after merge, roll it back — no forward `fix` chains
 - [ ] `CONTRIBUTING.md` read
