@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/sca-templates/infra-kubernetes/compare/v0.2.1...v0.3.0) (2026-09-08)
+
+
+### Features
+
+* **vault:** deploy HashiCorp Vault (Phase 2) — HA raft + TLS + seed ([#49](https://github.com/sca-templates/infra-kubernetes/issues/49)) ([45ec5e5](https://github.com/sca-templates/infra-kubernetes/commit/45ec5e5a5f6530949ec449eacfa1d42c174e16c1))
+
 ## [0.2.1](https://github.com/sca-templates/infra-kubernetes/compare/v0.2.0...v0.2.1) (2026-09-08)
 
 
