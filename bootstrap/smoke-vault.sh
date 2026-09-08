@@ -44,15 +44,15 @@ kubectl -n "$NAMESPACE" wait --for=jsonpath='{.status.phase}'=Running "pod/$POD"
 
 echo "── smoke(vault): vault status"
 status_json="$(vault_status_json)"
-initialized="$(printf '%s' "$status_json" | jq -r '.initialized // false')"
-sealed="$(printf '%s' "$status_json" | jq -r '.sealed // true')"
+initialized="$(printf '%s' "$status_json" | jq -r '.initialized')"
+sealed="$(printf '%s' "$status_json" | jq -r '.sealed')"
 
 if [ "$initialized" != "true" ]; then
   echo "── smoke(vault): Vault not initialized — running idempotent seed (bootstrap/seed-vault.sh)"
   "$(dirname "$0")/seed-vault.sh"
   status_json="$(vault_status_json)"
   initialized="$(printf '%s' "$status_json" | jq -r '.initialized // false')"
-  sealed="$(printf '%s' "$status_json" | jq -r '.sealed // true')"
+  sealed="$(printf '%s' "$status_json" | jq -r '.sealed // empty')"
 fi
 
 if [ "$initialized" != "true" ] || [ "$sealed" != "false" ]; then

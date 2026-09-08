@@ -13,6 +13,10 @@ POD="${VAULT_POD:-vault-0}"
 SECRETS_DIR="${SECRETS_DIR:-.secrets}"
 INIT_FILE="${SECRETS_DIR}/init-keys.json"
 ROOT_FILE="${SECRETS_DIR}/root-token"
+# set -u would trip on the unset VAULT_TOKEN in vault_exec/vault_pod_exec
+# before the root token is read below; default it so the early probe call
+# (which needs no token) is safe under `set -euo pipefail`.
+export VAULT_TOKEN="${VAULT_TOKEN:-}"
 POD_WAIT="${VAULT_WAIT_TIMEOUT:-180s}"
 # HA raft: write operations must reach the active leader. The chart's
 # vault-active Service follows the elected leader; the leaf certificate covers
