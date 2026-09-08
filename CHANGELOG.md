@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/sca-templates/infra-kubernetes/compare/v0.3.0...v0.4.0) (2026-09-08)
+
+
+### Features
+
+* **external-secrets:** deploy operator with vault cluster secret store ([#51](https://github.com/sca-templates/infra-kubernetes/issues/51)) ([efa238d](https://github.com/sca-templates/infra-kubernetes/commit/efa238d07bd1b59830cad6ebc9c9670c96b5dd41))
+
 ## [0.3.0](https://github.com/sca-templates/infra-kubernetes/compare/v0.2.1...v0.3.0) (2026-09-08)
 
 
