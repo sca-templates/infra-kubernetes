@@ -71,6 +71,9 @@ spec:
           jqPathExpressions:
             - .spec.versions[].schema
             - .status
+            - .spec.conversion
+            - .spec.names.listKind
+            - .spec.preserveUnknownFields
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{.namespace}}'
