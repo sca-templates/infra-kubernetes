@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/sca-templates/infra-kubernetes/compare/v0.4.0...v0.5.0) (2026-09-09)
+
+
+### Features
+
+* **linkerd-crds:** Phase 4 — deploy Linkerd mesh CRDs via ArgoCD ([#53](https://github.com/sca-templates/infra-kubernetes/issues/53)) ([a888872](https://github.com/sca-templates/infra-kubernetes/commit/a888872877d585287b2a70f9bf2c22d92fd1b335))
+
 ## [0.4.0](https://github.com/sca-templates/infra-kubernetes/compare/v0.3.0...v0.4.0) (2026-09-08)
 
 
