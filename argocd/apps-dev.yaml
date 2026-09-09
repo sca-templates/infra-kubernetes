@@ -33,6 +33,13 @@ spec:
             targetRevision: 1.8.0
             wave: "-10"
             path: linkerd-crds/manifests
+          - name: cloudnative-pg
+            namespace: cloudnative-pg
+            chartRepo: https://cloudnative-pg.github.io/charts
+            chart: cloudnative-pg
+            targetRevision: 0.29.0
+            wave: "-10"
+            path: cloudnative-pg/manifests
           - name: vault
             namespace: vault
             chartRepo: https://helm.releases.hashicorp.com

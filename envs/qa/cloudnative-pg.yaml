@@ -1,0 +1,24 @@
+# cloudnative-pg — qa profile (2 replicas, soft anti-affinity). `preferred`
+# anti-affinity keeps the overlay loadable on a single-node kind for
+# promote-test while still spreading replicas in real HA. The chart ships no
+# PodDisruptionBudget value, so the tier expresses scale + spread only.
+
+replicaCount: 2
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: topology.kubernetes.io/hostname
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: cloudnative-pg
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

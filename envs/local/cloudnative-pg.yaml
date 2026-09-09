@@ -1,0 +1,4 @@
+# cloudnative-pg — local profile (developer kind cluster: 1 replica, minimal
+# resources). Matches the base defaults; declared for tier symmetry.
+
+replicaCount: 1

@@ -3,8 +3,9 @@
 Reference for the `sca` platform on Kubernetes: layers, the component catalog,
 sync-waves, namespaces, the secret flow and the environment model. This is a
 **state document** — how the platform *is*. Beyond ArgoCD, cert-manager
-(Phase 1) is deployed; every other catalog entry is marked `planned` until its
-phase lands. For how changes *flow* through the platform, see
+(Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4)
+and cloudnative-pg (Phase 5) are deployed; every other catalog entry is marked
+`planned` until its phase lands. For how changes *flow* through the platform, see
 [workflow.md](workflow.md); for what is done and what is next, see
 [status.md](status.md).
 
@@ -69,8 +70,9 @@ The catalog has **17 components**. Each row shows its intended namespace,
 upstream chart, ArgoCD sync-wave and roadmap phase. Chart and image pins are
 set per component when that phase lands (values live under
 `infrastructure/<component>/` and `envs/<env>/` from Phase 1 on); in the table
-ArgoCD, cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3) and
-linkerd-crds (Phase 4) are deployed, the rest are `planned`.
+ArgoCD, cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3),
+linkerd-crds (Phase 4) and cloudnative-pg (Phase 5) are deployed, the rest are
+`planned`.
 
 | Component | Namespace | Upstream chart | Wave | Phase | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -78,7 +80,7 @@ linkerd-crds (Phase 4) are deployed, the rest are `planned`.
 | vault | `vault` | hashicorp/vault | 0 | 2 | deployed (Phase 2) |
 | external-secrets | `external-secrets` | external-secrets/external-secrets | -10 | 3 | deployed (Phase 3) |
 | linkerd-crds | `linkerd` | linkerd/linkerd-crds | -10 | 4 | deployed (Phase 4) |
-| cloudnative-pg | `cloudnative-pg` | cloudnative-pg/cloudnative-pg | -10 | 5 | planned (Phase 5) |
+| cloudnative-pg | `cloudnative-pg` | cloudnative-pg/cloudnative-pg | -10 | 5 | deployed (Phase 5) |
 | strimzi | `strimzi` | strimzi/strimzi-kafka-operator | -10 | 6 | planned (Phase 6) |
 | redis-operator | `data` | ot-container-kit/redis-operator | -10 | 7 | planned (Phase 7) |
 | kong | `kong` | kong/kong (DB-less) | 20 | 8 | planned (Phase 8) |
@@ -98,9 +100,9 @@ linkerd-crds (Phase 4) are deployed, the rest are `planned`.
 Notes:
 
 - **Status column** is the source of truth for "is it live?". ArgoCD,
-  cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3) and
-  linkerd-crds (Phase 4) are deployed; every other component is
-  `planned (Phase N)`. The column is flipped to `deployed` inside the phase
+  cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3),
+  linkerd-crds (Phase 4) and cloudnative-pg (Phase 5) are deployed; every
+  other component is `planned (Phase N)`. The column is flipped to `deployed` inside the phase
   that lands the component, and `status.md` is updated in the same commit.
 - `postgres-app` is a **local-only** raw `Application` (not in the
   `ApplicationSet` generator list) and also defines the `keycloak-db` CNPG

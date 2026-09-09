@@ -96,7 +96,7 @@ REF ?= $(shell git branch --show-current)
 
 .PHONY: smoke
 smoke: ## Smoke a deployed component: make smoke COMPONENT=cert-manager
-	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cert-manager, vault, external-secrets, linkerd-crds)'; exit 1; }
+	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cert-manager, vault, external-secrets, linkerd-crds, cloudnative-pg)'; exit 1; }
 	bootstrap/smoke-target.sh "$(COMPONENT)"
 
 .PHONY: smoke-app

@@ -12,6 +12,7 @@ case "$component" in
   vault) exec "$(dirname "$0")/smoke-vault.sh" ;;
   external-secrets) exec "$(dirname "$0")/smoke-external-secrets.sh" ;;
   linkerd-crds) exec "$(dirname "$0")/smoke-linkerd-crds.sh" ;;
-  "") echo "usage: $0 <component> (cert-manager, vault, external-secrets, linkerd-crds)" >&2; exit 2 ;;
+  cloudnative-pg) exec "$(dirname "$0")/smoke-cloudnative-pg.sh" ;;
+  "") echo "usage: $0 <component> (cert-manager, vault, external-secrets, linkerd-crds, cloudnative-pg)" >&2; exit 2 ;;
   *) echo "ERROR: no smoke command for component '$component'" >&2; exit 2 ;;
 esac

@@ -10,7 +10,7 @@ Milestones and Issues.
 
 ## Current state
 
-**Phase 4 — linkerd-crds deployed.** Phase 0 delivered the scaffold
+**Phase 5 — cloudnative-pg deployed.** Phase 0 delivered the scaffold
 (Makefile, `bootstrap/`, `argocd/` with the app-of-apps pattern, the CI
 workflows, the service template, this docs set) and brought the local `kind`
 cluster up with ArgoCD. **Phase 1** lands cert-manager on the `local` profile
@@ -24,18 +24,25 @@ a smoke proving a projected secret reaches `SecretSynced`. **Phase 4** lands
 linkerd-crds — the service-mesh CRDs (`linkerd.io` + `policy.linkerd.io`, plus
 the chart-default gateway `HTTPRoute`) in the `linkerd` namespace — a CRD-only
 Application with no workloads; it is the base the Linkerd control plane
-(Phase 9, wave 30) installs against. See [ci-cd.md](ci-cd.md) for the smoke design.
+(Phase 9, wave 30) installs against. **Phase 5** lands CloudNativePG — the
+PostgreSQL operator — at wave -10 in the `cloudnative-pg` namespace: chart
+pinned 0.29.0 (operator 1.30.0), cluster-wide watch (`config.clusterWide`) so
+the datastores can run in `data` at Phase 10, monitoring off until Phase 14,
+with the 11 `postgresql.cnpg.io` CRDs all `Established`. No `Cluster` CR
+exists yet (postgres-app / keycloak-db land at Phase 10). See
+[ci-cd.md](ci-cd.md) for the smoke design.
 
 | Fact | Value |
 | --- | --- |
 | Repository | `infra-kubernetes` (local, fully-local git serve; published to GitHub before promotion) |
-| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4) |
+| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg (Phase 5) |
 | `platform-root-local` | present, `Synced` + `Healthy` against the local git serve (`main`); Phase 0.0 `automated.enabled=false` override dropped |
-| `platform-local` ApplicationSet | present, four elements (`cert-manager` wave -20, `external-secrets` + `linkerd-crds` wave -10, `vault` wave 0) |
+| `platform-local` ApplicationSet | present, five elements (`cert-manager` wave -20, `external-secrets` + `linkerd-crds` + `cloudnative-pg` wave -10, `vault` wave 0) |
 | cert-manager app | `cert-manager-local` `Synced` + `Healthy`; `sca-ca` ClusterIssuer `Ready`; leaf Certificate smoke green |
 | vault app | `vault-local` `Synced` + `Healthy`; HA raft trio, TLS via `vault-tls` leaf; `make smoke COMPONENT=vault` → initialized=true sealed=false; seed idempotent and HA-aware |
 | external-secrets app | `external-secrets-local` `Synced` + `Healthy`; `ClusterSecretStore vault` Ready (k8s-auth `external-secrets`, TLS via `vault-tls`); short `refreshInterval` (5m); `make smoke COMPONENT=external-secrets` → throwaway ExternalSecret `SecretSynced` + data verified |
 | linkerd-crds app | `linkerd-crds-local` `Synced`, namespace `linkerd` present, CRD-only app (no workloads); `servers`/`serverauthorizations`/`serviceprofiles` + policy group all `Established`; `make smoke COMPONENT=linkerd-crds` green |
+| cloudnative-pg app | `cloudnative-pg-local` `Synced` + `Healthy`; operator Deployment `cloudnative-pg` Ready (chart 0.29.0 / operator 1.30.0); 11 `postgresql.cnpg.io` CRDs present + `Established`; `make smoke COMPONENT=cloudnative-pg` green |
 | git-local-serve | in-cluster git daemon (`git://<node>:9418/sca-infra.git`) `Ready` |
 | Observability / smoke CI | cluster smoke `pr-cluster.yml` **shipped** (Phase 1): selective on PRs as the **required `Smoke` check** on `main` + manual `workflow_dispatch`; no `push` smoke (see [ci-cd.md](ci-cd.md)) |
 | Security CI | checkov **baseline gate** active (Phase 1): `.github/checkov-baseline.json` documents the local-git-server pod findings; new IaC findings fail the PR; re-evaluated at Phase 18 (see [security.md](security.md)) |
