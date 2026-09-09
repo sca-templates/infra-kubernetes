@@ -16,6 +16,8 @@ No natural phases → issues directly under the project.
         Commits: `feat(linkerd-crds): register in apps appset (wave -10)`
   - [x] smoke: `kubectl get crd` shows the linkerd groups
         Commits: `test(linkerd-crds): crd presence smoke`
+  - [x] convergence: appset `ignoreDifferences` extended for server-defaulted CRD fields; stale pre-restart Linkerd CRDs cleaned on local
+        Commits: `fix(linkerd-crds): ignore apiserver-defaulted CRD fields`
   - [x] docs: Work Log row + catalog Status → deployed
         Commits: `docs(linkerd-crds): mark deployed`
   Issue done when: linkerd CRDs installed, control plane installs against them.
