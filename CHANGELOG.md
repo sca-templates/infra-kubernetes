@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/sca-templates/infra-kubernetes/compare/v0.5.0...v0.6.0) (2026-09-09)
+
+
+### Features
+
+* **cloudnative-pg:** Phase 5 — deploy CloudNativePG operator via ArgoCD ([#55](https://github.com/sca-templates/infra-kubernetes/issues/55)) ([128a3ff](https://github.com/sca-templates/infra-kubernetes/commit/128a3ffbef6586b492acde2c4544e03db75ed150))
+
 ## [0.5.0](https://github.com/sca-templates/infra-kubernetes/compare/v0.4.0...v0.5.0) (2026-09-09)
 
 
