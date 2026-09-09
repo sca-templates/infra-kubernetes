@@ -3,8 +3,9 @@
 Reference for the `sca` platform on Kubernetes: layers, the component catalog,
 sync-waves, namespaces, the secret flow and the environment model. This is a
 **state document** — how the platform *is*. Beyond ArgoCD, cert-manager
-(Phase 1) is deployed; every other catalog entry is marked `planned` until its
-phase lands. For how changes *flow* through the platform, see
+(Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4)
+and cloudnative-pg (Phase 5) are deployed; every other catalog entry is marked
+`planned` until its phase lands. For how changes *flow* through the platform, see
 [workflow.md](workflow.md); for what is done and what is next, see
 [status.md](status.md).
 
@@ -69,8 +70,9 @@ The catalog has **17 components**. Each row shows its intended namespace,
 upstream chart, ArgoCD sync-wave and roadmap phase. Chart and image pins are
 set per component when that phase lands (values live under
 `infrastructure/<component>/` and `envs/<env>/` from Phase 1 on); in the table
-ArgoCD, cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3) and
-linkerd-crds (Phase 4) are deployed, the rest are `planned`.
+ArgoCD, cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3),
+linkerd-crds (Phase 4) and cloudnative-pg (Phase 5) are deployed, the rest are
+`planned`.
 
 | Component | Namespace | Upstream chart | Wave | Phase | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -78,7 +80,7 @@ linkerd-crds (Phase 4) are deployed, the rest are `planned`.
 | vault | `vault` | hashicorp/vault | 0 | 2 | deployed (Phase 2) |
 | external-secrets | `external-secrets` | external-secrets/external-secrets | -10 | 3 | deployed (Phase 3) |
 | linkerd-crds | `linkerd` | linkerd/linkerd-crds | -10 | 4 | deployed (Phase 4) |
-| cloudnative-pg | `cloudnative-pg` | cloudnative-pg/cloudnative-pg | -10 | 5 | planned (Phase 5) |
+| cloudnative-pg | `cloudnative-pg` | cloudnative-pg/cloudnative-pg | -10 | 5 | deployed (Phase 5) |
 | strimzi | `strimzi` | strimzi/strimzi-kafka-operator | -10 | 6 | planned (Phase 6) |
 | redis-operator | `data` | ot-container-kit/redis-operator | -10 | 7 | planned (Phase 7) |
 | kong | `kong` | kong/kong (DB-less) | 20 | 8 | planned (Phase 8) |
@@ -98,9 +100,9 @@ linkerd-crds (Phase 4) are deployed, the rest are `planned`.
 Notes:
 
 - **Status column** is the source of truth for "is it live?". ArgoCD,
-  cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3) and
-  linkerd-crds (Phase 4) are deployed; every other component is
-  `planned (Phase N)`. The column is flipped to `deployed` inside the phase
+  cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3),
+  linkerd-crds (Phase 4) and cloudnative-pg (Phase 5) are deployed; every
+  other component is `planned (Phase N)`. The column is flipped to `deployed` inside the phase
   that lands the component, and `status.md` is updated in the same commit.
 - `postgres-app` is a **local-only** raw `Application` (not in the
   `ApplicationSet` generator list) and also defines the `keycloak-db` CNPG
@@ -285,6 +287,7 @@ as each component lands; the log always explains *why*, never just *what*.
 | Vault | The jetstack `hashicorp/vault` chart defaults to `global.tlsDisable: true`, which injects plain-http probe addresses that break against the TLS listener; we set `global.tlsDisable: false` and add `retry_join` with `leader_ca_cert_file` in the raft storage block | The chart ships no `retry_join` and no HTTPS probe wiring; without these the readiness probe (`vault status`) spoke HTTP to an HTTPS listener and the raft peers failed to join (`certificate signed by unknown authority` until the CA file was passed) |
 | AppSet (CRD apps) | CRD `ignoreDifferences` extended with `.spec.conversion`, `.spec.names.listKind` and `.spec.preserveUnknownFields` (on top of `.spec.versions[].schema` and `.status`) | The API server defaults these fields on served CRDs even when the chart does not declare them, so without the ignore every CRD-shipping app shows a perpetual, non-convergent `OutOfSync`. The fields are server-derived, not genuine drift — the applied CRD content is still the git-pinned chart |
 | linkerd-crds (local) | Five leftover Linkerd CRDs from the pre-restart bulk install (2026-09-02) removed manually: the conflicting `servers`/`serviceprofiles` and the orphaned `egressnetworks`, `externalworkloads`, `httplocalratelimitpolicies` (managed by no app) | SSA cannot remove extra CRD versions or objects it does not manage, so the newer-version leftovers made the app converge to a permanent `OutOfSync`. After cleanup the chart 1.8.0 app re-applied pristine definitions and re-converged to `Synced`. One-off cluster hygiene, not repo state |
+| cloudnative-pg + future-phase CRDs (local) | Same one-off cluster hygiene extended: **60 orphaned CRDs** from the 2026-09-02 bulk install removed — the 11 `postgresql.cnpg.io` (Phase 5) plus the undeployed groups `kafka.strimzi.io`/`core.strimzi.io` (10, Phase 6), `redis.redis.opstreelabs.in` (4, Phase 7), `configuration.konghq.com` (12, Phase 8), `monitoring.coreos.com`/`monitoring.grafana.com` (11, Phase 14) and `velero.io` (13, Phase 18). All lacked ArgoCD ownership (`helm.sh/resource-policy: keep`, no tracking labels) | Extra CRDs not owned by any app wedge the app that ships them into a permanent `OutOfSync` under SSA (same as the linkerd-crds row); each future phase would have hit the same gate. The converging `cloudnative-pg` app re-created its 11 CRDs as app-owned and converged `Synced`+`Healthy`; the undeployed groups were plain leftovers. ArgoCD, cert-manager, external-secrets and linkerd CRDs untouched |
 
 ## Change flow (summary)
 

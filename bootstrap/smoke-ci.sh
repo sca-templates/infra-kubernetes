@@ -136,9 +136,17 @@ make smoke COMPONENT="${component}"
 
 # Phase 2 — after the component smoke bootstrapped the app (e.g. Vault seed),
 # it must converge to Healthy. This is the real Health gate, deferred until the
-# smoke had a chance to make the component healthy.
+# smoke had a chance to make the component healthy. Degraded is deliberately
+# NOT an instant fail here: on a cold cluster CRD-shipping apps
+# (cloudnative-pg, cert-manager, linkerd-crds, ...) are born Degraded while
+# their CRDs are still establishing (ArgoCD v3.x health check reports "CRD is
+# not established", argoproj/argo-cd#26346), which self-heals on the next
+# refresh. The gate is the deadline: fail only if the app has not converged to
+# Synced/Healthy in time, then diagnose. Genuine failures (name conflicts,
+# schema violations, non-Convergence) stay Degraded and fail the deadline.
 echo "── wait for Application/${APP_NAME} Synced/Healthy post-smoke (timeout ${TIMEOUT}s)"
 deadline=$(( $(date +%s) + TIMEOUT ))
+degraded_announced=0
 while : ; do
   now="$(date +%s)"
   [ "${now}" -lt "${deadline}" ] || { echo "FAIL: Application/${APP_NAME} did not converge to Healthy after smoke within ${TIMEOUT}s" >&2; diagnose; exit 1; }
@@ -155,7 +163,10 @@ while : ; do
   case "${status}/${health_status}" in
     Synced/Healthy) echo "[OK] Application/${APP_NAME} is Synced/Healthy post-smoke"; break ;;
     Synced/Degraded)
-      echo "FAIL: Application/${APP_NAME} synced but Degraded post-smoke (${health})" >&2; diagnose; exit 1 ;;
+      if [ "${degraded_announced}" = "0" ]; then
+        echo "── Application/${APP_NAME} Degraded (${health}) — possibly transient CRD/operator convergence, waiting for ArgoCD refresh..." >&2
+        degraded_announced=1
+      fi ;;
   esac
   sleep "${POLL}"
 done

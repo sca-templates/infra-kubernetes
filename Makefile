@@ -51,7 +51,7 @@ cluster-down: ## Delete the local kind cluster (keeps nothing)
 argocd-up: ## Install or upgrade ArgoCD from argocd/install-values.yaml (no apps)
 	@[ -f argocd/install-values.yaml ] || { echo 'argocd/install-values.yaml is missing'; exit 1; }
 	kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
-	helm upgrade --install argocd argo-cd --repo https://argoproj.github.io/argo-helm --version "$(ARGOCD_CHART_VERSION)" --namespace argocd --values argocd/install-values.yaml --wait
+	helm upgrade --install argocd argo-cd --repo https://argoproj.github.io/argo-helm --version "$(ARGOCD_CHART_VERSION)" --namespace argocd --values argocd/install-values.yaml --wait --timeout 10m
 
 .PHONY: bootstrap
 bootstrap: argocd-up ## Install ArgoCD and apply the Applications for ENV=$(ENV)
@@ -96,7 +96,7 @@ REF ?= $(shell git branch --show-current)
 
 .PHONY: smoke
 smoke: ## Smoke a deployed component: make smoke COMPONENT=cert-manager
-	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cert-manager, vault, external-secrets, linkerd-crds)'; exit 1; }
+	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cert-manager, vault, external-secrets, linkerd-crds, cloudnative-pg)'; exit 1; }
 	bootstrap/smoke-target.sh "$(COMPONENT)"
 
 .PHONY: smoke-app

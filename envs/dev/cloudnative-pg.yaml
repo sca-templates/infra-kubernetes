@@ -1,0 +1,4 @@
+# cloudnative-pg — dev profile (shared integration, reduced footprint).
+# Matches the base defaults; declared for tier symmetry.
+
+replicaCount: 1

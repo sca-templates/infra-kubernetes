@@ -1,0 +1,43 @@
+# cloudnative-pg — base values (shared across environments; per-env tier
+# overrides live in envs/<env>/cloudnative-pg.yaml).
+# Official chart: cloudnative-pg/cloudnative-pg, https://cloudnative-pg.github.io/charts.
+# Chart pin (targetRevision) is set in argocd/apps-<env>.yaml; the image tag is
+# pinned here to the same version the chart ships (appVersion), never `latest`.
+#
+# CloudNativePG (CNPG, wave -10) is the PostgreSQL operator: it reconciles
+# `Cluster` CRs (postgres-app / keycloak-db, Phase 10 wave 40) into managed
+# PostgreSQL instances. The chart ships the `postgresql.cnpg.io` CRDs
+# (crds.create, as regular templates) and the operator webhooks; the operator
+# manages its own webhook certificate (secret `cnpg-webhook-cert`) and watches
+# all namespaces (config.clusterWide) so the datastores can live in `data`.
+# No `Cluster` CRs live here — the datastores arrive as raw CRs at Phase 10.
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/cloudnative-pg/cloudnative-pg
+  tag: "1.30.0"
+  pullPolicy: IfNotPresent
+
+crds:
+  # CRDs ship as chart templates gated by this flag (Helm v3, no crds/ bundle).
+  # Left chart-default; ArgoCD covers them with the platform-wide CRD
+  # ignoreDifferences.
+  create: true
+
+config:
+  # Watch Cluster/Backup CRs in every namespace, not just the operator one:
+  # the datastores (postgres-app, keycloak-db) run in `data` at Phase 10.
+  clusterWide: true
+
+monitoring:
+  # Postgres metrics (podmonitor + Grafana dashboard) land with the
+  # observability radar (Phase 14), not here.
+  podMonitorEnabled: false
+  grafanaDashboard:
+    create: false
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
