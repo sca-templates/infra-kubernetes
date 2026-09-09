@@ -1,7 +1,7 @@
 # Project: Implement Linkerd control plane
 
 Area: Edge & Mesh · Wave 30 · Environments: local→dev→qa→prod
-Depends on: linkerd-crds (#4) — CRDs must be present first; installed by script
+Depends on: linkerd-crds (#9) — CRDs must be present first; installed by script
 (`linkerd install`), not an ArgoCD Application.
 Project done when: control plane pods `Running`; `linkerd check` shows
 golden signals; mTLS identity works for the mesh namespace.
@@ -10,8 +10,8 @@ golden signals; mTLS identity works for the mesh namespace.
 
 M1 done when: pod `Running` + `linkerd check` clean + mTLS identity ok.
 
-- [ ] Issue #9 · Install Linkerd control plane (script)
-  Depends on: linkerd-crds (#4)
+- [ ] Issue #14 · Install Linkerd control plane (script)
+  Depends on: linkerd-crds (#9)
   - [ ] `infrastructure/linkerd/` install script + overlay config
         - Commits: `feat(linkerd): control plane install script`
   - [ ] golden signals config (identity, proxy-init)

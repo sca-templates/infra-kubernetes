@@ -1,0 +1,19 @@
+# linkerd-crds — base values (shared across environments; per-env tier
+# overrides live in envs/<env>/linkerd-crds.yaml).
+# Official chart: linkerd/linkerd-crds, https://helm.linkerd.io/stable.
+# Chart pin (targetRevision) is set in argocd/apps-<env>.yaml.
+#
+# linkerd-crds (wave -10) installs the service-mesh CRDs the Linkerd control
+# plane (Phase 9, wave 30) installs against: the policy group
+# (servers, serverauthorizations, authorizationpolicies, meshtls/network
+# authentications, httproutes) and serviceprofiles, all in the `linkerd`
+# namespace. The chart ships no workloads — the Application is CRD-only, and
+# the control plane is deployed by script, not ArgoCD. No additional CRs live
+# here; the `link`/profiles arrive with the control plane at Phase 9.
+
+# The chart's sole value: enable the bundled Gateway API HTTPRoute CRD
+# (httproutes.gateway.networking.k8s.io, deprecated experimental bundle).
+# Kept at the chart default (true) — the CRD is harmless, shared with the
+# platform-wide CRD ignoreDifferences, and any Gateway API use by Kong
+# (Phase 8) decides its own route.
+enableHttpRoutes: true

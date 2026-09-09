@@ -1,0 +1,5 @@
+# linkerd-crds — local profile (developer kind cluster). The chart ships only
+# CRDs (no workloads), so the overlay just confirms the Gateway API HTTPRoute
+# CRD stays enabled. Matches the base default; declared for tier symmetry.
+
+enableHttpRoutes: true

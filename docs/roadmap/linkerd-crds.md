@@ -7,15 +7,17 @@ plane (project #9) installs cleanly against them.
 
 No natural phases → issues directly under the project.
 
-- [ ] Issue #4 · Deploy `linkerd/linkerd-crds`
+- [x] Issue #9 · Deploy `linkerd/linkerd-crds`
   Depends on: —
-  - [ ] `infrastructure/linkerd-crds/` values-base + overlays for 4 envs
-        - [ ] envs/local, dev, qa, prod
+  - [x] `infrastructure/linkerd-crds/` values-base + overlays for 4 envs
+        - [x] envs/local, dev, qa, prod
         - Commits: `feat(linkerd-crds): add chart reference and per-env overlays`
-  - [ ] registry appset element (wave -10)
+  - [x] registry appset element (wave -10)
         Commits: `feat(linkerd-crds): register in apps appset (wave -10)`
-  - [ ] smoke: `kubectl get crd` shows the linkerd groups
+  - [x] smoke: `kubectl get crd` shows the linkerd groups
         Commits: `test(linkerd-crds): crd presence smoke`
-  - [ ] docs: Work Log row + catalog Status → deployed
+  - [x] convergence: appset `ignoreDifferences` extended for server-defaulted CRD fields; stale pre-restart Linkerd CRDs cleaned on local
+        Commits: `fix(linkerd-crds): ignore apiserver-defaulted CRD fields`
+  - [x] docs: Work Log row + catalog Status → deployed
         Commits: `docs(linkerd-crds): mark deployed`
   Issue done when: linkerd CRDs installed, control plane installs against them.

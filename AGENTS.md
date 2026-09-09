@@ -45,10 +45,10 @@ and image pins are set inside each phase and live under
 
 | Component | Namespace | Upstream chart | Role | Provenance | Status |
 | --- | --- | --- | --- | --- | --- |
-| cert-manager | `cert-manager` | jetstack/cert-manager | In-cluster TLS issuers | — | planned (Phase 1) |
-| Vault | `vault` | hashicorp/vault | Secrets SSOT (KV-v2 + k8s auth) | [infra-vault](https://github.com/sca-templates/infra-vault) | planned (Phase 2) |
-| External Secrets | `external-secrets` | external-secrets/external-secrets | Projects Vault KV → native Secrets | — | planned (Phase 3) |
-| linkerd-crds | `linkerd` | linkerd/linkerd-crds | Mesh CRDs | [infra-linkerd](https://github.com/sca-templates/infra-linkerd) | planned (Phase 4) |
+| cert-manager | `cert-manager` | jetstack/cert-manager | In-cluster TLS issuers | — | **deployed** (Phase 1) |
+| Vault | `vault` | hashicorp/vault | Secrets SSOT (KV-v2 + k8s auth) | [infra-vault](https://github.com/sca-templates/infra-vault) | **deployed** (Phase 2) |
+| External Secrets | `external-secrets` | external-secrets/external-secrets | Projects Vault KV → native Secrets | — | **deployed** (Phase 3) |
+| linkerd-crds | `linkerd` | linkerd/linkerd-crds | Mesh CRDs | [infra-linkerd](https://github.com/sca-templates/infra-linkerd) | **deployed** (Phase 4) |
 | CloudNativePG | `cloudnative-pg` | cloudnative-pg/cloudnative-pg | PostgreSQL operator | — | planned (Phase 5) |
 | Strimzi | `strimzi` | strimzi/strimzi-kafka-operator | Kafka operator (KRaft) | [infra-kafka](https://github.com/sca-templates/infra-kafka) | planned (Phase 6) |
 | redis-operator | `data` | ot-container-kit/redis-operator | Redis operator | [infra-redis](https://github.com/sca-templates/infra-redis) | planned (Phase 7) |
