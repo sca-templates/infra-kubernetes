@@ -119,10 +119,16 @@ logs and EndpointSlices, and the workflow uploads `.generated/` as an artifact
   `Application` to become **`Synced`** (any health), runs the component smoke,
   then waits for **`Synced/Healthy`**. Health is deliberately *not* a pre-smoke
   gate: stateful components (e.g. Vault) are born sealed/uninitialized and only
-  become `Healthy` after their own smoke seeds them (`smoke-vault.sh` →
-  `seed-vault.sh`); requiring `Healthy` first would deadlock their bootstrap.
-  Post-smoke `Healthy` is the real gate, so a genuinely broken chart/CR still
-  fails the PR.
+become `Healthy` after their own smoke seeds them (`smoke-vault.sh` →
+   `seed-vault.sh`); requiring `Healthy` first would deadlock their bootstrap.
+   Post-smoke `Healthy` is the real gate, so a genuinely broken chart/CR still
+   fails the PR. Post-smoke `Degraded` is tolerated as a transient, not an
+   instant fail: CRD-shipping apps (e.g. cloudnative-pg) are born `Degraded`
+   while their CRDs still report `Established` — ArgoCD v3.x flags that as
+   "CRD is not established" (argoproj/argo-cd#26346) — and self-heal on the
+   next refresh. The gate is the wait deadline: the run fails only if the app
+   has not converged to `Synced/Healthy` in time (genuine failures stay
+   `Degraded` and hit the deadline with diagnostics).
 
   ArgoCD syncs synchronously (no `-Async` on the smoke ApplicationSet), so a
   `Deployment` that is slow becoming `Ready` blocks `Synced`. The cert-controller

@@ -61,3 +61,47 @@ configs:
     reposerver.git.request.timeout: "120s"
   cm:
     timeout.reconciliation: 180s
+    # ArgoCD v3.x ships a CRD health check that flags an app Degraded while any
+    # of its CRDs is not yet Established ("CRD is not established",
+    # argoproj/argo-cd#26346). On a cold test cluster that establishment window
+    # makes the smoke gate flaky for every CRD-shipping component
+    # (cloudnative-pg, cert-manager, linkerd-crds — later Strimzi, redis-operator,
+    # kube-prometheus-stack, ...). Override: report Progressing until the CRD is
+    # Established, keep the genuine Degraded signals (NamesAccepted=False,
+    # NonStructuralSchema=True). The smokes still assert CRD Establishment.
+    resource.customizations.health.apiextensions_k8s.io_CustomResourceDefinition: |
+      local hs = {}
+      local established = false
+      if obj.metadata.deletionTimestamp ~= nil then
+        hs.status = "Progressing"
+        hs.message = "CRD is terminating"
+        return hs
+      end
+      if obj.status == nil or obj.status.conditions == nil then
+        hs.status = "Progressing"
+        hs.message = "CRD status not yet reported"
+        return hs
+      end
+      for _, c in pairs(obj.status.conditions) do
+        if c.type == "Established" and c.status == "True" then
+          established = true
+        end
+        if c.type == "NamesAccepted" and c.status == "False" then
+          hs.status = "Degraded"
+          hs.message = "CRD names have not been accepted: " .. (c.message or "")
+          return hs
+        end
+        if c.type == "NonStructuralSchema" and c.status == "True" then
+          hs.status = "Degraded"
+          hs.message = "Schema violations found: " .. (c.message or "")
+          return hs
+        end
+      end
+      if not established then
+        hs.status = "Progressing"
+        hs.message = "CRD is not yet established"
+        return hs
+      end
+      hs.status = "Healthy"
+      hs.message = "CRD is healthy"
+      return hs
