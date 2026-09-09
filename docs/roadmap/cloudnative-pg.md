@@ -20,8 +20,10 @@ No natural phases → issues directly under the project.
         Commits: `docs(cloudnative-pg): mark deployed`
   Issue done when: operator pod `Running` + CRDs present.
 
-Rollout note (local, one-off cluster hygiene): the 11 orphaned
-`postgresql.cnpg.io` CRDs left by the 2026-09-02 pre-restart bulk install
-(`helm.sh/resource-policy: keep`, managed by no app) must be removed from
-`local` before the chart app converges to `Synced` — the same leftover-CRD
-condition that wedged linkerd-crds (see `docs/architecture.md` deviations log).
+Rollout note (local, one-off cluster hygiene): the orphaned `postgresql.cnpg.io`
+CRDs left by the 2026-09-02 pre-restart bulk install were removed from `local`
+before the chart app converged — the same leftover-CRD condition that wedged
+linkerd-crds. The app re-created its 11 CRDs as app-owned and converged
+`Synced`. The hygiene pass extended to every undeployed group of that bulk
+(Strimzi, redis-operator, Kong, Prometheus, Velero); see `docs/architecture.md`
+deviations log.
