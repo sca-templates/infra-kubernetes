@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/sca-templates/infra-kubernetes/compare/v0.6.0...v0.7.0) (2026-09-19)
+
+
+### Features
+
+* **services:** app-repo-as-source with version-pinned prod registry ([#58](https://github.com/sca-templates/infra-kubernetes/issues/58)) ([e05bcf5](https://github.com/sca-templates/infra-kubernetes/commit/e05bcf502ab85ea1f887720034e4f8511706aa58))
+
 ## [0.6.0](https://github.com/sca-templates/infra-kubernetes/compare/v0.5.0...v0.6.0) (2026-09-09)
 
 
