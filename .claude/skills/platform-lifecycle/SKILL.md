@@ -20,6 +20,12 @@ After bootstrap, changes deploy exclusively via `git push` — never
 
 ## How to add a component (checklist)
 
+> Two different flows: **platform components** (catalog, centralized, below)
+> versus **services** (app-repo-as-source: the service owns its `deploy/` in
+> its own repo and is registered in `argocd/services-<env>.yaml`, with no
+> `envs/local` — see `docs/onboarding-new-service.md`). This checklist is for
+> platform components.
+
 The docs define the target state — read them first:
 
 1. Read `docs/architecture.md` (catalog, sync-waves, deviations log),

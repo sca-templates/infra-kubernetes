@@ -47,7 +47,7 @@ GitHub Actions runs the same suite in CI on every push and pull request
 
 | Environment | Profile | ArgoCD sync policy | Substrate |
 | --- | --- | --- | --- |
-| `local` | Full platform, one replica, minimal | Auto-sync + prune | `kind` |
+| `local` | Full platform catalog, one replica, minimal | Auto-sync + prune | `kind` (**platform-only, no services**) |
 | `dev` | Reduced HA | Auto-sync + prune | Kubernetes cluster |
 | `qa` | HA, PDBs, anti-affinity | Auto-sync, **no prune** | Kubernetes cluster |
 | `prod` | Full HA, real storage | **Manual sync** | Kubernetes cluster |
@@ -56,6 +56,15 @@ Select an environment with `ENV=local|dev|qa|prod`. Environment values live
 under `envs/<environment>/` (Phase 1 onward); the per-environment component
 registry is `argocd/apps-<env>.yaml`. Promotion between environments passes a
 `promote-test` on local (see [docs/workflow.md](docs/workflow.md)).
+
+**Services (app-repo-as-source)**: microservices are **not** in this catalog —
+each service owns its manifests (`deploy/`) in its own repository; dev/qa
+deploy by moving git refs (`deploy/dev`, `deploy/qa`) that ArgoCD tracks, and
+prod by bumping the **version tag pin** in `argocd/services-prod.yaml` via a
+reviewed `chore(services)` PR (go/no-go; the bot only marks a tag `latest`
+after prod adopted it). The feature PR to the service `main` happens after dev
+and qa. See
+[docs/onboarding-new-service.md](docs/onboarding-new-service.md).
 
 ## Platform Components
 
@@ -78,6 +87,8 @@ live.
 MinIO is **local-only** (S3 stand-in for Velero); `dev`/`qa`/`prod` point
 Velero at external S3 via Vault/ESO credentials. All images and charts are
 pinned to explicit upstream versions — this repository builds no images.
+Services use app-repo-as-source (see
+[docs/onboarding-new-service.md](docs/onboarding-new-service.md)).
 Consul, Unleash, KafkaConnect/Debezium, kafka-ui and linkerd-viz are
 intentionally excluded.
 

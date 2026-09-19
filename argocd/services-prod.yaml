@@ -1,0 +1,54 @@
+# Services registry for prod — one generated Application per service.
+# Each service owns its manifests in its own repo (deploy/), see
+# docs/onboarding-new-service.md. Prod tracks the **service version tag**
+# pinned in this registry (`version`): only a tag released after dev/qa
+# validation is adopted, by bumping the pin via an infra `chore(services)`
+# PR (the reviewed go/no-go). The service repo's `latest` tag is marked by the
+# bot only once prod has adopted that version. No `automated` block — prod is
+# manual (ADR-003); the human Sync in the deploy window is the last checkpoint.
+#
+# Add one element per service. Every element MUST carry `version` (the template
+# reads it with missingkey=error). Example:
+# - name: nest-authz
+#   namespace: nest-authz
+#   appRepo: https://github.com/sca-templates/nest-authz
+#   version: v1.2.0
+#   wave: "60"
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: services-prod
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-20"
+spec:
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error
+  generators:
+    - list:
+        elements: []
+  template:
+    metadata:
+      name: '{{.name}}-prod'
+      namespace: argocd
+      annotations:
+        argocd.argoproj.io/sync-wave: '{{.wave}}'
+    spec:
+      project: default
+      source:
+        repoURL: '{{.appRepo}}'
+        targetRevision: '{{.version}}'
+        path: deploy
+        helm:
+          releaseName: '{{.name}}'
+          valueFiles:
+            - env/prod.yaml
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{.namespace}}'
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true
+          - ApplyOutOfSyncOnly=true
+          - ServerSideApply=true

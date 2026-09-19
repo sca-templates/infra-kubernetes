@@ -14,7 +14,7 @@ spec:
     targetRevision: {{GIT_TARGET_BRANCH}}
     path: argocd
     directory:
-      include: "{apps-qa}.yaml"
+      include: "{apps-qa,services-qa}.yaml"
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
