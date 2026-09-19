@@ -1,8 +1,19 @@
 # Services registry for prod — one generated Application per service.
 # Each service owns its manifests in its own repo (deploy/), see
-# docs/onboarding-new-service.md. Prod tracks `main` of the service repo: only
-# a PR merged after dev/qa validation lands here, and the human Sync (in the
-# deploy window) is the go/no-go. No `automated` block — prod is manual.
+# docs/onboarding-new-service.md. Prod tracks the **service version tag**
+# pinned in this registry (`version`): only a tag released after dev/qa
+# validation is adopted, by bumping the pin via an infra `chore(services)`
+# PR (the reviewed go/no-go). The service repo's `latest` tag is marked by the
+# bot only once prod has adopted that version. No `automated` block — prod is
+# manual (ADR-003); the human Sync in the deploy window is the last checkpoint.
+#
+# Add one element per service. Every element MUST carry `version` (the template
+# reads it with missingkey=error). Example:
+# - name: nest-authz
+#   namespace: nest-authz
+#   appRepo: https://github.com/sca-templates/nest-authz
+#   version: v1.2.0
+#   wave: "60"
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -16,11 +27,6 @@ spec:
     - missingkey=error
   generators:
     - list:
-        # Add one element per service. Example:
-        # - name: nest-authz
-        #   namespace: nest-authz
-        #   appRepo: https://github.com/sca-templates/nest-authz
-        #   wave: "60"
         elements: []
   template:
     metadata:
@@ -32,7 +38,7 @@ spec:
       project: default
       source:
         repoURL: '{{.appRepo}}'
-        targetRevision: main
+        targetRevision: '{{.version}}'
         path: deploy
         helm:
           releaseName: '{{.name}}'

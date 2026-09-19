@@ -58,9 +58,12 @@ registry is `argocd/apps-<env>.yaml`. Promotion between environments passes a
 `promote-test` on local (see [docs/workflow.md](docs/workflow.md)).
 
 **Services (app-repo-as-source)**: microservices are **not** in this catalog —
-each service owns its manifests (`deploy/`) in its own repository and deploys
-by moving git refs that ArgoCD tracks (`deploy/dev`, `deploy/qa`, `main`); a
-PR to the service `main` happens only after dev and qa. See
+each service owns its manifests (`deploy/`) in its own repository; dev/qa
+deploy by moving git refs (`deploy/dev`, `deploy/qa`) that ArgoCD tracks, and
+prod by bumping the **version tag pin** in `argocd/services-prod.yaml` via a
+reviewed `chore(services)` PR (go/no-go; the bot only marks a tag `latest`
+after prod adopted it). The feature PR to the service `main` happens after dev
+and qa. See
 [docs/onboarding-new-service.md](docs/onboarding-new-service.md).
 
 ## Platform Components

@@ -30,19 +30,20 @@ them first, execute against their gates, and update `status.md` /
 ## 2. Environment model
 
 `local` is a **platform-only** sandbox (kind): the full catalog for iteration
-and CI smoke, but **no services**. Services deploy from `dev` upward, promoted
-by moving refs of their own repos.
+and CI smoke, but **no services**. Services deploy from `dev` upward: dev/qa
+promoted by moving refs of their own repos, prod by bumping the **version tag
+pin** in the services registry (`chore(services)` PR = go/no-go).
 
 | Environment | Profile | Sync policy | Purpose |
 | --- | --- | --- | --- |
 | `local` | 1 replica, full platform catalog, minimal resources | auto-sync + prune | Developer machine (kind); platform-only, no services |
 | `dev` | reduced HA | auto-sync + prune | Shared integration; services auto via ref `deploy/dev` |
 | `qa` | HA (3 replicas, PDBs, anti-affinity) | auto-sync, **no prune** | Pre-production validation; services via ref `deploy/qa` |
-| `prod` | full HA, real storage | **manual sync** | Production; services from a merged `main`, go/no-go |
+| `prod` | full HA, real storage | **manual sync** | Production; services via the `version` pin in `services-prod.yaml`, go/no-go |
 
 Sync policies follow ADR-003. Platform-component promotion is gated by the
-`promote-test`; services promote by ref moves, and a service PR to its `main`
-only happens **after** dev and qa
+`promote-test`; services promote by ref moves (dev/qa) and a verified version
+bump (prod), and a service PR to its `main` only happens **after** dev and qa
 ([docs/workflow.md](docs/workflow.md#services-app-repo-as-source)).
 
 ## 3. Component catalog

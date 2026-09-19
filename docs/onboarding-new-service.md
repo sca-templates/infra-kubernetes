@@ -55,20 +55,30 @@ ArgoCD applies them via `helm.valueFiles` in the services `ApplicationSet`
 ## 2. Register the service per environment
 
 - Add one element to `argocd/services-<env>.yaml` for `dev`, `qa` and `prod`
-  (the registry): `name`, `namespace`, `appRepo`, `wave`.
+  (the registry): `name`, `namespace`, `appRepo`, `wave`. Prod's element
+  **additionally** carries `version` — the tag prod tracks (the template reads
+  it with `missingkey=error`, so every prod element must set it).
   `services-local.yaml` does **not** exist — `local` is the platform-only
   sandbox; services live from `dev` upward.
-- Each `ApplicationSet` template pins the ref ArgoCD tracks:
-  `deploy/dev` (dev), `deploy/qa` (qa), `main` (prod).
+- Each `ApplicationSet` template pins what ArgoCD tracks per env:
+  `deploy/dev` (dev), `deploy/qa` (qa), `version` (prod).
 - The service namespace is created by ArgoCD (`CreateNamespace=true`); pick one
   per service (e.g. the service name).
 
-Example registry element (all three files):
+Example registry elements:
 
 ```yaml
+# argocd/services-dev.yaml and services-qa.yaml
 - name: nest-authz
   namespace: nest-authz
   appRepo: https://github.com/sca-templates/nest-authz
+  wave: "60"
+
+# argocd/services-prod.yaml — version is required
+- name: nest-authz
+  namespace: nest-authz
+  appRepo: https://github.com/sca-templates/nest-authz
+  version: v1.2.0
   wave: "60"
 ```
 
@@ -83,35 +93,49 @@ The secret flow is unchanged from [secrets.md](secrets.md):
 3. Pods mount the projected `Secret`; the raw value never appears in the
    manifest.
 
-## 4. Environment refs and promotion
+## 4. Environment refs, releases and promotion to prod
 
-Deployment is a **ref move**, not a PR in `infra-kubernetes`:
+Dev/qa deployment is a **ref move**; prod deployment is a **version pin**:
 
-| Ref | Environment | Gate |
+| Ref / pin | Environment | Gate |
 | --- | --- | --- |
 | `deploy/dev` | dev (auto + prune) | none — last deployer wins |
 | `deploy/qa` | qa (auto, no prune) | free, after a dev pass |
-| `main` | prod (manual Sync in window) | PR merged after qa |
+| `version` tag in `argocd/services-prod.yaml` | prod (manual Sync in window) | reviewed `chore(services)` bump + go/no-go |
 
 The service repo ships a `promote` GitHub Action (`workflow_dispatch` or on
 merge to a `release/*` branch — the service owner's choice) that:
 
-1. Builds and pushes the image with a unique tag (`sha-…` or semver; never
-   `latest`).
-2. Pins that tag in `deploy/values.yaml` (and any env override files).
-3. Moves the refs ArgoCD tracks: `deploy/dev`, then `deploy/qa` on request.
-4. Prod only via a PR to the service `main` **after** the change has passed
-   dev and qa — the PR is the last step, not the first.
+1. Builds and pushes the image with a unique tag (`sha-…`; never `latest`).
+2. Moves the refs ArgoCD tracks: `deploy/dev`, then `deploy/qa` on request.
+
+Reaching prod is a **version-gated** flow run by the release bot (releases
+happen upstream in the service repo, the adopt-bump lands here):
+
+1. The service opens the feature PR to its `main` **after** dev and qa passed
+   ([workflow.md](workflow.md#services-app-repo-as-source)) — the only code PR.
+2. On merge, release-please (in the service repo) opens a release PR the bot
+   **auto-merges**, cutting the immutable signed tag `vX.Y.Z` — never `latest`.
+3. The bot opens a `chore(services): adopt nest-authz vX.Y.Z` PR bumping the
+   `version` pin in `argocd/services-prod.yaml`. Because the commit type is
+   `chore`, **no** infra release PR opens ([versioning.md](versioning.md)).
+4. Human review of the bump is the **go/no-go**; on merge the prod
+   `Application` goes `OutOfSync` and the human `Sync` in the deploy window
+   applies it. The bot then marks `latest` = `vX.Y.Z` on the service repo.
+
+So the 4 PRs of the flow are **2 human gates**: the feature PR (code review)
+and the `chore(services)` bump (go/no-go) — release PRs are bot-managed.
 
 The repo rules must protect the refs and the PR path:
 
 - `deploy/dev` and `deploy/qa` allow **force-push only from the bot** (the
   mechanism moves refs; humans do not push to them).
 - `main` requires review + status checks (the service's own CI).
-- Prod's Sync is manual (ADR-003), so a merge to `main` never auto-deploys prod.
+- Prod's Sync is manual (ADR-003), so a bump merge never auto-deploys prod.
 
 Rollback on failure: point the env ref back at the previous known-good commit
-(a no-op git move for dev/qa); for prod, revert the merge on the service `main`.
+(a no-op git move for dev/qa); for prod, revert the `chore(services)` bump so
+the pin returns to the previous version tag.
 
 ## 5. Gates (per-service DoD)
 
@@ -126,8 +150,9 @@ Onboarding is complete when:
 - Env refs actually deploy: the dev deploy proves the ref move → sync path
   works end to end.
 
-The service is now self-serve: it ships daily without touching
-`infra-kubernetes` again unless its registration, namespace or secrets change.
+The service is now self-serve: dev/qa ship without touching `infra-kubernetes`;
+prod ships by approving the bot's per-version bump PR. Registration, namespace
+or secrets changes still touch the registry.
 
 ## 6. Platform integration (once ready)
 

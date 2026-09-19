@@ -70,21 +70,36 @@ describes:
 
 ### Services (app-repo-as-source)
 
-A service is deployed through the ref of its own repository that each
-environment's ArgoCD tracks:
+A service is deployed through its own repository. dev/qa ride on movable refs;
+prod rides on the **version tag pinned in the services registry**
+(`argocd/services-prod.yaml` → `version`). Each environment's ArgoCD tracks:
 
 | Env | Ref tracked by ArgoCD | Deploy trigger | Gate |
 | --- | --- | --- | --- |
 | `dev` | `deploy/dev` | service `promote` action moves the ref | none — last deployer wins |
 | `qa` | `deploy/qa` | `promote` action moves the ref | free, after a dev pass |
-| `prod` | `main` | merge of the post-qa PR | **manual Sync** in the deploy window |
+| `prod` | the `version` tag pinned in `services-prod.yaml` | infra `chore(services)` PR bumps the pin | reviewed go/no-go + **manual Sync** |
 
-The `promote` action (lives in the service repo) builds the image, pins the tag
-in `deploy/env/<env>.yaml`, points the env ref at that commit, and lets the
-ArgoCD pull model apply it. A PR to the service `main` only happens **after**
-the change has passed dev and qa; prod comes exclusively from that merged
-`main`. `local`/`dev`/`qa`/`prod` sync policies still follow ADR-003. The full
-contract for a service lives in [onboarding-new-service.md](onboarding-new-service.md).
+A service release is **automatic bookkeeping, not a deploy gate**:
+
+1. dev/qa validate the change on the refs; the first PR is the feature PR to the
+   service `main`, **after** dev and qa have passed.
+2. On merge, the service's `release-please` opens a release PR that the release
+   bot **auto-merges** once required checks pass, cutting the immutable semver
+   tag `vX.Y.Z` (signed, CHANGELOG-driven). The tag is **never** `latest` —
+   `latest` is a reality marker, not a control.
+3. Another bot then opens the **only infra PR a deploy needs**: a
+   `chore(services): adopt nest-authz vX.Y.Z` bump of the `version` pin in
+   `argocd/services-prod.yaml`. Because the commit type is `chore`,
+   release-please opens **no** infra release PR ([versioning.md](versioning.md)).
+4. Human review of that bump is the **go/no-go**; merges make the prod
+   `Application` `OutOfSync`, and the human `Sync` in the deploy window applies
+   it (ADR-003). Once prod is running that version, the bot marks
+   `latest` = `vX.Y.Z` on the service repo.
+
+So the 4 PRs of the flow are **2 human gates**: the feature PR (code review)
+and `chore(services)` bump (go/no-go). Release PR and (absent) infra release PR
+are bot-managed. The contract lives in [onboarding-new-service.md](onboarding-new-service.md).
 
 ```mermaid
 graph LR
@@ -97,7 +112,12 @@ graph LR
     G --> H[validate qa]
     H --> I[PR to service main]
     I --> J[Human review + merge]
-    J --> K[ArgoCD prod: manual Sync in window]
+    J --> K[release PR auto-merged by bot]
+    K --> L["tag vX.Y.Z created, not latest"]
+    L --> M["chore(services) PR in infra: bump prod pin"]
+    M --> N[Human review + merge = go/no-go]
+    N --> O[ArgoCD prod: manual Sync in window]
+    O --> P["bot marks latest once prod adopted it"]
 ```
 
 ### Platform components
@@ -123,9 +143,10 @@ red), the response is **rollback, not forward-churn**:
 
 - **Platform component**: revert the offending commit (or the environment's
   view of it via the overlay), merge the revert, let ArgoCD reconcile it back.
-- **Service**: point the env ref back at the previous known-good commit (the
-  ref move is itself the rollback — no new commit needed for dev/qa; for prod,
-  revert the merge on the service `main`).
+- **Service**: point the env ref back at the previous known-good commit for
+  dev/qa (the ref move is itself the rollback — no new commit needed); for
+  prod, revert the `chore(services)` pin bump so the registry points back at
+  the previous version tag.
 - Investigate *why* it failed *before* attempting it again — never string
   `fix` commits onto a broken sync.
 - Update [status.md](status.md) and the component's phase row to reflect the
@@ -169,5 +190,6 @@ a deliberate, documented deviation (the [Deviations log](architecture.md#deviati
 | ESO wedged (local) | Was running with the old long refresh pattern | Do **not** restart by hand; short refresh (~5 min) prevents recurrence |
 | `ImagePullBackOff` | Bad pin or unreachable registry | Verify the pinned tag exists upstream; never float `latest` |
 | Service not updating in dev/qa | `promote` action did not move the env ref | Check the service repo's `deploy/dev` / `deploy/qa` ref; move it to the intended commit |
-| Service `OutOfSync` in dev/qa semantics | Ref points at a commit whose tree changed | Inspect the service `Application` (`kubectl -n argocd get application <svc>-<env>`); ensure `main` merge only after qa |
+| Service `OutOfSync` in dev/qa semantics | Ref points at a commit whose tree changed | Inspect the service `Application` (`kubectl -n argocd get application <svc>-<env>`); ensure the `main` merge only happens after qa |
+| Service not updating in prod | Prod `version` pin not bumped (or the tag missing) | Check `argocd/services-prod.yaml` → `version` and that the tag exists in the service repo; the `chore(services)` bump PR is the go/no-go |
 | kind cluster OOM | Host RAM exhausted | Stop sibling Compose stacks before bootstrapping; use the 1-replica local profile |

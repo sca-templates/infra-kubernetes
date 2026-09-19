@@ -45,7 +45,7 @@ here.
 | [secrets.md](secrets.md) | Vault + ESO design, KV path inventory, seed script, short-refresh rationale, per-component secret flow | `bootstrap/seed-vault.sh` |
 | [labels.md](labels.md) | Label model: structural grouping lives in board fields (`Domain`/`Wave`/`Status`), labels stay flat and cross-cutting; the only labels that exist | Kubernetes Planning board; `.github/ISSUE_TEMPLATE/*.yml` |
 | [observability-radar.md](observability-radar.md) | Metrics pipeline and radar alerts as designed (planned until Phase 14) | roadmap in `roadmap.md` |
-| [onboarding-new-service.md](onboarding-new-service.md) | Step-by-step to add a new microservice (app-repo-as-source): the service owns its `deploy/` and promotes by ref moves | `charts/service-template`, `argocd/services-<env>.yaml` |
+| [onboarding-new-service.md](onboarding-new-service.md) | Step-by-step to add a new microservice (app-repo-as-source): dev/qa promote by ref moves, prod by a version-tag pin bump | `charts/service-template`, `argocd/services-<env>.yaml` |
 | [glossary.md](glossary.md) | Every term and component name explained in one place | — |
 
 ## Conventions of this documentation
