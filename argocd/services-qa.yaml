@@ -1,0 +1,51 @@
+# Services registry for qa — one generated Application per service.
+# Each service owns its manifests in its own repo (deploy/), see
+# docs/onboarding-new-service.md. ArgoCD tracks the movable ref `deploy/qa` of
+# the service repo: the service's `promote` action moves that ref to the commit
+# already validated in dev, and auto-sync (no prune) deploys it.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: services-qa
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-20"
+spec:
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error
+  generators:
+    - list:
+        # Add one element per service. Example:
+        # - name: nest-authz
+        #   namespace: nest-authz
+        #   appRepo: https://github.com/sca-templates/nest-authz
+        #   wave: "60"
+        elements: []
+  template:
+    metadata:
+      name: '{{.name}}-qa'
+      namespace: argocd
+      annotations:
+        argocd.argoproj.io/sync-wave: '{{.wave}}'
+    spec:
+      project: default
+      source:
+        repoURL: '{{.appRepo}}'
+        targetRevision: deploy/qa
+        path: deploy
+        helm:
+          releaseName: '{{.name}}'
+          valueFiles:
+            - env/qa.yaml
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{.namespace}}'
+      syncPolicy:
+        automated:
+          prune: false
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ApplyOutOfSyncOnly=true
+          - ServerSideApply=true

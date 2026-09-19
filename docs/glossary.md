@@ -55,6 +55,8 @@ Phase numbers refer to the roadmap in [roadmap.md](roadmap.md).
 | --------------------------------- | ---------------------------------------------------------------------------------- |
 | **`envs/<env>/`**                 | Per-environment overlays (one file per component)                                  |
 | **`infrastructure/<component>/`** | Per-component chart reference + shared values + CRs/manifests                      |
-| **`argocd/apps-<env>.yaml`**      | Per-env `ApplicationSet` generator — the component registry                        |
+| **`argocd/apps-<env>.yaml`**      | Per-env `ApplicationSet` generator — the platform component registry        |
+| **`argocd/services-<env>.yaml`**  | Per-env `ApplicationSet` for services (app-repo-as-source); dev/qa/prod only, never `local` |
+| **`deploy/dev` · `deploy/qa`**    | Ref each env's ArgoCD tracks for a service; the service's `promote` action moves it |
 | **`argocd/root-app-<env>.yaml`**  | Per-env root `Application`                                                         |
 | **`{{GIT_REPO_URL}}`**            | Placeholder in repoURL fields; substituted by `make bootstrap` from `GIT_REPO_URL` |

@@ -11,13 +11,22 @@ and cloudnative-pg (Phase 5) are deployed; every other catalog entry is marked
 
 ## Overview
 
-`infra-kubernetes` is the single source of truth for the platform. ArgoCD (in
-each environment cluster) reconciles this repository via an app-of-apps
-pattern per environment: one root `Application`
-(`argocd/root-app-<env>.yaml`) renders one `ApplicationSet`
-(`argocd/apps-<env>.yaml`) that generates one `Application` per component
-from a list generator. There is **no global `ServerSideApply`**, Kong is a
-dedicated `Application`, and `postgres-app` is a local raw `Application` (see
+`infra-kubernetes` is the single source of truth **for the platform catalog**.
+ArgoCD (in each environment cluster) reconciles this repository via an
+app-of-apps pattern per environment: one root `Application`
+(`argocd/root-app-<env>.yaml`) renders two `ApplicationSet`s that each generate
+one `Application`:
+
+- `argocd/apps-<env>.yaml` — the **platform catalog**: upstream charts/CRs for
+  the components below (from a list generator).
+- `argocd/services-<env>.yaml` — the **services registry** (app-repo-as-source):
+  each service owns its `deploy/` in its own repository, and ArgoCD tracks the
+  env ref (`deploy/dev`, `deploy/qa`, `main`) that the service's `promote`
+  action moves. See [workflow.md](workflow.md#services-app-repo-as-source) and
+  [onboarding-new-service.md](onboarding-new-service.md).
+
+There is **no global `ServerSideApply`**, Kong is a dedicated `Application`,
+and `postgres-app` is a local raw `Application` (see
 [Sync-wave map](#sync-wave-map) and the [Deviations log](#deviations-log)).
 Nothing is deployed by hand after `make bootstrap`.
 
@@ -27,6 +36,7 @@ Nothing is deployed by hand after `make bootstrap`.
 graph TD
     subgraph Git["infra-kubernetes"]
         A["root-app-<env>.yaml"] --> B["ApplicationSet apps-<env>.yaml"]
+        A --> S["ApplicationSet services-<env>.yaml"]
     end
     subgraph ArgoCD["ArgoCD (per environment)"]
         B --> C[Security & Identity]
@@ -34,6 +44,7 @@ graph TD
         B --> E[Data]
         B --> F[Observability]
         B --> G[Delivery & Resilience]
+        S --> SR[Services: e.g. nest-authz]
     end
     subgraph Security["Security & Identity"]
         C --> C1[cert-manager]
@@ -73,6 +84,11 @@ set per component when that phase lands (values live under
 ArgoCD, cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3),
 linkerd-crds (Phase 4) and cloudnative-pg (Phase 5) are deployed, the rest are
 `planned`.
+
+**Services are not part of this catalog.** They are registered in
+`argocd/services-<env>.yaml` (app-repo-as-source) and own their manifests in
+their own repositories — see
+[onboarding-new-service.md](onboarding-new-service.md).
 
 | Component | Namespace | Upstream chart | Wave | Phase | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -241,13 +257,14 @@ Full inventory and runbooks: [secrets.md](secrets.md).
 
 | Environment | Profile | Sync policy | Purpose |
 | --- | --- | --- | --- |
-| `local` | 1 replica, full catalog, minimal resources | auto-sync + prune | Developer machine (kind) |
+| `local` | 1 replica, full platform catalog, minimal resources | auto-sync + prune | Developer machine (kind); **platform-only, no services** |
 | `dev` | reduced HA | auto-sync + prune | Shared integration |
 | `qa` | HA (3 replicas, PDBs, anti-affinity) | auto-sync, **no prune** | Pre-production validation |
 | `prod` | full HA, real storage | **manual sync** | Production |
 
-Sync policies follow ADR-003. Promotion between environments is gated by the
-`promote-test` (see [workflow.md](workflow.md)).
+Sync policies follow ADR-003. Platform-component promotion between environments
+is gated by the `promote-test`; services promote by moving their env refs
+(see [workflow.md](workflow.md#services-app-repo-as-source)).
 
 Per-component replica profile (intended values; materialized as each phase
 lands — cert-manager is done):
@@ -288,6 +305,7 @@ as each component lands; the log always explains *why*, never just *what*.
 | AppSet (CRD apps) | CRD `ignoreDifferences` extended with `.spec.conversion`, `.spec.names.listKind` and `.spec.preserveUnknownFields` (on top of `.spec.versions[].schema` and `.status`) | The API server defaults these fields on served CRDs even when the chart does not declare them, so without the ignore every CRD-shipping app shows a perpetual, non-convergent `OutOfSync`. The fields are server-derived, not genuine drift — the applied CRD content is still the git-pinned chart |
 | linkerd-crds (local) | Five leftover Linkerd CRDs from the pre-restart bulk install (2026-09-02) removed manually: the conflicting `servers`/`serviceprofiles` and the orphaned `egressnetworks`, `externalworkloads`, `httplocalratelimitpolicies` (managed by no app) | SSA cannot remove extra CRD versions or objects it does not manage, so the newer-version leftovers made the app converge to a permanent `OutOfSync`. After cleanup the chart 1.8.0 app re-applied pristine definitions and re-converged to `Synced`. One-off cluster hygiene, not repo state |
 | cloudnative-pg + future-phase CRDs (local) | Same one-off cluster hygiene extended: **60 orphaned CRDs** from the 2026-09-02 bulk install removed — the 11 `postgresql.cnpg.io` (Phase 5) plus the undeployed groups `kafka.strimzi.io`/`core.strimzi.io` (10, Phase 6), `redis.redis.opstreelabs.in` (4, Phase 7), `configuration.konghq.com` (12, Phase 8), `monitoring.coreos.com`/`monitoring.grafana.com` (11, Phase 14) and `velero.io` (13, Phase 18). All lacked ArgoCD ownership (`helm.sh/resource-policy: keep`, no tracking labels) | Extra CRDs not owned by any app wedge the app that ships them into a permanent `OutOfSync` under SSA (same as the linkerd-crds row); each future phase would have hit the same gate. The converging `cloudnative-pg` app re-created its 11 CRDs as app-owned and converged `Synced`+`Healthy`; the undeployed groups were plain leftovers. ArgoCD, cert-manager, external-secrets and linkerd CRDs untouched |
+| Services | A service is **app-repo-as-source**: its Kubernetes manifests live in the service's own repo (`deploy/`), and each environment's ArgoCD tracks a ref of that repo (`deploy/dev`, `deploy/qa`, `main`). `local` intentionally does **not** run services (`services-<env>.yaml` exists only for `dev`/`qa`/`prod`) | Services iterate daily (multiple deploys a day per service) and a PR-per-deployment in `infra-kubernetes` would turn TBD into a bottleneck. Keeping services self-owned while the catalog components stay centralized (the two `ApplicationSet`s in the root app) preserves git as the deployment gate: dev/qa are ref moves, `main` is the only PR gate, and prod still only deploys from a merged `main` with a human Sync (ADR-003). This is a documented deviation from the single-repo-catalog model, constrained to the services registry |
 
 ## Change flow (summary)
 

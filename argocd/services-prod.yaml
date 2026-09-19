@@ -1,0 +1,48 @@
+# Services registry for prod — one generated Application per service.
+# Each service owns its manifests in its own repo (deploy/), see
+# docs/onboarding-new-service.md. Prod tracks `main` of the service repo: only
+# a PR merged after dev/qa validation lands here, and the human Sync (in the
+# deploy window) is the go/no-go. No `automated` block — prod is manual.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: services-prod
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-20"
+spec:
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error
+  generators:
+    - list:
+        # Add one element per service. Example:
+        # - name: nest-authz
+        #   namespace: nest-authz
+        #   appRepo: https://github.com/sca-templates/nest-authz
+        #   wave: "60"
+        elements: []
+  template:
+    metadata:
+      name: '{{.name}}-prod'
+      namespace: argocd
+      annotations:
+        argocd.argoproj.io/sync-wave: '{{.wave}}'
+    spec:
+      project: default
+      source:
+        repoURL: '{{.appRepo}}'
+        targetRevision: main
+        path: deploy
+        helm:
+          releaseName: '{{.name}}'
+          valueFiles:
+            - env/prod.yaml
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{.namespace}}'
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true
+          - ApplyOutOfSyncOnly=true
+          - ServerSideApply=true

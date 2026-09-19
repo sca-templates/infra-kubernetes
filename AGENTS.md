@@ -8,10 +8,13 @@ repo.
 
 ## 1. What this repo is
 
-- Single source of truth for the platform: components, environments, secret
-  projections.
-- ArgoCD app-of-apps: one root Application per environment renders an
-  ApplicationSet that generates one Application per component.
+- Single source of truth for the **platform components**: environments, secret
+  projections. Services do **not** live here — each service owns its `deploy/`
+  in its own repo (app-repo-as-source, [docs/onboarding-new-service.md](docs/onboarding-new-service.md)).
+- ArgoCD app-of-apps: one root Application per environment renders **two**
+  ApplicationSets — `apps-<env>.yaml` (platform catalog) and
+  `services-<env>.yaml` (services registry; present for `dev`/`qa`/`prod`
+  only, never `local`).
 - A **clean restart** of the previous `infra-kubernetes` (which churned in
   `fix` commits): a human-reviewed gate per logical change, rollback over
   forward-fix.
@@ -26,15 +29,21 @@ them first, execute against their gates, and update `status.md` /
 
 ## 2. Environment model
 
+`local` is a **platform-only** sandbox (kind): the full catalog for iteration
+and CI smoke, but **no services**. Services deploy from `dev` upward, promoted
+by moving refs of their own repos.
+
 | Environment | Profile | Sync policy | Purpose |
 | --- | --- | --- | --- |
-| `local` | 1 replica, full catalog, minimal resources | auto-sync + prune | Developer machine (kind) |
-| `dev` | reduced HA | auto-sync + prune | Shared integration |
-| `qa` | HA (3 replicas, PDBs, anti-affinity) | auto-sync, **no prune** | Pre-production validation |
-| `prod` | full HA, real storage | **manual sync** | Production |
+| `local` | 1 replica, full platform catalog, minimal resources | auto-sync + prune | Developer machine (kind); platform-only, no services |
+| `dev` | reduced HA | auto-sync + prune | Shared integration; services auto via ref `deploy/dev` |
+| `qa` | HA (3 replicas, PDBs, anti-affinity) | auto-sync, **no prune** | Pre-production validation; services via ref `deploy/qa` |
+| `prod` | full HA, real storage | **manual sync** | Production; services from a merged `main`, go/no-go |
 
-Sync policies follow ADR-003. Promotion is gated by the `promote-test`
-([docs/workflow.md](docs/workflow.md)).
+Sync policies follow ADR-003. Platform-component promotion is gated by the
+`promote-test`; services promote by ref moves, and a service PR to its `main`
+only happens **after** dev and qa
+([docs/workflow.md](docs/workflow.md#services-app-repo-as-source)).
 
 ## 3. Component catalog
 
@@ -69,7 +78,9 @@ and image pins are set inside each phase and live under
 **Intentional exclusions** (per the restart plan): no Consul in-cluster
 (ADR-001; native DNS + Linkerd replace it), no Unleash, no
 KafkaConnect/Debezium, no kafka-ui, no linkerd-viz in-cluster. No `latest`
-tags; this repo builds nothing.
+tags; this repo builds nothing. **Services are not part of this catalog** —
+each service owns its `deploy/` and is registered in `argocd/services-<env>.yaml`
+([docs/onboarding-new-service.md](docs/onboarding-new-service.md)).
 
 ## 4. Dependency order (sync-waves)
 
@@ -88,6 +99,7 @@ before CRs; Vault before ESO syncs; datastores before consumers.
 | 40 | Datastores: postgres-app, keycloak-db (CNPG), kafka, redis CRs |
 | 50 | Consumers: keycloak |
 | 60 | Observability: kube-prometheus-stack, loki, alloy, tempo |
+| 60 | Service apps (registry `services-<env>.yaml`) — consumers of the catalog, wave set per service |
 | 70 | MinIO (local only) |
 | 80 | Velero |
 
