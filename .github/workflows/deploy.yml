@@ -1,0 +1,39 @@
+# Copyright (c) 2026 sca-templates contributors
+# SPDX-License-Identifier: MIT
+# =============================================================================
+# infra-kubernetes deploy — single deployment pipeline (EKS-parity target).
+# Runs on the org self-hosted runner (labels: self-hosted, kind).
+#
+# Repo-level Variables swap the target (PC <-> cloud) with no YAML changes:
+#   DEPLOY_ENV   = local | eks   (GitHub Environment for the run)
+#   KUBE_CONTEXT = kubectl context pointing at the target cluster
+#
+# The runner reads ~/.kube/config on the host; no kubeconfig secret.
+# Planned growth: build -> push to ghcr.io -> apply/upgrade -> rollout.
+# =============================================================================
+
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ vars.DEPLOY_ENV }}
+  cancel-in-progress: false
+
+jobs:
+  connect:
+    name: Connect to cluster
+    runs-on: [self-hosted, kind]
+    environment: ${{ vars.DEPLOY_ENV }}
+    steps:
+      - name: Verify cluster reachability
+        env:
+          KUBE_CONTEXT: ${{ vars.KUBE_CONTEXT }}
+        run: |
+          set -euo pipefail
+          test -n "${KUBE_CONTEXT}" || { echo "::error::repo variable KUBE_CONTEXT is not set"; exit 1; }
+          kubectl --context "${KUBE_CONTEXT}" get nodes -o wide
