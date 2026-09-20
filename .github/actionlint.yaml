@@ -1,0 +1,7 @@
+# actionlint configuration — declare custom self-hosted runner labels.
+# The org runner `debian-kind` reports labels: self-hosted, Linux, X64, kind.
+# actionlint already knows the standard labels; only the custom one needs
+# declaring so `runs-on: [self-hosted, kind]` does not fail Workflow lint.
+self-hosted-runner:
+  labels:
+    - kind
