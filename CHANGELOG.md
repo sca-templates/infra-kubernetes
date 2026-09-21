@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/sca-templates/infra-kubernetes/compare/v0.7.0...v0.8.0) (2026-09-21)
+
+
+### Features
+
+* **ci:** deploy service-template over the EKS-parity pipeline ([#61](https://github.com/sca-templates/infra-kubernetes/issues/61)) ([9007d2e](https://github.com/sca-templates/infra-kubernetes/commit/9007d2e227020a0d3ee39f4480a5ae904541883c))
+
 ## [0.7.0](https://github.com/sca-templates/infra-kubernetes/compare/v0.6.0...v0.7.0) (2026-09-19)
 
 
