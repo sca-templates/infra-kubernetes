@@ -5,11 +5,15 @@
 # Runs on the org self-hosted runner (labels: self-hosted, kind).
 #
 # Repo-level Variables swap the target (PC <-> cloud) with no YAML changes:
-#   DEPLOY_ENV   = local | eks   (GitHub Environment for the run)
-#   KUBE_CONTEXT = kubectl context pointing at the target cluster
+#   DEPLOY_ENV       = local | eks   (GitHub Environment for the run)
+#   KUBE_CONTEXT     = kubectl context pointing at the target cluster
+#   DEPLOY_NAMESPACE = namespace the sandbox app is installed into
 #
 # The runner reads ~/.kube/config on the host; no kubeconfig secret.
-# Planned growth: build -> push to ghcr.io -> apply/upgrade -> rollout.
+# The service-template chart is installed through Helm; the environment
+# overlay under sandbox/deploy/values-<DEPLOY_ENV>.yaml swaps the values per
+# target. Cloud-only steps (image build+push, EKS promote) run only when
+# DEPLOY_ENV=eks; locally the full local path is exercised end-to-end.
 # =============================================================================
 
 name: Deploy
@@ -37,3 +41,62 @@ jobs:
           set -euo pipefail
           test -n "${KUBE_CONTEXT}" || { echo "::error::repo variable KUBE_CONTEXT is not set"; exit 1; }
           kubectl --context "${KUBE_CONTEXT}" get nodes -o wide
+
+  deploy:
+    name: Deploy to ${{ vars.DEPLOY_ENV }}
+    needs: connect
+    runs-on: [self-hosted, kind]
+    environment: ${{ vars.DEPLOY_ENV }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build and push image
+        if: ${{ vars.DEPLOY_ENV == 'eks' }}
+        run: |
+          echo "Cloud-only: build and push the image to the registry for EKS."
+          echo "infra-kubernetes builds nothing (image policy); the pinned public"
+          echo "placeholder image is reached directly through the values overlay."
+      - name: Resolve environment overlay
+        id: overlay
+        env:
+          DEPLOY_ENV: ${{ vars.DEPLOY_ENV }}
+        run: |
+          set -euo pipefail
+          overlay="sandbox/deploy/values-${DEPLOY_ENV}.yaml"
+          test -f "${overlay}" || { echo "::error::missing overlay '${overlay}'"; exit 1; }
+          echo "overlay=${overlay}" >> "${GITHUB_OUTPUT}"
+      - name: Validate chart
+        env:
+          OVERLAY: ${{ steps.overlay.outputs.overlay }}
+        run: |
+          set -euo pipefail
+          helm lint charts/service-template --values "${OVERLAY}"
+          helm template sca-sandbox-app charts/service-template \
+            --namespace "sca-sandbox" --values "${OVERLAY}" >/dev/null
+      - name: Deploy with Helm
+        env:
+          KUBE_CONTEXT: ${{ vars.KUBE_CONTEXT }}
+          NAMESPACE: ${{ vars.DEPLOY_NAMESPACE }}
+          OVERLAY: ${{ steps.overlay.outputs.overlay }}
+        run: |
+          set -euo pipefail
+          test -n "${NAMESPACE}" || { echo "::error::repo variable DEPLOY_NAMESPACE is not set"; exit 1; }
+          helm upgrade --install sca-sandbox-app charts/service-template \
+            --kube-context "${KUBE_CONTEXT}" \
+            --namespace "${NAMESPACE}" --create-namespace \
+            --values "${OVERLAY}" \
+            --wait --timeout 180s
+      - name: Verify rollout
+        env:
+          KUBE_CONTEXT: ${{ vars.KUBE_CONTEXT }}
+          NAMESPACE: ${{ vars.DEPLOY_NAMESPACE }}
+        run: |
+          set -euo pipefail
+          kubectl --context "${KUBE_CONTEXT}" -n "${NAMESPACE}" \
+            rollout status deploy/sca-sandbox-app --timeout 120s
+          kubectl --context "${KUBE_CONTEXT}" -n "${NAMESPACE}" get deploy,po
+      - name: Promote to EKS
+        if: ${{ vars.DEPLOY_ENV == 'eks' }}
+        run: |
+          echo "Cloud-only: rollout/tag promotion gates on the EKS target."
+          echo "Locally this step is skipped; DEPLOY_ENV=local exercises the full local path."
