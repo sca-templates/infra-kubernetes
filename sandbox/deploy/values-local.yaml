@@ -1,0 +1,62 @@
+# Local (kind) values overlay for the service-template sandbox app.
+# Selected by deploying with DEPLOY_ENV=local (repo variable).
+# Mirrors a service's env/local overlay: minimal, non-root footprint.
+fullnameOverride: sca-sandbox-app
+
+replicaCount: 1
+
+image:
+  repository: docker.io/nginxinc/nginx-unprivileged
+  # Pinned tag, no floating/latest (repo image policy).
+  tag: "1.27-alpine"
+  pullPolicy: IfNotPresent
+
+# The nginx-unprivileged placeholder serves "/"; point the probes there
+# instead of the chart's default /healthz and /readyz.
+livenessProbe:
+  httpGet:
+    path: /
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 15
+
+readinessProbe:
+  httpGet:
+    path: /
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+# Sandbox-only relaxation: nginx-unprivileged runs as uid 101 and writes its
+# cache/pid at runtime, so the chart's hard read-only rootfs is overridden.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 101
+  runAsGroup: 101
+  fsGroup: 101
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: http
+
+serviceMonitor:
+  enabled: false
+
+ingress:
+  enabled: false
+
+autoscaling:
+  enabled: false
+
+pdb:
+  enabled: false
