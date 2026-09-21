@@ -1,8 +1,9 @@
 # Services registry for dev — one generated Application per service.
 # Each service owns its manifests in its own repo (deploy/), see
-# docs/onboarding-new-service.md. ArgoCD tracks the movable ref `deploy/dev`
-# of the service repo: the service's `promote` action moves that ref to the
-# commit it wants to test, and auto-sync deploys it — last deployer wins.
+# docs/onboarding-new-service.md. ArgoCD tracks `main` of the service repo:
+# the service's `promote` workflow selects the branch to deploy and syncs this
+# Application through the ArgoCD API (scoped token) — no refs, last wins.
+# Sync is intentionally NOT automated: it is driven by the promote workflow.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -32,7 +33,7 @@ spec:
       project: default
       source:
         repoURL: '{{.appRepo}}'
-        targetRevision: deploy/dev
+        targetRevision: main
         path: deploy
         helm:
           releaseName: '{{.name}}'
@@ -41,11 +42,7 @@ spec:
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{.namespace}}'
-      syncPolicy:
-        automated:
-          prune: true
-          selfHeal: true
-        syncOptions:
-          - CreateNamespace=true
-          - ApplyOutOfSyncOnly=true
-          - ServerSideApply=true
+      syncOptions:
+        - CreateNamespace=true
+        - ApplyOutOfSyncOnly=true
+        - ServerSideApply=true
