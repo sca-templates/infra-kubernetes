@@ -3,9 +3,15 @@
 # docs/onboarding-new-service.md. Prod tracks the **service version tag**
 # pinned in this registry (`version`): only a tag released after dev/qa
 # validation is adopted, by bumping the pin via an infra `chore(services)`
-# PR (the reviewed go/no-go). The service repo's `latest` tag is marked by the
-# bot only once prod has adopted that version. No `automated` block — prod is
-# manual (ADR-003); the human Sync in the deploy window is the last checkpoint.
+# PR (the reviewed go/no-go). The service repo's `latest` tag is marked only
+# after prod has adopted that version (service `deploy-prod` workflow,
+# `action: mark-latest`). No `automated` block — prod is manual (ADR-003);
+# the human Sync in the deploy window is the last checkpoint.
+#
+# The `version` pin of a service is read/written by the org's shared deploy
+# templates (sca-templates/CI-CD-Templates shared-adopt-prod and
+# shared-enforce-latest) through the ApplicationSet element lookup:
+#   .spec.generators[0].list.elements[] | select(.name == "<service>") | .version
 #
 # Add one element per service. Every element MUST carry `version` (the template
 # reads it with missingkey=error). Example:
