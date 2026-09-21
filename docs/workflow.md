@@ -86,20 +86,27 @@ A service release is **automatic bookkeeping, not a deploy gate**:
    service `main`, **after** dev and qa have passed.
 2. On merge, the service's `release-please` opens a release PR that the release
    bot **auto-merges** once required checks pass, cutting the immutable semver
-   tag `vX.Y.Z` (signed, CHANGELOG-driven). The tag is **never** `latest` —
-   `latest` is a reality marker, not a control.
-3. Another bot then opens the **only infra PR a deploy needs**: a
+   tag `vX.Y.Z` (signed, CHANGELOG-driven). The tag is **not** trusted as
+   `latest` — `latest` is a reality marker, corrected only once prod adopts it.
+3. The service's `deploy-prod` workflow (**`action: adopt`**, a
+   `workflow_dispatch` wrapper over CI-CD-Templates'
+   `shared-adopt-prod.yml` — copy-paste example in CI-CD-Templates
+   `docs/examples/deploy-prod.yml`)
+   opens the **only infra PR a deploy needs**: a
    `chore(services): adopt nest-authz vX.Y.Z` bump of the `version` pin in
    `argocd/services-prod.yaml`. Because the commit type is `chore`,
    release-please opens **no** infra release PR ([versioning.md](versioning.md)).
-4. Human review of that bump is the **go/no-go**; merges make the prod
+4. Human review of that bump is the **go/no-go**; merging makes the prod
    `Application` `OutOfSync`, and the human `Sync` in the deploy window applies
-   it (ADR-003). Once prod is running that version, the bot marks
+   it (ADR-003). Once prod is running that version, the same service workflow
+   (**`action: mark-latest`**, over `shared-enforce-latest.yml`) marks
    `latest` = `vX.Y.Z` on the service repo.
 
-So the 4 PRs of the flow are **2 human gates**: the feature PR (code review)
-and `chore(services)` bump (go/no-go). Release PR and (absent) infra release PR
-are bot-managed. The contract lives in [onboarding-new-service.md](onboarding-new-service.md).
+So the flow has **2 human gates** — the feature PR (code review) and the
+`chore(services)` bump (go/no-go) — plus the manual prod `Sync`. Release PRs
+are bot-managed; the adopt and mark-latest steps are **human-invoked per
+service** from its `deploy-prod` workflow. The contract lives in
+[onboarding-new-service.md](onboarding-new-service.md).
 
 ```mermaid
 graph LR
@@ -113,11 +120,12 @@ graph LR
     H --> I[PR to service main]
     I --> J[Human review + merge]
     J --> K[release PR auto-merged by bot]
-    K --> L["tag vX.Y.Z created, not latest"]
-    L --> M["chore(services) PR in infra: bump prod pin"]
-    M --> N[Human review + merge = go/no-go]
-    N --> O[ArgoCD prod: manual Sync in window]
-    O --> P["bot marks latest once prod adopted it"]
+    K --> L["tag vX.Y.Z created"]
+    L --> M["service deploy-prod: action adopt"]
+    M --> N["chore(services) PR in infra: bump prod pin"]
+    N --> O[Human review + merge = go/no-go]
+    O --> P[ArgoCD prod: manual Sync in window]
+    P --> Q["service deploy-prod: action mark-latest"]
 ```
 
 ### Platform components

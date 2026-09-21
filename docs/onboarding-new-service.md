@@ -103,33 +103,46 @@ Dev/qa deployment is a **ref move**; prod deployment is a **version pin**:
 | `deploy/qa` | qa (auto, no prune) | free, after a dev pass |
 | `version` tag in `argocd/services-prod.yaml` | prod (manual Sync in window) | reviewed `chore(services)` bump + go/no-go |
 
-The service repo ships a `promote` GitHub Action (`workflow_dispatch` or on
-merge to a `release/*` branch — the service owner's choice) that:
+The service repo ships two `workflow_dispatch` wrappers copied from
+CI-CD-Templates' `docs/examples/` (`promote.yml`, `deploy-prod.yml`):
 
-1. Builds and pushes the image with a unique tag (`sha-…`; never `latest`).
-2. Moves the refs ArgoCD tracks: `deploy/dev`, then `deploy/qa` on request.
+- `promote.yml` — builds and pushes the image with a unique tag (`sha-…`; never
+  `latest`) and moves the refs ArgoCD tracks: `deploy/dev`, then `deploy/qa` on
+  request (dev promotes immediately; `qa` waits for an approval when the repo's
+  `qa` GitHub Environment has **Required reviewers** configured — **public
+  repos** on Free/Pro/Team, Enterprise Cloud required for private ones).
+- `deploy-prod.yml` — the two manual prod steps:
+  - `action: adopt` opens the `chore(services)` bump PR (below);
+  - `action: mark-latest` corrects GitHub `latest` after the prod `Sync`.
 
-Reaching prod is a **version-gated** flow run by the release bot (releases
-happen upstream in the service repo, the adopt-bump lands here):
+Reaching prod is a **version-gated** flow (releases happen upstream in the
+service repo, the adopt-bump lands here):
 
 1. The service opens the feature PR to its `main` **after** dev and qa passed
    ([workflow.md](workflow.md#services-app-repo-as-source)) — the only code PR.
 2. On merge, release-please (in the service repo) opens a release PR the bot
-   **auto-merges**, cutting the immutable signed tag `vX.Y.Z` — never `latest`.
-3. The bot opens a `chore(services): adopt nest-authz vX.Y.Z` PR bumping the
-   `version` pin in `argocd/services-prod.yaml`. Because the commit type is
-   `chore`, **no** infra release PR opens ([versioning.md](versioning.md)).
+   **auto-merges**, cutting the immutable signed tag `vX.Y.Z`.
+3. A human runs `deploy-prod` with `action: adopt` and the `release-tag`; the
+   wrapper calls `shared-adopt-prod.yml`, which opens the
+   `chore(services): adopt nest-authz vX.Y.Z` PR bumping the `version` pin in
+   `argocd/services-prod.yaml`. Because the commit type is `chore`, **no** infra
+   release PR opens ([versioning.md](versioning.md)).
 4. Human review of the bump is the **go/no-go**; on merge the prod
    `Application` goes `OutOfSync` and the human `Sync` in the deploy window
-   applies it. The bot then marks `latest` = `vX.Y.Z` on the service repo.
+   applies it. Once prod is running that version, a human runs `deploy-prod`
+   with `action: mark-latest` so `latest` = `vX.Y.Z` on the service repo.
 
-So the 4 PRs of the flow are **2 human gates**: the feature PR (code review)
-and the `chore(services)` bump (go/no-go) — release PRs are bot-managed.
+So the flow has **2 human gates**: the feature PR (code review) and the
+`chore(services)` bump (go/no-go) — plus the manual prod `Sync`. Release PRs
+are bot-managed; the adopt and mark-latest steps are invoked from the service's
+`deploy-prod` workflow.
 
 The repo rules must protect the refs and the PR path:
 
 - `deploy/dev` and `deploy/qa` allow **force-push only from the bot** (the
-  mechanism moves refs; humans do not push to them).
+  mechanism moves refs; humans do not push to them). Apply CI-CD-Templates'
+  `service-deploy-refs` ruleset with **higher precedence** than any
+  `allowed-branches-only` ruleset, so the bot's force-push is allowed.
 - `main` requires review + status checks (the service's own CI).
 - Prod's Sync is manual (ADR-003), so a bump merge never auto-deploys prod.
 
@@ -151,8 +164,9 @@ Onboarding is complete when:
   works end to end.
 
 The service is now self-serve: dev/qa ship without touching `infra-kubernetes`;
-prod ships by approving the bot's per-version bump PR. Registration, namespace
-or secrets changes still touch the registry.
+prod ships by running the service's `deploy-prod` workflow (`action: adopt`)
+and reviewing/merging its per-version bump PR, then `Sync`ing prod.
+Registration, namespace or secrets changes still touch the registry.
 
 ## 6. Platform integration (once ready)
 
