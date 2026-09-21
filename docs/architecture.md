@@ -20,10 +20,10 @@ one `Application`:
 - `argocd/apps-<env>.yaml` — the **platform catalog**: upstream charts/CRs for
   the components below (from a list generator).
 - `argocd/services-<env>.yaml` — the **services registry** (app-repo-as-source):
-  each service owns its `deploy/` in its own repository; dev/qa ArgoCD track the
-  env refs (`deploy/dev`, `deploy/qa`) the service's `promote` action moves,
-  while prod tracks the **version tag pinned** in the registry element (bumped
-  by a reviewed `chore(services)` PR). See
+  each service owns its `deploy/` in its own repository; dev/qa ArgoCD track
+  `main` of the service repo and are synced by the service's `promote`
+  workflow to the selected commit, while prod tracks the **version tag pinned**
+  in the registry element (bumped by a reviewed `chore(services)` PR). See
   [workflow.md](workflow.md#services-app-repo-as-source) and
   [onboarding-new-service.md](onboarding-new-service.md).
 
@@ -260,13 +260,14 @@ Full inventory and runbooks: [secrets.md](secrets.md).
 | Environment | Profile | Sync policy | Purpose |
 | --- | --- | --- | --- |
 | `local` | 1 replica, full platform catalog, minimal resources | auto-sync + prune | Developer machine (kind); **platform-only, no services** |
-| `dev` | reduced HA | auto-sync + prune | Shared integration |
-| `qa` | HA (3 replicas, PDBs, anti-affinity) | auto-sync, **no prune** | Pre-production validation |
+| `dev` | reduced HA | auto-sync + prune (platform); services synced on demand by the `promote` workflow | Shared integration; services via the `promote` workflow → `<service>-dev` app sync |
+| `qa` | HA (3 replicas, PDBs, anti-affinity) | auto-sync, **no prune** (platform); services synced by the `promote` workflow against the `qa` approval gate | Pre-production validation; services via the `promote` workflow → `<service>-qa` app sync |
 | `prod` | full HA, real storage | **manual sync** | Production |
 
 Sync policies follow ADR-003. Platform-component promotion between environments
-is gated by the `promote-test`; services promote by moving their env refs
-(see [workflow.md](workflow.md#services-app-repo-as-source)).
+is gated by the `promote-test`; services promote by syncing the ArgoCD
+Application of the service repo (see
+[workflow.md](workflow.md#services-app-repo-as-source)).
 
 Per-component replica profile (intended values; materialized as each phase
 lands — cert-manager is done):
@@ -307,7 +308,7 @@ as each component lands; the log always explains *why*, never just *what*.
 | AppSet (CRD apps) | CRD `ignoreDifferences` extended with `.spec.conversion`, `.spec.names.listKind` and `.spec.preserveUnknownFields` (on top of `.spec.versions[].schema` and `.status`) | The API server defaults these fields on served CRDs even when the chart does not declare them, so without the ignore every CRD-shipping app shows a perpetual, non-convergent `OutOfSync`. The fields are server-derived, not genuine drift — the applied CRD content is still the git-pinned chart |
 | linkerd-crds (local) | Five leftover Linkerd CRDs from the pre-restart bulk install (2026-09-02) removed manually: the conflicting `servers`/`serviceprofiles` and the orphaned `egressnetworks`, `externalworkloads`, `httplocalratelimitpolicies` (managed by no app) | SSA cannot remove extra CRD versions or objects it does not manage, so the newer-version leftovers made the app converge to a permanent `OutOfSync`. After cleanup the chart 1.8.0 app re-applied pristine definitions and re-converged to `Synced`. One-off cluster hygiene, not repo state |
 | cloudnative-pg + future-phase CRDs (local) | Same one-off cluster hygiene extended: **60 orphaned CRDs** from the 2026-09-02 bulk install removed — the 11 `postgresql.cnpg.io` (Phase 5) plus the undeployed groups `kafka.strimzi.io`/`core.strimzi.io` (10, Phase 6), `redis.redis.opstreelabs.in` (4, Phase 7), `configuration.konghq.com` (12, Phase 8), `monitoring.coreos.com`/`monitoring.grafana.com` (11, Phase 14) and `velero.io` (13, Phase 18). All lacked ArgoCD ownership (`helm.sh/resource-policy: keep`, no tracking labels) | Extra CRDs not owned by any app wedge the app that ships them into a permanent `OutOfSync` under SSA (same as the linkerd-crds row); each future phase would have hit the same gate. The converging `cloudnative-pg` app re-created its 11 CRDs as app-owned and converged `Synced`+`Healthy`; the undeployed groups were plain leftovers. ArgoCD, cert-manager, external-secrets and linkerd CRDs untouched |
-| Services | A service is **app-repo-as-source**: its Kubernetes manifests live in the service's own repo (`deploy/`); dev/qa ArgoCD track the env refs (`deploy/dev`, `deploy/qa`) that the service's `promote` action moves, while prod tracks the **version tag pinned** in `services-prod.yaml` (`version`, bumped by a reviewed `chore(services)` PR that also carries the go/no-go). `local` intentionally does **not** run services (`services-<env>.yaml` exists only for `dev`/`qa`/`prod`) | Services iterate daily (multiple deploys a day per service) and a PR-per-deployment in `infra-kubernetes` would turn TBD into a bottleneck. Keeping services self-owned while the catalog components stay centralized (the two `ApplicationSet`s in the root app) preserves git as the deployment gate: dev/qa are ref moves, prod is a one-line version bump (`chore(services)`, so it never opens an infra release PR) plus a human `Sync` (ADR-003). Each service release cuts an immutable semver tag that is only marked `latest` once prod adopted it, which is what makes prod rollback a revert of the pin. This is a documented deviation from the single-repo-catalog model, constrained to the services registry |
+| Services | A service is **app-repo-as-source**: its Kubernetes manifests live in the service's own repo (`deploy/`); dev/qa ArgoCD track `main` and are synced to the selected commit by the service's `promote` workflow (ArgoCD API, scoped token), while prod tracks the **version tag pinned** in `services-prod.yaml` (`version`, bumped by a reviewed `chore(services)` PR that also carries the go/no-go). `local` intentionally does **not** run services (`services-<env>.yaml` exists only for `dev`/`qa`/`prod`) | Services iterate daily (multiple deploys a day per service) and a PR-per-deployment in `infra-kubernetes` would turn TBD into a bottleneck. Keeping services self-owned while the catalog components stay centralized (the two `ApplicationSet`s in the root app) preserves git as the deployment gate: dev/qa are ArgoCD app syncs run from the service repo, prod is a one-line version bump (`chore(services)`, so it never opens an infra release PR) plus a human `Sync` (ADR-003). Each service release cuts an immutable semver tag that is only marked `latest` once prod adopted it, which is what makes prod rollback a revert of the pin. This is a documented deviation from the single-repo-catalog model, constrained to the services registry |
 
 ## Change flow (summary)
 

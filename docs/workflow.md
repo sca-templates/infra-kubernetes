@@ -10,9 +10,9 @@ cluster. Companion to [architecture.md](architecture.md) (the *state*) and
   Each environment cluster runs an ArgoCD that reconciles a root `Application`
   (`argocd/root-app-<env>.yaml`) from this repo; sync policies follow ADR-003.
 - **Services are not part of that catalog.** Each service is the owner of its
-  own `deploy/` manifest and is deployed through the refs its environment
-  tracks (`deploy/dev`, `deploy/qa`, `main`) in its own repository — the
-  service `promote` action moves those refs. See
+  own `deploy/` manifest. dev/qa ArgoCD Applications track `main` of the service
+  repo; the service `promote` workflow selects the branch to deploy and syncs
+  the Application through the ArgoCD API (scoped token) — no refs, no PR. See
   [Services (app-repo-as-source)](#services-app-repo-as-source).
 - A platform-change becomes a deployment by landing in `main`; ArgoCD does the
   rest. **Nothing is deployed by hand after `make bootstrap`.**
@@ -24,7 +24,7 @@ cluster. Companion to [architecture.md](architecture.md) (the *state*) and
 ## Change → deploy flow (platform components)
 
 This is the flow for the platform catalog (Vault, Kong, …). Services use the
-ref-based flow in
+sync-based flow in
 [Services (app-repo-as-source)](#services-app-repo-as-source) instead.
 
 ```mermaid
@@ -64,26 +64,28 @@ describes:
   only that env's `envs/<env>/` overlays plus `argocd/apps-<env>.yaml` (the
   registry).
 - **Services** (microservices like `nest-authz`): they own their manifests in
-  their own repo (`deploy/`), and their environment placement is a **movable
-  git ref**, not a PR in `infra-kubernetes` — see
+  their own repo (`deploy/`), and their environment placement is an **ArgoCD
+  Application sync** triggered from their `promote` workflow — not a PR in
+  `infra-kubernetes` — see
   [Services (app-repo-as-source)](#services-app-repo-as-source).
 
 ### Services (app-repo-as-source)
 
-A service is deployed through its own repository. dev/qa ride on movable refs;
-prod rides on the **version tag pinned in the services registry**
-(`argocd/services-prod.yaml` → `version`). Each environment's ArgoCD tracks:
+A service is deployed through its own repository. dev/qa are synced to the
+commit selected in the service `promote` workflow; prod rides on the **version
+tag pinned in the services registry** (`argocd/services-prod.yaml` → `version`).
+Each environment's ArgoCD tracks:
 
 | Env | Ref tracked by ArgoCD | Deploy trigger | Gate |
 | --- | --- | --- | --- |
-| `dev` | `deploy/dev` | service `promote` action moves the ref | none — last deployer wins |
-| `qa` | `deploy/qa` | `promote` action moves the ref | free, after a dev pass |
+| `dev` | `main` | service `promote` workflow → ArgoCD API sync (`<service>-dev` app) | none — last deployer wins |
+| `qa` | `main` | `promote` workflow → ArgoCD API sync (`<service>-qa` app) | free, after a dev pass; a real promote pauses on the repo's `qa` Environment (Required reviewers) |
 | `prod` | the `version` tag pinned in `services-prod.yaml` | infra `chore(services)` PR bumps the pin | reviewed go/no-go + **manual Sync** |
 
 A service release is **automatic bookkeeping, not a deploy gate**:
 
-1. dev/qa validate the change on the refs; the first PR is the feature PR to the
-   service `main`, **after** dev and qa have passed.
+1. dev/qa validate the change through promote syncs; the first PR is the
+   feature PR to the service `main`, **after** dev and qa have passed.
 2. On merge, the service's `release-please` opens a release PR that the release
    bot **auto-merges** once required checks pass, cutting the immutable semver
    tag `vX.Y.Z` (signed, CHANGELOG-driven). The tag is **not** trusted as
@@ -110,12 +112,12 @@ service** from its `deploy-prod` workflow. The contract lives in
 
 ```mermaid
 graph LR
-    A[Feature commit] --> B[promote action: build + pin tag]
-    B --> C["move deploy/dev ref"]
-    C --> D[ArgoCD dev: auto + prune]
+    A[Commit on main] --> B["promote workflow: select branch/commit"]
+    B --> C["ArgoCD API sync dev app --revision <commit>"]
+    C --> D[ArgoCD dev app synced]
     D --> E[validate dev]
-    E --> F["move deploy/qa ref"]
-    F --> G[ArgoCD qa: auto, no prune]
+    E --> F["promote workflow: sync qa app (approval gate)"]
+    F --> G[ArgoCD qa app synced]
     G --> H[validate qa]
     H --> I[PR to service main]
     I --> J[Human review + merge]
@@ -142,7 +144,7 @@ validate the target env overlay on a local `kind` cluster loaded with
 `ENV=dev|qa|prod` (`make bootstrap ENV=<env>` against the same overlay).
 Promotion of a platform component is only allowed when the promote-test passes
 and the component is green in the lower environment. Services do not use
-`promote-test` — their pre-PR validation is exactly the dev → qa flow.
+`promote-test` — their pre-PR validation is exactly the dev → qa sync flow.
 
 ## The escalation gate
 
@@ -151,10 +153,10 @@ red), the response is **rollback, not forward-churn**:
 
 - **Platform component**: revert the offending commit (or the environment's
   view of it via the overlay), merge the revert, let ArgoCD reconcile it back.
-- **Service**: point the env ref back at the previous known-good commit for
-  dev/qa (the ref move is itself the rollback — no new commit needed); for
-  prod, revert the `chore(services)` pin bump so the registry points back at
-  the previous version tag.
+- **Service**: re-run the `promote` workflow pointing the dev/qa app back at
+  the previous known-good commit (a new sync is the rollback — no new commit
+  needed); for prod, revert the `chore(services)` pin bump so the registry
+  points back at the previous version tag.
 - Investigate *why* it failed *before* attempting it again — never string
   `fix` commits onto a broken sync.
 - Update [status.md](status.md) and the component's phase row to reflect the
@@ -197,7 +199,7 @@ a deliberate, documented deviation (the [Deviations log](architecture.md#deviati
 | Pods crash after a wave bump | Dependency started before its datastore/operator | Re-check wave assignment; consumers must be ≥10 above their dependency |
 | ESO wedged (local) | Was running with the old long refresh pattern | Do **not** restart by hand; short refresh (~5 min) prevents recurrence |
 | `ImagePullBackOff` | Bad pin or unreachable registry | Verify the pinned tag exists upstream; never float `latest` |
-| Service not updating in dev/qa | `promote` action did not move the env ref | Check the service repo's `deploy/dev` / `deploy/qa` ref; move it to the intended commit |
-| Service `OutOfSync` in dev/qa semantics | Ref points at a commit whose tree changed | Inspect the service `Application` (`kubectl -n argocd get application <svc>-<env>`); ensure the `main` merge only happens after qa |
+| Service not updating in dev/qa | `promote` workflow did not sync the env app | Check the service repo's last `promote` run; re-run it targeting the intended commit |
+| Service `OutOfSync` in dev/qa semantics | `main` head moved past what was promoted | Inspect the service `Application` (`kubectl -n argocd get application <svc>-<env>`); ensure the `main` merge only happens after qa |
 | Service not updating in prod | Prod `version` pin not bumped (or the tag missing) | Check `argocd/services-prod.yaml` → `version` and that the tag exists in the service repo; the `chore(services)` bump PR is the go/no-go |
 | kind cluster OOM | Host RAM exhausted | Stop sibling Compose stacks before bootstrapping; use the 1-replica local profile |

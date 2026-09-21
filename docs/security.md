@@ -23,7 +23,12 @@ the CI workflow map see [ci-cd.md](ci-cd.md).
 
 Deploy-time security (no pages by design in the radar, manual prod sync) is
 covered in [observability-radar.md](observability-radar.md) and
-[workflow.md](workflow.md).
+[workflow.md](workflow.md). Service dev/qa deploys run outside this repo: the
+service's `promote` workflow talks to the ArgoCD API with a **scoped token**
+(`ARGOCD_SERVER` / `ARGOCD_TOKEN`, RBAC restricted to `sync`/`get` on the
+service's own `<service>-dev` and `<service>-qa` applications) — no kubeconfig
+or cluster credential is ever stored in CI, and no pipeline can touch other
+services or prod.
 
 ## Release signing
 
