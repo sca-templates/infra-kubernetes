@@ -38,14 +38,14 @@ here.
 | [architecture.md](architecture.md) | Layers, component catalog (with status + phase), sync-waves, namespaces, secret flow, environment model, deviations log | `argocd/*`, `envs/*`, `infrastructure/*` (from Phase 1) |
 | [status.md](status.md) | Current state, known accepted limitations, intentional exclusions | live cluster + `make status` |
 | [roadmap.md](roadmap.md) | The delivery plan index: dependency-graph timeline, shared DoD, project index, global Work Log, and out-of-plan rules; linked to GitHub Projects/Milestones/Issues. Per-project detail lives in [roadmap/](roadmap/), one file per component | GitHub board; [roadmap/](roadmap/) for per-project gates; `docs/status.md` for what is deployed |
-| [workflow.md](workflow.md) | GitOps model, change→deploy flow, per-env promotion (platform: promote-test; services: app-repo-as-source ref moves), escalation gate, troubleshooting | `argocd/*`, `Makefile` |
+| [workflow.md](workflow.md) | GitOps model, change→deploy flow, per-env promotion (platform: promote-test; services: app-repo-as-source ArgoCD syncs), escalation gate, troubleshooting | `argocd/*`, `Makefile` |
 | [ci-cd.md](ci-cd.md) | What the shipped GitHub Actions do; cluster-smoke workflow (`pr-cluster.yml`): selective on PRs as a required check, manual dispatch | `.github/workflows/*.yml`, `Makefile` |
 | [versioning.md](versioning.md) | Semver pre-1.0 scheme, release-please flow, signed release tags, CHANGELOG rules | `.github/workflows/release.yml`, `.release-please-*.json`, `.github/release-bot-gpg.pub` |
 | [security.md](security.md) | Security controls wired into CI: gitleaks, checkov baseline, pinning guards, settings checklist, leaked-secret runbook | `.github/workflows/security.yml`, `codeql.yml`, `scorecard.yml` |
 | [secrets.md](secrets.md) | Vault + ESO design, KV path inventory, seed script, short-refresh rationale, per-component secret flow | `bootstrap/seed-vault.sh` |
 | [labels.md](labels.md) | Label model: structural grouping lives in board fields (`Domain`/`Wave`/`Status`), labels stay flat and cross-cutting; the only labels that exist | Kubernetes Planning board; `.github/ISSUE_TEMPLATE/*.yml` |
 | [observability-radar.md](observability-radar.md) | Metrics pipeline and radar alerts as designed (planned until Phase 14) | roadmap in `roadmap.md` |
-| [onboarding-new-service.md](onboarding-new-service.md) | Step-by-step to add a new microservice (app-repo-as-source): dev/qa promote by ref moves, prod by a version-tag pin bump | `charts/service-template`, `argocd/services-<env>.yaml` |
+| [onboarding-new-service.md](onboarding-new-service.md) | Step-by-step to add a new microservice (app-repo-as-source): dev/qa promote by ArgoCD syncs, prod by a version-tag pin bump | `charts/service-template`, `argocd/services-<env>.yaml` |
 | [glossary.md](glossary.md) | Every term and component name explained in one place | — |
 
 ## Conventions of this documentation

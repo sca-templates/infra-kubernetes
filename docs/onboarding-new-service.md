@@ -2,9 +2,9 @@
 
 The contract for a microservice (e.g. `nest-authz`) on the platform. A service
 is **app-repo-as-source**: it owns its Kubernetes manifests in its own
-repository (`deploy/`) and reaches each environment through refs that
-`infra-kubernetes` points ArgoCD at. This page is the per-service **add
-checklist**; the deployment model it implements is in
+repository (`deploy/`) and reaches an environment when its `promote` workflow
+syncs the environment's ArgoCD Application to a selected commit. This page is
+the per-service **add checklist**; the deployment model it implements is in
 [workflow.md](workflow.md#services-app-repo-as-source).
 
 > This is **not** the catalog flow. Platform components (Vault, Kong, …) are
@@ -60,8 +60,9 @@ ArgoCD applies them via `helm.valueFiles` in the services `ApplicationSet`
   it with `missingkey=error`, so every prod element must set it).
   `services-local.yaml` does **not** exist — `local` is the platform-only
   sandbox; services live from `dev` upward.
-- Each `ApplicationSet` template pins what ArgoCD tracks per env:
-  `deploy/dev` (dev), `deploy/qa` (qa), `version` (prod).
+- Each `ApplicationSet` template pins what ArgoCD tracks per env: dev and qa
+  track `main` (the `promote` workflow syncs the app to the selected commit),
+  prod tracks `version`.
 - The service namespace is created by ArgoCD (`CreateNamespace=true`); pick one
   per service (e.g. the service name).
 
@@ -93,24 +94,28 @@ The secret flow is unchanged from [secrets.md](secrets.md):
 3. Pods mount the projected `Secret`; the raw value never appears in the
    manifest.
 
-## 4. Environment refs, releases and promotion to prod
+## 4. Environment promotion and releases
 
-Dev/qa deployment is a **ref move**; prod deployment is a **version pin**:
+Dev/qa deployment is an **ArgoCD sync** (service `promote` workflow); prod
+deployment is a **version pin**:
 
-| Ref / pin | Environment | Gate |
+| Tracked by ArgoCD | Environment | Gate |
 | --- | --- | --- |
-| `deploy/dev` | dev (auto + prune) | none — last deployer wins |
-| `deploy/qa` | qa (auto, no prune) | free, after a dev pass |
+| `main` → sync of `<service>-dev` | dev (sync only; no auto-sync) | none — last deployer wins |
+| `main` → sync of `<service>-qa` | qa (sync only; ADR-003: **no prune**) | free, after a dev pass; must clear the `qa` Environment approval |
 | `version` tag in `argocd/services-prod.yaml` | prod (manual Sync in window) | reviewed `chore(services)` bump + go/no-go |
 
 The service repo ships two `workflow_dispatch` wrappers copied from
-CI-CD-Templates' `docs/examples/` (`promote.yml`, `deploy-prod.yml`):
+CI-CD-Templates' `docs/examples/` (`promote.yml` → `shared-service-promote.yml`,
+and `deploy-prod.yml`):
 
-- `promote.yml` — builds and pushes the image with a unique tag (`sha-…`; never
-  `latest`) and moves the refs ArgoCD tracks: `deploy/dev`, then `deploy/qa` on
-  request (dev promotes immediately; `qa` waits for an approval when the repo's
-  `qa` GitHub Environment has **Required reviewers** configured — **public
-  repos** on Free/Pro/Team, Enterprise Cloud required for private ones).
+- `promote.yml` — selects the branch/tag to deploy and syncs the matching
+  `<service>-dev` / `<service>-qa` ArgoCD Application through the ArgoCD API
+  with a **scoped token** (`ARGOCD_SERVER` / `ARGOCD_TOKEN`, RBAC limited to
+  `sync`/`get` on those apps). dev promotes immediately; `qa` waits for an
+  approval when the repo's `qa` GitHub Environment has **Required reviewers**
+  configured — **public repos** on Free/Pro/Team, Enterprise Cloud required for
+  private ones. No refs move and no PR is involved.
 - `deploy-prod.yml` — the two manual prod steps:
   - `action: adopt` opens the `chore(services)` bump PR (below);
   - `action: mark-latest` corrects GitHub `latest` after the prod `Sync`.
@@ -137,18 +142,20 @@ So the flow has **2 human gates**: the feature PR (code review) and the
 are bot-managed; the adopt and mark-latest steps are invoked from the service's
 `deploy-prod` workflow.
 
-The repo rules must protect the refs and the PR path:
+The repo rules must protect `main` and the PR path:
 
-- `deploy/dev` and `deploy/qa` allow **force-push only from the bot** (the
-  mechanism moves refs; humans do not push to them). Apply CI-CD-Templates'
-  `service-deploy-refs` ruleset with **higher precedence** than any
-  `allowed-branches-only` ruleset, so the bot's force-push is allowed.
-- `main` requires review + status checks (the service's own CI).
+- `main` requires review + status checks (the service's own CI). There are **no
+  `deploy/*` refs** and no ruleset protecting them — dev/qa are Application
+  syncs, not ref moves.
+- The service stores `ARGOCD_SERVER` / `ARGOCD_TOKEN` as GitHub Actions secrets
+  (repository/organization level; or scoped to its `dev`/`qa` Environments with
+  `secrets: inherit`). The ArgoCD role is restricted via RBAC to `sync`/`get`
+  on `<service>-dev` and `<service>-qa` only.
 - Prod's Sync is manual (ADR-003), so a bump merge never auto-deploys prod.
 
-Rollback on failure: point the env ref back at the previous known-good commit
-(a no-op git move for dev/qa); for prod, revert the `chore(services)` bump so
-the pin returns to the previous version tag.
+Rollback on failure: re-run the `promote` workflow pointing the dev/qa app back
+at the previous known-good commit (no new code needed); for prod, revert the
+`chore(services)` bump so the pin returns to the previous version tag.
 
 ## 5. Gates (per-service DoD)
 
@@ -158,10 +165,9 @@ Onboarding is complete when:
   `Healthy`.
 - Pods `Running` — no `CrashLoopBackOff`/`ImagePullBackOff` after 2+ min.
 - `ExternalSecret` → `SecretSynced` where applicable.
-- The service's own CI validates the change before `deploy/<env>` refs move
+- The service's own CI validates the change before any dev/qa promote sync
   (unit tests, image build, optional smoke).
-- Env refs actually deploy: the dev deploy proves the ref move → sync path
-  works end to end.
+- The promote end-to-end path works: a dev sync deploys the promoted commit.
 
 The service is now self-serve: dev/qa ship without touching `infra-kubernetes`;
 prod ships by running the service's `deploy-prod` workflow (`action: adopt`)

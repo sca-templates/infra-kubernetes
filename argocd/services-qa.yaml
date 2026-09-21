@@ -1,8 +1,11 @@
 # Services registry for qa — one generated Application per service.
 # Each service owns its manifests in its own repo (deploy/), see
-# docs/onboarding-new-service.md. ArgoCD tracks the movable ref `deploy/qa` of
-# the service repo: the service's `promote` action moves that ref to the commit
-# already validated in dev, and auto-sync (no prune) deploys it.
+# docs/onboarding-new-service.md. ArgoCD tracks `main` of the service repo:
+# the service's `promote` workflow selects the branch to deploy and syncs this
+# Application through the ArgoCD API (scoped token) — no refs, QA gates on the
+# repo's `qa` GitHub Environment (Required reviewers).
+# Sync is intentionally NOT automated: it is driven by the promote workflow,
+# matching ADR-003 (qa: no auto-sync, no prune).
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -32,7 +35,7 @@ spec:
       project: default
       source:
         repoURL: '{{.appRepo}}'
-        targetRevision: deploy/qa
+        targetRevision: main
         path: deploy
         helm:
           releaseName: '{{.name}}'
@@ -41,11 +44,7 @@ spec:
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{.namespace}}'
-      syncPolicy:
-        automated:
-          prune: false
-          selfHeal: true
-        syncOptions:
-          - CreateNamespace=true
-          - ApplyOutOfSyncOnly=true
-          - ServerSideApply=true
+      syncOptions:
+        - CreateNamespace=true
+        - ApplyOutOfSyncOnly=true
+        - ServerSideApply=true

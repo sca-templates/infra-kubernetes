@@ -56,7 +56,7 @@ Phase numbers refer to the roadmap in [roadmap.md](roadmap.md).
 | **`envs/<env>/`**                 | Per-environment overlays (one file per component)                                  |
 | **`infrastructure/<component>/`** | Per-component chart reference + shared values + CRs/manifests                      |
 | **`argocd/apps-<env>.yaml`**      | Per-env `ApplicationSet` generator — the platform component registry        |
-| **`argocd/services-<env>.yaml`**  | Per-env `ApplicationSet` for services (app-repo-as-source); dev/qa/prod only, never `local`. Prod elements carry a `version` tag pin (`chore(services)` bump = the deploy go/no-go) |
-| **`deploy/dev` · `deploy/qa`**    | Ref each env's ArgoCD tracks for a service; the service's `promote` action moves it |
+| **`argocd/services-<env>.yaml`**  | Per-env `ApplicationSet` for services (app-repo-as-source); dev/qa/prod only, never `local`. dev/qa elements track `main` (synced by the service's `promote` workflow); prod elements carry a `version` tag pin (`chore(services)` bump = the deploy go/no-go) |
+| **`promote` workflow**           | Per-service `workflow_dispatch` (wraps `shared-service-promote.yml`) that picks a branch/commit and syncs `<service>-dev` / `<service>-qa` via the ArgoCD API — replaces the retired `deploy/dev` · `deploy/qa` refs |
 | **`argocd/root-app-<env>.yaml`**  | Per-env root `Application`                                                         |
 | **`{{GIT_REPO_URL}}`**            | Placeholder in repoURL fields; substituted by `make bootstrap` from `GIT_REPO_URL` |
