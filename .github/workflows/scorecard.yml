@@ -3,6 +3,9 @@
 # =============================================================================
 # OpenSSF Scorecard — supply-chain security score, results published to OSSF
 # and uploaded as code-scanning SARIF.
+#
+# Thin wrapper over the org shared template
+# (CI-CD-Templates/.github/workflows/shared-scorecard.yml), pinned to a SHA.
 # =============================================================================
 
 name: Scorecards supply-chain security
@@ -17,27 +20,18 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   analysis:
     name: Scorecards analysis
-    runs-on: ubuntu-latest
     permissions:
-      id-token: write # publish_results needs an OIDC token
-      contents: read # repository contents
+      actions: read # repository contents stats
+      contents: read
       security-events: write # upload SARIF to code scanning
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Run Scorecards
-        uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
-        with:
-          results_file: results.sarif
-          results_format: sarif
-          publish_results: true
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Upload results as SARIF
-        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4
-        with:
-          sarif_file: results.sarif
+      id-token: write # publish_results needs an OIDC token
+    uses: sca-templates/CI-CD-Templates/.github/workflows/shared-scorecard.yml@d68a710f413fd4c8134e53da06778c5e190cbfbf
+    with:
+      publish-results: true

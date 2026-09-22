@@ -101,7 +101,8 @@ See [architecture.md](architecture.md) and [observability-radar.md](observabilit
 
 A different secret plane from Vault/ESO: the **release** secrets are stored as
 **GitHub Actions secrets** at the **repository** level (not org, not
-environment) and consumed only by the `Release` workflow
+environment) and consumed only by the `Release` workflow, which is a thin
+wrapper over the org shared `shared-release-flow.yml`
 ([.github/workflows/release.yml](../.github/workflows/release.yml)). Vault stays
 the SSOT for *cluster* secrets; this is where CI *automation* secrets live.
 
@@ -111,9 +112,11 @@ the SSOT for *cluster* secrets; this is where CI *automation* secrets live.
 | `APP_PRIVATE_KEY` | `sca-bot-release` GitHub App private key, PEM with newlines (base64 single-line also accepted) |
 | `RELEASE_GPG_PRIVATE_KEY` | Release-bot signing key armor (see [versioning.md](versioning.md)) |
 
-`release.yml` mints a per-run installation token from `APP_ID` +
-`APP_PRIVATE_KEY` via `actions/create-github-app-token` (scoped to
-`infra-kubernetes`, `owner: sca-templates`), so the release PR and the tag push
+Inside the shared flow, per-run installation tokens are minted from `APP_ID` +
+`APP_PRIVATE_KEY` via the `mint-app-token` composite action
+([CI-CD-Templates](https://github.com/sca-templates/CI-CD-Templates), scoped to
+`infra-kubernetes`, `owner: sca-templates`), so the release PR and the
+tag push
 authenticate as `sca-bot-release[bot]` — a GitHub App, not a PAT — triggering
 the required CI checks on the release PR (see [versioning.md](versioning.md),
 [ci-cd.md](ci-cd.md)). The old dedicated PAT (`RELEASE_PLEASE_TOKEN`) was
@@ -130,7 +133,7 @@ Storage model (GitHub):
   secret **encrypted at rest**; the API returns only `name` / `created_at` /
   `updated_at` — never the value.
 - The secrets are available in CI **only** through
-  `${{ secrets.<NAME> }}` inside `release.yml`, are handed to the runner only
+  `${{ secrets.<NAME> }}` inside the `Release` wrapper, are handed to the runner only
   for the jobs that reference them, and are masked (`***`) in the logs.
 - **Rotating a value** (e.g. regenerating the App private key and replacing
   `APP_PRIVATE_KEY`) changes only the value: fetch the current public key,

@@ -3,13 +3,17 @@
 # =============================================================================
 # infra-kubernetes release-gate — no human PR merges while a release PR is open
 # =============================================================================
-# A release-please PR (head branch 'release-please--branches--main', base =
-# default branch) deliberately waits behind every other merge so that a doc or
-# dependency change bundled in the same release is reflected in the tag and
+# A release-please PR deliberately waits behind every other merge so that a doc
+# or dependency change bundled in the same release is reflected in the tag and
 # CHANGELOG. This check makes that ordering visible and enforced: a human PR
 # arriving while a release PR is open gets a failing gate and cannot merge.
-# The release PR itself is excluded (only release-please opens that branch,
-# and only one such PR exists at a time), so it is never blocked.
+# The release PR itself is excluded, so it is never blocked.
+#
+# Thin wrapper over the org shared template
+# (CI-CD-Templates/.github/workflows/shared-qa-lock-check.yml, SHA-pinned);
+# the shared gate job is named `release-gate`, so the required_status_checks
+# context on `main` stays valid. Detection keys on the release-please PR title
+# `chore(...release...)` rather than the reserved branch name.
 #
 # Registered as required_status_checks context 'release-gate' on main.
 
@@ -24,30 +28,11 @@ permissions:
   contents: read
   pull-requests: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
 jobs:
   gate:
     name: release-gate
-    runs-on: ubuntu-latest
-    steps:
-      - name: Fail if a release PR is open
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          current="${{ github.event.pull_request.number }}"
-          release_pending=$(gh pr list \
-            --repo "$GITHUB_REPOSITORY" \
-            --state open \
-            --base "${GITHUB_BASE_REF:-main}" \
-            --json number,headRefName \
-            --jq '.[] | select(.headRefName == "release-please--branches--main") | .number' \
-            || true)
-          blocked=""
-          for p in $release_pending; do
-            if [ "$p" != "$current" ]; then blocked="$p"; fi
-          done
-          if [ -n "$blocked" ]; then
-            echo "::error::Release PR #$blocked is open: human PRs wait until it merges."
-            exit 1
-          fi
-          echo "No release PR open — merge may proceed."
+    uses: sca-templates/CI-CD-Templates/.github/workflows/shared-qa-lock-check.yml@d68a710f413fd4c8134e53da06778c5e190cbfbf
