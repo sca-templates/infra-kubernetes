@@ -199,19 +199,27 @@ on the title instead — same effect, one release PR at a time.)
 
 ## Required checks
 
-Enforce, on `main`:
+`main` is enforced by the active **`main-protected` ruleset** (required
+status checks + one human review + DCO). Ruleset contexts match the
+**check-run names** CI reports on every PR head — when a workflow delegates to
+a reusable template, GitHub reports its jobs as `<caller> / <scan>`, so the
+contexts below are the nested names:
 
-1. `Validate` (static) — required on every PR.
-2. `Security` — required on every PR (block on gitleaks findings).
-3. `CodeQL` — required once stable.
-4. `release-gate` — required on every PR (fails while a release PR is open;
-   passes on the release PR itself).
-5. Human review — always the release gate for "turns green".
+1. `Markdown`, `YAML and Shell`, `Kubernetes and Helm` — the three
+   `validate.yml` linters (required on every PR).
+2. `Security / Secrets (gitleaks)` — gitleaks (via the shared template) —
+   required on every PR; blocks on findings.
+3. `IaC (checkov)` and `Guard policies` — the two local `security.yml` jobs.
+4. `CodeQL / Analyze (actions)` — required once stable.
+5. `release-gate / release-gate` — required on every PR (fails while a
+   release PR is open; passes on the release PR itself).
+6. Human review — always the last gate for "turns green".
 
-The two `Validate` linters and the `Security` SCA job are part of the required
-`Validate`/`Security` checks above, so a clear PR must satisfy Markdown +
-YAML + shell + workflow lint, kube-linter, gitleaks, checkov and osv-scanner
-before merge.
+`Security / Dependency Vulnerabilities (osv)` runs the same scan but is **not**
+a required context. A clear PR must satisfy Markdown + YAML + shell + workflow
+lint, kube-linter, gitleaks, checkov and osv-scanner before merge. If a caller
+job or a template job is renamed, the `main-protected` ruleset contexts must be
+updated to the new reported check-run names.
 
 ## Local parity
 

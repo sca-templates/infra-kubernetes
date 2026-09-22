@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   shared:
-    name: Shared security scan (gitleaks + osv)
+    name: Security
     permissions:
       contents: read
       security-events: write # gitleaks SARIF upload to code scanning

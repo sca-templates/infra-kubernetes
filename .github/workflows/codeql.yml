@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   analyze:
-    name: Analyze (GitHub Actions)
+    name: CodeQL
     permissions:
       actions: read # fetch the CodeQL bundle
       contents: read
