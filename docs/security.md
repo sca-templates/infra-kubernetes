@@ -12,14 +12,23 @@ the CI workflow map see [ci-cd.md](ci-cd.md).
 
 | Control | Workflow | Behavior today |
 | --- | --- | --- |
-| gitleaks | security.yml | Secrets/password scan on push and PR; blocks on findings |
-| checkov (static IaC) | security.yml | IaC misconfiguration scan of YAML manifests |
-| osv-scanner (SCA) | security.yml | Open-source dependency vulnerability scan on push + PR; honours `.github/osv-scanner.toml` ignores |
-| checkov baseline | security.yml | `.github/checkov-baseline.json` gates **new** findings since Phase 1 — the pod on `bootstrap/local-git-server.yaml` is documented (local-only tooling); anything else fails the PR as it would without the baseline |
-| CodeQL | codeql.yml | Static analysis on push + PR + weekly schedule |
-| OpenSSF Scorecard | scorecard.yml | Attestation on push + weekly; feeds the README badge |
-| Pin guards | security.yml | Fails any chart reference or image tag that is `latest` or floating |
-| Release tag signing | release.yml | Every release tag is re-signed with the dedicated **release-bot** GPG key (private key in repo secret `RELEASE_GPG_PRIVATE_KEY`) |
+| gitleaks | security.yml (via shared template) | Secrets/password scan on push and PR; blocks on findings |
+| checkov (static IaC) | security.yml (local job) | IaC misconfiguration scan of YAML manifests |
+| osv-scanner (SCA) | security.yml (via shared template) | Open-source dependency vulnerability scan on push + PR; honours `.github/osv-scanner.toml` ignores |
+| checkov baseline | security.yml (local job) | `.github/checkov-baseline.json` gates **new** findings since Phase 1 — the pod on `bootstrap/local-git-server.yaml` is documented (local-only tooling); anything else fails the PR as it would without the baseline |
+| CodeQL | codeql.yml (shared template) | Static analysis on push + PR + weekly schedule |
+| OpenSSF Scorecard | scorecard.yml (shared template) | Attestation on push + weekly; feeds the README badge |
+| Pin guards | security.yml (local job) | Fails any chart reference or image tag that is `latest` or floating |
+| Release tag signing | release.yml (shared template) | Every release tag is re-signed with the dedicated **release-bot** GPG key (private key in repo secret `RELEASE_GPG_PRIVATE_KEY`) |
+
+`security.yml` runs gitleaks + osv-scanner through the org shared
+`shared-security-scan.yml` (SHA-pinned; Sonar/Semgrep/Dependency-Check
+disabled — YAML-only repo) and keeps checkov + pin guards as local jobs. The
+wrapper workflows delegate to
+[sca-templates/CI-CD-Templates](https://github.com/sca-templates/CI-CD-Templates)
+— see [ci-cd.md](ci-cd.md) for the map. A gitleaks finding still fails the PR;
+the shared template uploads the SARIF only on non-PR events, so PR runs block
+on findings but skip the code-scanning alert (same-repo PRs included).
 
 Deploy-time security (no pages by design in the radar, manual prod sync) is
 covered in [observability-radar.md](observability-radar.md) and
@@ -37,7 +46,8 @@ fingerprint `E272B06540C49A7EF2AA22A22D7114035EB46A21`, public trust anchor in
 `.github/release-bot-gpg.pub`. The private key lives only in the
 `RELEASE_GPG_PRIVATE_KEY` repo secret and a lockbox backup; it is imported (by
 SHA-pinned `crazy-max/ghaction-import-gpg`) only inside the `sign-tag` job of
-`release.yml`. Verification and rotation policy in
+the shared `shared-release-flow.yml` (invoked by `release.yml`). Verification
+and rotation policy in
 [versioning.md](versioning.md).
 
 ## Python dependency pinning

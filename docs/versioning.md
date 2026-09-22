@@ -47,12 +47,11 @@ them (the path match works per directory, not per file).
    precisely so those checks run — resources opened with `GITHUB_TOKEN` do not
    trigger workflow runs), and it needs human review + merge.
 4. On merge, the workflow tags the merge commit (`vX.Y.Z`) and creates the
-   GitHub Release. The tag is re-created by the **`sign-tag` job** as an
-   annotated tag signed by the dedicated release bot key, then force-pushed
-   to the same commit (see Deviations). The job first runs a fresh
-   `actions/checkout` at the tag's commit, so the GPG import happens inside a
-   git work tree (`f8d50f4`; the earlier version failed because it imported
-   the key before checking anything out).
+   GitHub Release. The tag is re-created by the **`sign-tag` job** (inside the
+   shared `shared-release-flow.yml` template) as an annotated tag signed by the
+   dedicated release bot key, then force-pushed to the same commit (see
+   Deviations). The job checks out the tag's commit first, so the GPG import
+   happens inside a git work tree.
 
 A merge opens no release PR when its type is `docs`/`chore`/`ci`/`test`, or
 when every file of its `feat`/`fix` falls under an `exclude-paths` directory.
@@ -90,7 +89,7 @@ the release bot — `git tag -v v0.1.0` shows
 | Key ID / fingerprint | `E272B06540C49A7EF2AA22A22D7114035EB46A21` |
 | Public key | [`.github/release-bot-gpg.pub`](../.github/release-bot-gpg.pub) (committed trust anchor) |
 | Private key | CI secret `RELEASE_GPG_PRIVATE_KEY` (repo secrets), never in git; lockbox backup per [GOVERNANCE](../.github/GOVERNANCE.md) |
-| Signing job | `.github/workflows/release.yml` → `crazy-max/ghaction-import-gpg` (pinned) |
+| Signing job | `shared-release-flow.yml` (CI-CD-Templates) → `crazy-max/ghaction-import-gpg` (pinned) |
 
 Verify a tag after pulling:
 
@@ -106,17 +105,18 @@ key, replace the `RELEASE_GPG_PRIVATE_KEY` secret, update this table and
 `.github/release-bot-gpg.pub`, then re-sign future tags. History itself is not
 rewritten when a key rotates.
 
-### Re-signing an existing tag
+### Re-signing an existing tag (removed)
 
-The `Release` workflow also accepts a manual `workflow_dispatch` with two
-inputs, `tag_name` + `commit_sha`, to (re)sign an existing tag **without**
-creating a new release. A manual dispatch never runs release-please; the
-`sign-tag` job runs when a release was created on `main` or — on dispatch —
-only if **both** inputs are provided (an empty dispatch now does nothing
-instead of failing the job). The initial `v0.1.0` tag was released before the
-signing job existed; it was promoted from the API-created lightweight ref to
-the signed annotated tag with exactly this dispatch, pinned to commit
-`0e39a99`.
+The `Release` workflow used to accept a manual `workflow_dispatch` with
+`tag_name` + `commit_sha` to (re)sign an existing tag **without** creating a
+new release. That path was a one-off for `v0.1.0` (the tag was released before
+the signing job existed) and is **no longer offered**: since the migration to
+the shared `shared-release-flow.yml` template, `release.yml` responds only to a
+push to `main`, and tag signing runs only when a release was created. The
+`v0.1.0` tag was promoted once from the API-created lightweight ref to the
+signed annotated tag, pinned to commit `0e39a99`, before the migration; if an
+existing tag ever needs (re)signing again, re-sign it with `git tag -sf` and a
+force-push, or add a manual path to the shared template first.
 
 ## CHANGELOG.md
 

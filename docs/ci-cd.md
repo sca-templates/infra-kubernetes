@@ -13,12 +13,29 @@ a deployment.
 
 | Workflow | File | Runs on | What it does |
 | --- | --- | --- | --- |
-| Validate | `.github/workflows/validate.yml` | push + PR | Static suite: markdownlint, yamllint, YAML parse, `bash -n`, actionlint (workflow lint), kube-linter (K8s manifest lint) |
-| Security | `.github/workflows/security.yml` | push + PR | gitleaks, checkov (static IaC), osv-scanner (SCA), pin guards (no `latest` tags/charts) |
-| CodeQL | `.github/workflows/codeql.yml` | push + PR + schedule | GitHub CodeQL static analysis on the repo languages |
-| Scorecard | `.github/workflows/scorecard.yml` | push + schedule | OpenSSF Scorecard attestation + badge |
-| Release | `.github/workflows/release.yml` | push to `main` | release-please opens release PRs/tags (+ signed annotated tags) and GitHub Releases for `feat`/`fix` commits touching the **platform surface** — commits confined to the `exclude-paths` directories (`.github`, `bootstrap`, `0.Project_info`) are dropped (see [versioning.md](versioning.md)); drives `CHANGELOG.md`; a manual `workflow_dispatch` never runs release-please and only re-signs an existing tag when `tag_name` + `commit_sha` are both provided |
-| Release gate | `.github/workflows/release-gate.yml` | PR + manual | blocks human PRs while a release-please PR is open (`release-gate` required check) |
+| Validate | `.github/workflows/validate.yml` | push + PR | Static suite: markdownlint, yamllint, YAML parse, `bash -n`, actionlint (workflow lint), kube-linter (K8s manifest lint) — **local** (no template counterpart) |
+| Security | `.github/workflows/security.yml` | push + PR | gitleaks + osv-scanner (SCA) via the shared template; checkov (static IaC baseline) and pin guards (no `latest` tags/charts) stay local |
+| CodeQL | `.github/workflows/codeql.yml` | push + PR + schedule | GitHub CodeQL static analysis on the repo languages — **wrapper** over the shared template |
+| Scorecard | `.github/workflows/scorecard.yml` | push + schedule | OpenSSF Scorecard attestation + badge — **wrapper** over the shared template |
+| Release | `.github/workflows/release.yml` | push to `main` | **wrapper** over the shared template: release-please opens release PRs/tags (+ signed annotated tags) and GitHub Releases for `feat`/`fix` commits touching the **platform surface** — commits confined to the `exclude-paths` directories (`.github`, `bootstrap`, `0.Project_info`) are dropped (see [versioning.md](versioning.md)); drives `CHANGELOG.md`; no manual re-sign `workflow_dispatch` (see [versioning.md](versioning.md)) |
+| Release gate | `.github/workflows/release-gate.yml` | PR + manual | **wrapper** over the shared template: blocks human PRs while a release-please PR is open (`release-gate` required check) |
+| Auto label | `.github/workflows/auto-label.yml` | PR | **wrapper** over the shared template: labels PRs from the type (`feature`, `bug`, `ci`, `documentation`, `refactor`, `security`, `dependencies`) and changed files — see [labels.md](labels.md) |
+
+### Template provenance
+
+The named **wrapper** workflows delegate their logic to reusable workflows in
+[sca-templates/CI-CD-Templates](https://github.com/sca-templates/CI-CD-Templates),
+referenced **pinned to a commit SHA** (this repo's strict-pin policy; the
+template repo recommends `@main`). `CodeQL` → `shared-codeql.yml`, `Scorecard`
+→ `shared-scorecard.yml`, `Security` (gitleaks + osv) →
+`shared-security-scan.yml`, `Release` → `shared-release-flow.yml`, Release gate
+→ `shared-qa-lock-check.yml`, Auto label → `shared-auto-label.yml`. The templates' own pins (actions, versions,
+`mint-app-token` composite) are maintained by the template repo's dependabot;
+this repo keeps its remaining local action pins current via its own
+[`.github/dependabot.yml`](../.github/dependabot.yml). `validate.yml`,
+`pr-cluster.yml`, `main-sync.yml` and `deploy.yml` stay local on purpose: the
+static suite (kubeconform/kube-linter on `infrastructure/`) and the cluster
+smoke/EKS-parity pipelines are repo-specific and have no template counterpart.
 
 ### Scope semantics
 
@@ -50,27 +67,26 @@ guards in [security.md](security.md).
 
 ### Release workflow
 
-`release.yml` has two jobs:
+`release.yml` is a thin wrapper over the org shared
+`shared-release-flow.yml`, which has two jobs:
 
-- **release-please** — runs **only on a push to `main`** (a manual dispatch
-  never runs it); computes the next version, opens or updates the release PR,
-  and on merge creates the tag and the GitHub Release. Commits whose files all
-  fall under an `exclude-paths` directory are dropped before parsing, so a
-  CI/tooling/docs-only push releases nothing.
-- **sign-tag** — re-creates the tag as an annotated tag signed by the
-  release-bot GPG key on the same commit. It runs when a release was created
-  on `main`, **or** on a manual `workflow_dispatch` that provides **both**
-  `tag_name` and `commit_sha` (how an already-published lightweight tag is
-  promoted to signed — used for `v0.1.0`). An empty dispatch does nothing; the
-  job is guarded with `always()` because release-please is skipped on
-  dispatch.
+- **release-please** — runs **only on a push to `main`**; computes the next
+  version, opens or updates the release PR, and on merge creates the tag and
+  the GitHub Release. Commits whose files all fall under an `exclude-paths`
+  directory are dropped before parsing, so a CI/tooling/docs-only push releases
+  nothing.
+- **sign-tag** — runs when a release was created on `main`; re-creates the tag
+  as an annotated tag signed by the release-bot GPG key on the same commit. A
+  manual re-sign via `workflow_dispatch` is **no longer offered** (the old
+  `v0.1.0` lightweight tag was promoted with it once; the shared template
+  covers only the push path — see [versioning.md](versioning.md)).
 
 The workflow is the only one that holds repository secrets
 (`APP_ID`, `APP_PRIVATE_KEY`, `RELEASE_GPG_PRIVATE_KEY`) — see
-[secrets.md](secrets.md) for how they are stored and rotated.
-`release-please` and the tag push authenticate as the org-owned
-`sca-bot-release` GitHub App via a per-run installation token minted with
-`actions/create-github-app-token` (scoped to `infra-kubernetes`), so release
+[secrets.md](secrets.md) for how they are stored and rotated. Inside the shared
+flow, `release-please` and the tag push authenticate as the org-owned
+`sca-bot-release` GitHub App via a per-run installation token minted with the
+`mint-app-token` composite action (scoped to `infra-kubernetes`), so release
 PRs/tags are authored by `sca-bot-release[bot]` and still trigger the required
 checks.
 
@@ -169,33 +185,42 @@ The smoke runs the **`local`** profile (1 replica, auto-sync + prune), never
 
 ### Release gate
 
-`release-gate.yml` runs on every PR and holds a single fact: **a
-release-please PR (head branch `release-please--branches--main` against the
-default branch) must merge before any human PR**. While one is open, human
+`release-gate.yml` is a thin wrapper over the org shared
+`shared-qa-lock-check.yml` and runs on every PR, holding a single fact: **a
+release-please PR against the default branch must merge before any human
+PR**. While one is open, human
 PRs keep a failing `release-gate` check (`::error` and non-zero exit) and
-cannot merge; the release PR is excluded (only release-please opens that
-branch, and only one exists at a time), so it is never blocked. Because the
+cannot merge; the release PR is excluded (the shared gate detects the
+release-please PR by its `chore(...release...)` title, which only release-please
+produces), so it is never blocked. Because the
 check is registered as a required context on `main`, the block is enforced by
-branch protection, not by policy. The gate keys on the *branch name* of the
-release PR — which only release-please can produce — matching the
-[main-sync](workflow.md#queued-prs-branch-names-and-main-sync) model where
-mechanisms trust the reserved branch, never ad-hoc PR titles.
+branch protection, not by policy. (The previous local gate keyed on the
+reserved head branch `release-please--branches--main`; the shared template keys
+on the title instead — same effect, one release PR at a time.)
 
 ## Required checks
 
-Enforce, on `main`:
+`main` is enforced by the active **`main-protected` ruleset** (required
+status checks + one human review + DCO). Ruleset contexts match the
+**check-run names** CI reports on every PR head — when a workflow delegates to
+a reusable template, GitHub reports its jobs as `<caller> / <scan>`, so the
+contexts below are the nested names:
 
-1. `Validate` (static) — required on every PR.
-2. `Security` — required on every PR (block on gitleaks findings).
-3. `CodeQL` — required once stable.
-4. `release-gate` — required on every PR (fails while a release PR is open;
-   passes on the release PR itself).
-5. Human review — always the release gate for "turns green".
+1. `Markdown`, `YAML and Shell`, `Kubernetes and Helm` — the three
+   `validate.yml` linters (required on every PR).
+2. `Security / Secrets (gitleaks)` — gitleaks (via the shared template) —
+   required on every PR; blocks on findings.
+3. `IaC (checkov)` and `Guard policies` — the two local `security.yml` jobs.
+4. `CodeQL / Analyze (actions)` — required once stable.
+5. `release-gate / release-gate` — required on every PR (fails while a
+   release PR is open; passes on the release PR itself).
+6. Human review — always the last gate for "turns green".
 
-The two `Validate` linters and the `Security` SCA job are part of the required
-`Validate`/`Security` checks above, so a clear PR must satisfy Markdown +
-YAML + shell + workflow lint, kube-linter, gitleaks, checkov and osv-scanner
-before merge.
+`Security / Dependency Vulnerabilities (osv)` runs the same scan but is **not**
+a required context. A clear PR must satisfy Markdown + YAML + shell + workflow
+lint, kube-linter, gitleaks, checkov and osv-scanner before merge. If a caller
+job or a template job is renamed, the `main-protected` ruleset contexts must be
+updated to the new reported check-run names.
 
 ## Local parity
 
