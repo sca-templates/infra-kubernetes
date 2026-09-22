@@ -21,8 +21,8 @@ the CI workflow map see [ci-cd.md](ci-cd.md).
 | Release tag signing | release.yml (shared template) | Every release tag is re-signed with the dedicated **release-bot** GPG key (private key in repo secret `RELEASE_GPG_PRIVATE_KEY`) |
 
 `security.yml` runs gitleaks + osv-scanner through the org shared
-`shared-security-scan.yml` (SHA-pinned; Sonar/Semgrep/Dependency-Check
-disabled — YAML-only repo) and keeps checkov + pin guards as local jobs. The
+`shared-security-scan.yml` (SHA-pinned to the v3.0.0 release; gitleaks + osv
+only) and keeps checkov + pin guards as local jobs. The
 wrapper workflows delegate to
 [sca-templates/CI-CD-Templates](https://github.com/sca-templates/CI-CD-Templates)
 — see [ci-cd.md](ci-cd.md) for the map. A gitleaks finding still fails the PR;

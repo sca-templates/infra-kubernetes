@@ -4,10 +4,9 @@
 # infra-kubernetes security checks — secrets, IaC posture, image/version guards
 #
 # gitleaks + osv-scanner run through the org shared template
-# (CI-CD-Templates/.github/workflows/shared-security-scan.yml, SHA-pinned) with
-# only the checks this YAML-only repo needs enabled (SonarQube/Semgrep/
-# Dependency-Check/license are off). checkov (IaC baseline) and the pin guards
-# have no template counterpart and stay local.
+# (CI-CD-Templates/.github/workflows/shared-security-scan.yml, SHA-pinned to
+# the v3.0.0 release; gitleaks + osv only). checkov (IaC baseline) and the pin
+# guards have no template counterpart and stay local.
 # =============================================================================
 
 name: Security
@@ -31,14 +30,10 @@ jobs:
     permissions:
       contents: read
       security-events: write # gitleaks SARIF upload to code scanning
-    uses: sca-templates/CI-CD-Templates/.github/workflows/shared-security-scan.yml@d68a710f413fd4c8134e53da06778c5e190cbfbf
+    uses: sca-templates/CI-CD-Templates/.github/workflows/shared-security-scan.yml@0228c2950c0d269dcf22f64415ea941b5da13102
     with:
       gitleaks: true
       osv-scan: true
-      license-check: false
-      sonar: false
-      semgrep: false
-      dependency-check: false
 
   iac:
     name: IaC (checkov)
