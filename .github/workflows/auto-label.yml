@@ -1,0 +1,38 @@
+# Copyright (c) 2026 sca-templates contributors
+# SPDX-License-Identifier: MIT
+# =============================================================================
+# Auto label — labels PRs from the Conventional Commits type and changed
+# files (feature/bug/ci/documentation/refactor/security/dependencies).
+#
+# Thin wrapper over the org shared template
+# (CI-CD-Templates/.github/workflows/shared-auto-label.yml), pinned to a SHA.
+# stack-labels stay off: this repo carries Kubernetes manifests, not code
+# stacks. The label set is governed by docs/labels.md — new bot-created labels
+# (feature, ci, refactor) are declared there.
+# =============================================================================
+
+name: Auto label
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auto-label-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  label:
+    name: Auto label
+    permissions:
+      contents: read
+      pull-requests: write # apply labels to the PR
+      issues: write # labels can be issue-scoped too
+    uses: sca-templates/CI-CD-Templates/.github/workflows/shared-auto-label.yml@d68a710f413fd4c8134e53da06778c5e190cbfbf
+    with:
+      type-labels: true
+      stack-labels: false
+      ensure-labels: true

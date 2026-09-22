@@ -19,6 +19,7 @@ a deployment.
 | Scorecard | `.github/workflows/scorecard.yml` | push + schedule | OpenSSF Scorecard attestation + badge — **wrapper** over the shared template |
 | Release | `.github/workflows/release.yml` | push to `main` | **wrapper** over the shared template: release-please opens release PRs/tags (+ signed annotated tags) and GitHub Releases for `feat`/`fix` commits touching the **platform surface** — commits confined to the `exclude-paths` directories (`.github`, `bootstrap`, `0.Project_info`) are dropped (see [versioning.md](versioning.md)); drives `CHANGELOG.md`; no manual re-sign `workflow_dispatch` (see [versioning.md](versioning.md)) |
 | Release gate | `.github/workflows/release-gate.yml` | PR + manual | **wrapper** over the shared template: blocks human PRs while a release-please PR is open (`release-gate` required check) |
+| Auto label | `.github/workflows/auto-label.yml` | PR | **wrapper** over the shared template: labels PRs from the type (`feature`, `bug`, `ci`, `documentation`, `refactor`, `security`, `dependencies`) and changed files — see [labels.md](labels.md) |
 
 ### Template provenance
 
@@ -28,7 +29,7 @@ referenced **pinned to a commit SHA** (this repo's strict-pin policy; the
 template repo recommends `@main`). `CodeQL` → `shared-codeql.yml`, `Scorecard`
 → `shared-scorecard.yml`, `Security` (gitleaks + osv) →
 `shared-security-scan.yml`, `Release` → `shared-release-flow.yml`, Release gate
-→ `shared-qa-lock-check.yml`. The templates' own pins (actions, versions,
+→ `shared-qa-lock-check.yml`, Auto label → `shared-auto-label.yml`. The templates' own pins (actions, versions,
 `mint-app-token` composite) are maintained by the template repo's dependabot;
 this repo keeps its remaining local action pins current via its own
 [`.github/dependabot.yml`](../.github/dependabot.yml). `validate.yml`,
