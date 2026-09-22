@@ -17,7 +17,6 @@ the CI workflow map see [ci-cd.md](ci-cd.md).
 | osv-scanner (SCA) | security.yml (via shared template) | Open-source dependency vulnerability scan on push + PR; honours `.github/osv-scanner.toml` ignores |
 | checkov baseline | security.yml (local job) | `.github/checkov-baseline.json` gates **new** findings since Phase 1 — the pod on `bootstrap/local-git-server.yaml` is documented (local-only tooling); anything else fails the PR as it would without the baseline |
 | CodeQL | codeql.yml (shared template) | Static analysis on push + PR + weekly schedule |
-| OpenSSF Scorecard | scorecard.yml (shared template) | Attestation on push + weekly; feeds the README badge |
 | Pin guards | security.yml (local job) | Fails any chart reference or image tag that is `latest` or floating |
 | Release tag signing | release.yml (shared template) | Every release tag is re-signed with the dedicated **release-bot** GPG key (private key in repo secret `RELEASE_GPG_PRIVATE_KEY`) |
 
@@ -70,11 +69,11 @@ printf 'yamllint==<version>\n' | uv pip compile --generate-hashes --python-versi
 
 ### Ignored OSV advisories (via osv-scanner.toml)
 
-Scorecard flags three OSV advisories in the checkov dependency chain. They are
-**inherent to checkov and have no fix in its resolution**, so they are
-explicitly ignored through `.github/osv-scanner.toml` (the standard ignore
-mechanism, honoured by the `osv-scanner` library that Scorecard embeds) placed
-next to the `.github/requirements.txt` manifest that carries them:
+The shared security scan flags three OSV advisories in the checkov dependency
+chain. They are **inherent to checkov and have no fix in its resolution**, so
+they are explicitly ignored through `.github/osv-scanner.toml` (the standard
+ignore mechanism, honoured by `osv-scanner`) placed next to the
+`.github/requirements.txt` manifest that carries them:
 
 | OSV | Package | Advisories | Mechanism |
 | --- | --- | --- | --- |

@@ -41,7 +41,7 @@ here.
 | [workflow.md](workflow.md) | GitOps model, change→deploy flow, per-env promotion (platform: promote-test; services: app-repo-as-source ArgoCD syncs), escalation gate, troubleshooting | `argocd/*`, `Makefile` |
 | [ci-cd.md](ci-cd.md) | What the shipped GitHub Actions do (thin wrappers over the org `CI-CD-Templates` shared workflows where they fit); cluster-smoke workflow (`pr-cluster.yml`): selective on PRs as a required check, manual dispatch | `.github/workflows/*.yml`, `Makefile` |
 | [versioning.md](versioning.md) | Semver pre-1.0 scheme, release-please flow, signed release tags, CHANGELOG rules | `.github/workflows/release.yml`, `.release-please-*.json`, `.github/release-bot-gpg.pub` |
-| [security.md](security.md) | Security controls wired into CI: gitleaks, checkov baseline, pinning guards, settings checklist, leaked-secret runbook | `.github/workflows/security.yml`, `codeql.yml`, `scorecard.yml` |
+| [security.md](security.md) | Security controls wired into CI: gitleaks, checkov baseline, pinning guards, settings checklist, leaked-secret runbook | `.github/workflows/security.yml`, `codeql.yml` |
 | [secrets.md](secrets.md) | Vault + ESO design, KV path inventory, seed script, short-refresh rationale, per-component secret flow | `bootstrap/seed-vault.sh` |
 | [labels.md](labels.md) | Label model: structural grouping lives in board fields (`Domain`/`Wave`/`Status`), labels stay flat and cross-cutting; the only labels that exist | Kubernetes Planning board; `.github/ISSUE_TEMPLATE/*.yml` |
 | [observability-radar.md](observability-radar.md) | Metrics pipeline and radar alerts as designed (planned until Phase 14) | roadmap in `roadmap.md` |

@@ -125,7 +125,7 @@ pre-release history as a signed baseline — see
 ## Rules, out-of-plan and placeholders
 
 - **Not every task belongs to a project/milestone.** Issues raised by bots
-  (dependabot, scorecard) or by external developers, and ad-hoc debt, are
+  (dependabot, Copilot code review) or by external developers, and ad-hoc debt, are
   tracked on the board, may carry a milestone/project label only when it
   applies, and are **not forced into this roadmap**. They resolve
   independently and do not block promotion.
