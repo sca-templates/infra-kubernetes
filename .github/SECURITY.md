@@ -43,7 +43,7 @@ repository where the flaw lives; the maintainers triage across the ecosystem.
 The repository enforces, from `main`, the checks described in
 [docs/security.md](../docs/security.md): gitleaks secret scanning, checkov
 infrastructure posture (baseline re-examined before enforcement), image/version
-pinning guards, CodeQL on the GitHub Actions files, an OpenSSF Scorecard and
+pinning guards, CodeQL on the GitHub Actions files, and
 release-tag signing by a dedicated bot key. Secrets must never be committed —
 the CI blocks pushes that leak them.
 
