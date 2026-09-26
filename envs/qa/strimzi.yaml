@@ -1,0 +1,38 @@
+# strimzi — qa profile (2 replicas, PDB, soft anti-affinity). `preferred`
+# anti-affinity keeps the overlay loadable on a single-node kind for
+# promote-test while still spreading replicas in real HA. Unlike CloudNativePG,
+# this chart does ship a PodDisruptionBudget value, so the tier expresses
+# scale + spread + disruption budget. Leader election (base) keeps the two
+# replicas from reconciling the same cluster concurrently.
+
+replicas: 2
+
+podDisruptionBudget:
+  enabled: true
+  # The chart defaults minAvailable to 1 and the API rejects a PDB that sets
+  # both fields, so null the default explicitly and express the budget the
+  # other way round.
+  minAvailable: null
+  maxUnavailable: 1
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: topology.kubernetes.io/hostname
+          labelSelector:
+            # The chart puts `app: strimzi` on the Deployment metadata only; the
+            # pod template carries `name` + `strimzi.io/kind`, so select on the
+            # same labels the chart's own selector uses.
+            matchLabels:
+              name: strimzi-cluster-operator
+              strimzi.io/kind: cluster-operator
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 384Mi
+  limits:
+    cpu: 1000m
+    memory: 768Mi

@@ -1,0 +1,54 @@
+# strimzi — base values (shared across environments; per-env tier overrides
+# live in envs/<env>/strimzi.yaml).
+# Official chart: strimzi/strimzi-kafka-operator, https://strimzi.io/charts.
+# Chart pin (targetRevision) is set in argocd/apps-<env>.yaml; the image tag is
+# pinned here to the same version the chart ships (appVersion), never `latest`.
+#
+# Strimzi (wave -10) is the Kafka operator: it reconciles `Kafka` +
+# `KafkaNodePool` CRs into managed Apache Kafka clusters. The chart ships the
+# CRDs (in its `crds/` bundle, so Helm applies them on install) and the cluster
+# operator Deployment `strimzi-cluster-operator`; the operator manages its own
+# certificates. No `Kafka` CR lives here — the event backbone arrives as raw
+# CRs in the `data` namespace at Phase 11 (wave 40).
+
+replicas: 1
+
+image:
+  # Pinned to the chart appVersion (1.2.0). Upstream publishes the operator as
+  # quay.io/strimzi/operator; the chart composes the reference from these three
+  # fields, so pin all three rather than relying on the *_defaults.
+  registry: quay.io
+  repository: strimzi
+  name: operator
+  tag: "1.2.0"
+  pullPolicy: IfNotPresent
+
+# Watch the CRs in every namespace, not just the operator's own: the Kafka
+# datastores run in `data` (Phase 11), not in `strimzi`. Equivalent to
+# CloudNativePG's config.clusterWide — the operator's RBAC is cluster-wide
+# either way, so this only widens what it reconciles.
+watchAnyNamespace: true
+
+leaderElection:
+  # Two operators must not reconcile the same cluster concurrently. Kept at the
+  # chart default (on) — it is what makes the 2-replica qa/prod tiers safe.
+  enable: true
+
+podDisruptionBudget:
+  # Off in the base tier (local/dev run a single replica, where a PDB would
+  # block node drains). qa and prod switch it on.
+  enabled: false
+  maxUnavailable: 1
+
+dashboards:
+  # Grafana dashboard ConfigMap ships with the chart, but the observability
+  # stack that would consume it arrives at Phase 14. Off until then.
+  enabled: false
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

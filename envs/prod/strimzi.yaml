@@ -1,0 +1,36 @@
+# strimzi — prod profile (2 replicas, PDB, soft anti-affinity, manual sync
+# tier). Mirrors the qa footprint: the operator is not a stateful datastore
+# (the Kafka brokers are, at Phase 11), so prod stays on the same scale as qa
+# and the difference is the manual sync policy, not the replica count.
+
+replicas: 2
+
+podDisruptionBudget:
+  enabled: true
+  # The chart defaults minAvailable to 1 and the API rejects a PDB that sets
+  # both fields, so null the default explicitly and express the budget the
+  # other way round.
+  minAvailable: null
+  maxUnavailable: 1
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: topology.kubernetes.io/hostname
+          labelSelector:
+            # The chart puts `app: strimzi` on the Deployment metadata only; the
+            # pod template carries `name` + `strimzi.io/kind`, so select on the
+            # same labels the chart's own selector uses.
+            matchLabels:
+              name: strimzi-cluster-operator
+              strimzi.io/kind: cluster-operator
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 384Mi
+  limits:
+    cpu: 1000m
+    memory: 768Mi
