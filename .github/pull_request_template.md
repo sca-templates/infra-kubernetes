@@ -1,4 +1,6 @@
-# Pull Request — <scope>
+# <type>(<scope>): <summary>
+
+<!-- Squash-only merge means this title becomes the commit message release-please reads. -->
 
 ## Context
 
@@ -20,44 +22,6 @@
 
 <!-- List files, components, environment impact. -->
 
-## Validation
-
-- [ ] `make validate-static` green
-- [ ] Static CI green (gitleaks, checkov, pin guards, CodeQL, actionlint) — or N/A
-- [ ] Smoke run for the changed component via `pr-cluster.yml` — or N/A
-- [ ] Live cluster probes passed — or limitation documented
-
-## DoD gate evidence (phase delivery only)
-
-- [ ] `kubectl get applications -n argocd` — app Synced/Healthy
-- [ ] `kubectl get pods -n <ns>` — pods Ready 2+ min
-- [ ] `kubectl get externalsecret -A` — SecretSynced (if applicable)
-- [ ] Functional smoke per-project gate
-
-<details><summary>make status</summary>
-
-```text
-<paste output>
-```
-
-</details>
-
-<details><summary>kubectl get applications</summary>
-
-```text
-<paste output>
-```
-
-</details>
-
-<details><summary>kubectl get pods</summary>
-
-```text
-<paste output>
-```
-
-</details>
-
 ## Docs (updated when behavior or topology changes)
 
 - [ ] `docs/roadmap.md` Work Log row appended
@@ -69,9 +33,8 @@
 
 - [ ] Content in English
 - [ ] Commit(s) signed off with `git commit -s` (DCO)
+- [ ] Conventional commit (`feat(<scope>): ...`) matching the selected type
 - [ ] No secrets, kubeconfigs, or generated artifacts
-- [ ] Conventional commit (`feat(<scope>): ...`)
 - [ ] Sync-waves respected (operators before CRs, Vault before ESO, datastores before consumers; new component wave ≥10 apart)
-- [ ] Security workflows green (gitleaks, checkov, pin guards) and CodeQL clean
 - [ ] Rollback, not fix-chains: if the change fails its gate after merge, roll it back — no forward `fix` chains
-- [ ] `CONTRIBUTING.md` read
+- [ ] `.github/CONTRIBUTING.md` read
