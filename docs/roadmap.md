@@ -74,7 +74,7 @@ worked in parallel.
 | [external-secrets](roadmap/external-secrets.md) | Security & Identity | -10 | — | [#8](https://github.com/sca-templates/infra-kubernetes/issues/8) | deployed |
 | [linkerd-crds](roadmap/linkerd-crds.md) | Edge & Mesh | -10 | — | [#9](https://github.com/sca-templates/infra-kubernetes/issues/9) | deployed |
 | [cloudnative-pg](roadmap/cloudnative-pg.md) | Data | -10 | — | [#10](https://github.com/sca-templates/infra-kubernetes/issues/10) | deployed |
-| [strimzi](roadmap/strimzi.md) | Data | -10 | — | [#11](https://github.com/sca-templates/infra-kubernetes/issues/11) | pending |
+| [strimzi](roadmap/strimzi.md) | Data | -10 | — | [#11](https://github.com/sca-templates/infra-kubernetes/issues/11) | deployed |
 | [redis-operator](roadmap/redis-operator.md) | Data | -10 | — | [#12](https://github.com/sca-templates/infra-kubernetes/issues/12) | pending |
 | [kong](roadmap/kong.md) | Edge & Mesh | 20 | M1 dedicated app | [#13](https://github.com/sca-templates/infra-kubernetes/issues/13) | pending |
 | [linkerd](roadmap/linkerd.md) | Edge & Mesh | 30 | M1 control plane | [#14](https://github.com/sca-templates/infra-kubernetes/issues/14) | pending |
@@ -97,6 +97,7 @@ lands (see the Work Log below).
 
 | Date | Project | Gate | Commit | Issue |
 | --- | --- | --- | --- | --- |
+| 2026-09-26 | strimzi | deployed — chart `strimzi/strimzi-kafka-operator` 1.2.0 (operator 1.2.0, quay.io/strimzi) as an operator app in ns `strimzi`, appset wave -10 across all 4 envs; `watchAnyNamespace: true` so the Phase 11 Kafka CRs can live in `data`; 10 `kafka.strimzi.io` + `core.strimzi.io` CRDs `Established`; smoke = operator Deployment Ready + `STRIMZI_NAMESPACE=*` + 10 CRDs `Established` (`make smoke COMPONENT=strimzi`) | `feature/phase-6` (PR) | [#11](https://github.com/sca-templates/infra-kubernetes/issues/11) |
 | 2026-09-08 | cloudnative-pg | deployed — chart `cloudnative-pg/cloudnative-pg` 0.29.0 (operator 1.30.0, cloudnative-pg.github.io/charts) as an operator app in ns `cloudnative-pg`, appset wave -10 across all 4 envs; `config.clusterWide` watch so the `data` datastores land at Phase 10, monitoring off until Phase 14; smoke = operator Deployment Ready + 11 `postgresql.cnpg.io` CRDs `Established` (`make smoke COMPONENT=cloudnative-pg`) | `feature/phase-5` (PR) | [#10](https://github.com/sca-templates/infra-kubernetes/issues/10) |
 | 2026-09-08 | linkerd-crds | deployed — chart `linkerd/linkerd-crds` 1.8.0 (helm.linkerd.io/stable) as a CRD-only app in ns `linkerd`, appset wave -10 across all 4 envs; `enableHttpRoutes: true` (chart default); smoke = the `linkerd.io` + `policy.linkerd.io` CRD groups present + `Established` (`make smoke COMPONENT=linkerd-crds`) | `feature/phase-4` (PR) | [#9](https://github.com/sca-templates/infra-kubernetes/issues/9) |
 | 2026-09-08 | external-secrets | deployed — ESO chart 2.10.0, `ClusterSecretStore vault` Ready (k8s-auth `external-secrets`, TLS via `vault-tls`), smoke = throwaway ExternalSecret pulling `secret/keycloak/admin` → `SecretSynced` + data verified; short `refreshInterval` (5m); appset wave -10 across all 4 envs | `feature/phase-3` (PR) | [#8](https://github.com/sca-templates/infra-kubernetes/issues/8) |

@@ -13,6 +13,7 @@ case "$component" in
   external-secrets) exec "$(dirname "$0")/smoke-external-secrets.sh" ;;
   linkerd-crds) exec "$(dirname "$0")/smoke-linkerd-crds.sh" ;;
   cloudnative-pg) exec "$(dirname "$0")/smoke-cloudnative-pg.sh" ;;
-  "") echo "usage: $0 <component> (cert-manager, vault, external-secrets, linkerd-crds, cloudnative-pg)" >&2; exit 2 ;;
+  strimzi) exec "$(dirname "$0")/smoke-strimzi.sh" ;;
+  "") echo "usage: $0 <component> (cert-manager, vault, external-secrets, linkerd-crds, cloudnative-pg, strimzi)" >&2; exit 2 ;;
   *) echo "ERROR: no smoke command for component '$component'" >&2; exit 2 ;;
 esac

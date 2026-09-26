@@ -40,6 +40,13 @@ spec:
             targetRevision: 0.29.0
             wave: "-10"
             path: cloudnative-pg/manifests
+          - name: strimzi
+            namespace: strimzi
+            chartRepo: https://strimzi.io/charts
+            chart: strimzi-kafka-operator
+            targetRevision: 1.2.0
+            wave: "-10"
+            path: strimzi/manifests
           - name: vault
             namespace: vault
             chartRepo: https://helm.releases.hashicorp.com
