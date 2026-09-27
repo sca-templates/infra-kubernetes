@@ -1,0 +1,14 @@
+# redis-operator — dev profile (shared integration, reduced footprint): one
+# leader-elected replica and light resources. The base values already carry the
+# cluster-wide watch (Redis CRs land in `data` at Phase 12) and the webhook off,
+# so the overlay only states the tier's footprint.
+
+replicas: 1
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

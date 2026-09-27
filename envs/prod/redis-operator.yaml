@@ -1,0 +1,28 @@
+# redis-operator — prod profile (2 replicas, soft anti-affinity, manual sync
+# tier). Mirrors the qa footprint: the operator is stateless (the Redis
+# instances are the stateful part, at Phase 12), so prod stays on the same scale
+# as qa and the difference is the manual sync policy, not the replica count.
+# No PodDisruptionBudget — the chart ships no PDB value; see the qa overlay and
+# the deviations log in docs/architecture.md.
+
+replicas: 2
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: topology.kubernetes.io/hostname
+          labelSelector:
+            # `name` is the chart's only selector label (see the chart's
+            # selectorLabels helper); the pod template carries it too.
+            matchLabels:
+              name: redis-operator
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 384Mi
+  limits:
+    cpu: 1000m
+    memory: 768Mi
