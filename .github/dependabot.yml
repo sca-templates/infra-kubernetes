@@ -1,4 +1,13 @@
 version: 2
+# No `pip` ecosystem on purpose. The checkov toolchain in
+# /.github/requirements.txt is a uv-compiled, hash-pinned closure that only
+# resolves correctly through --overrides and a fixed --exclude-newer cutoff.
+# A pip watch can read neither: it treats .github/asteval-override.txt as a
+# requirements file (the `==` is a valid pin) and rewrites the version this
+# repository forces into the toolchain, then re-resolves the whole closure to
+# "latest" — landing versions that violate checkov's own declared constraints
+# (networkx, packaging, cachetools, aiodns, boto3) and failing the IaC gate.
+# Bumps are applied by hand; see docs/security.md.
 updates:
   - package-ecosystem: github-actions
     directory: /
@@ -13,25 +22,5 @@ updates:
       include: scope
     groups:
       actions:
-        patterns:
-          - "*"
-  - package-ecosystem: pip
-    # Keeps the repo clonable standalone: the checkov toolchain lives in
-    # /.github/requirements.txt, and the config that watches it belongs to the
-    # repository, not to org settings. Bumps may be hand-applied when
-    # Dependabot cannot re-resolve the hash-pinned closure — see
-    # docs/security.md.
-    directory: /.github
-    schedule:
-      interval: weekly
-      day: monday
-      time: "08:00"
-      timezone: America/Bogota
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: chore
-      include: scope
-    groups:
-      pip:
         patterns:
           - "*"

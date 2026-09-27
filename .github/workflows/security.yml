@@ -48,7 +48,7 @@ jobs:
       - name: Install checkov (pinned, verified)
         # --no-deps: .github/requirements.txt is a fully hash-pinned closure,
         # and checkov pins asteval==1.0.6 while the lockfile forces the fixed
-        # asteval==1.0.9 (advisories GHSA-89v8-rhwq-hf77, GHSA-9w56-46f6-3qhx).
+        # asteval==1.0.10 (advisories GHSA-89v8-rhwq-hf77, GHSA-9w56-46f6-3qhx).
         # Re-resolving that set is unsatisfiable, so the install trusts the
         # reviewed lockfile verbatim instead of the declared metadata. See
         # docs/security.md and .github/asteval-override.txt.

@@ -82,7 +82,7 @@ the fixed version instead, so the lockfile carries the fix rather than the
 manifest carrying a waiver:
 
 - `.github/asteval-override.txt` — the constraint, with the reasoning inline;
-- `.github/requirements.txt` — compiled against it, so `asteval==1.0.9` is
+- `.github/requirements.txt` — compiled against it, so `asteval==1.0.10` is
   hash-pinned and reviewed like every other entry;
 - `.github/workflows/security.yml` — installs the set with
   `--no-deps --require-hashes`.
@@ -103,38 +103,45 @@ unchecked at install time — a build-time tool that scans manifests, not a
 runtime component. Regenerate with `uv`, never `pip-compile`, so the override
 applies and the closure stays minimal.
 
-Dependabot watches `/.github/requirements.txt` (declared in
-`.github/dependabot.yml`, so the watch travels with the repo). It does not read
-uv overrides, so when it cannot re-resolve the closure, apply the bump by hand
-with the command above. Retire the override when checkov adopts
+There is deliberately **no `pip` Dependabot watch** on `/.github`. Dependabot's
+pip updater cannot read a uv override or honour `--exclude-newer`: it treats
+`.github/asteval-override.txt` as a requirements file (the `==` is a valid
+pin) and rewrites the version this repository forces into the toolchain, then
+re-resolves the whole closure to "latest". That lands versions which violate
+checkov's own declared constraints — `networkx<2.7`, `packaging<24.0`,
+`cachetools<6.0.0`, `cyclonedx-python-lib<8.0.0`, `aiodns<4.0.0`,
+`boto3==1.35.49` — so the lockfile stops describing an installable set and the
+IaC gate fails. Bumps are applied by hand with the command above and reviewed
+as the ~6-line diff they are. Retire the override when checkov adopts
 `asteval>=1.0.9`: drop the file, drop `--no-deps`, and delete the two
 `IgnoredVulns` entries.
 
 ### Ignored OSV advisories (via osv-scanner.toml)
 
-The shared security scan flags three OSV advisories in the checkov dependency
-chain. They are **inherent to checkov and have no fix in its resolution**, so
-they are explicitly ignored through `.github/osv-scanner.toml` (the standard
-ignore mechanism, honoured by `osv-scanner`) placed next to the
-`.github/requirements.txt` manifest that carries them:
+The shared security scan flags one OSV advisory in the checkov dependency
+chain. It is **inherent to checkov and has no fix in its resolution**, so it is
+explicitly ignored through `.github/osv-scanner.toml` (the standard ignore
+mechanism, honoured by `osv-scanner`) placed next to the
+`.github/requirements.txt` manifest that carries it:
 
-| OSV | Package | Advisories | Mechanism |
+| OSV | Package | Advisory | Mechanism |
 | --- | --- | --- | --- |
-| GHSA-89v8-rhwq-hf77 | asteval | sandbox escape / DoS | ignored — no resolvable fix |
-| GHSA-9w56-46f6-3qhx | asteval | sandbox escape (RCE-equivalent) | ignored — no resolvable fix |
 | PYSEC-2026-1325 | ecdsa | Minerva P-256 timing attack | ignored — no upstream fix (out of scope) |
 
-Rationale: `checkov==3.3.16` (current) hard-pins `asteval==1.0.6` (both
-advisories are fixed upstream in `asteval>=1.0.9`, but checkov has not adopted
-it), and `ecdsa<1.0.0,>=0.19.0` resolves to `ecdsa==0.19.2` (latest), which
-still carries the Minerva advisory — upstream explicitly considers side-channel
-attacks out of scope. Both packages are build-time CI tools, not runtime
-components of the platform; their vulnerable surfaces are not reachable from
-`checkov`'s IaC-scanning usage. The asteval fix is already available to this
-repo through the lockfile override above, so the two asteval entries come out as
-soon as that bumped lockfile lands; `ecdsa` has nothing to re-evaluate until
-upstream publishes. Both are re-evaluated when checkov adopts a fixed `asteval`
-or `ecdsa` publishes a fix.
+Rationale: `checkov==3.3.16` (current) declares `ecdsa<1.0.0,>=0.19.0`, which
+resolves to `ecdsa==0.19.2` (latest), and that release still carries the
+Minerva advisory — upstream explicitly considers side-channel attacks out of
+scope and publishes no fix. `ecdsa` is a build-time CI dependency, not a
+runtime component of the platform, and its vulnerable surface is not reachable
+from `checkov`'s IaC-scanning usage. It is re-evaluated when upstream publishes
+a fix.
+
+The two `asteval` advisories (GHSA-89v8-rhwq-hf77, GHSA-9w56-46f6-3qhx) are
+**no longer ignored**. `checkov==3.3.16` hard-pins `asteval==1.0.6`, from which
+they are reachable, but the lockfile override above forces `asteval==1.0.10`
+past that pin, so the vulnerable version is not in the closure at all. Accepted
+risk was the fallback while no fix was installable; the fix is installable, so
+the entries are gone rather than re-justified.
 
 ## Repository rules that enforce the posture
 

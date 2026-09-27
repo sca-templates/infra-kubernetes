@@ -18,7 +18,7 @@ a deployment.
 | CodeQL | `.github/workflows/codeql.yml` | push + PR + schedule | GitHub CodeQL static analysis on the repo languages — **wrapper** over the shared template |
 | Release | `.github/workflows/release.yml` | push to `main` | **wrapper** over the shared template: release-please opens release PRs/tags (+ signed annotated tags) and **draft** GitHub Releases for `feat`/`fix` commits touching the **platform surface** — commits confined to the `exclude-paths` directories (`.github`, `bootstrap`, `0.Project_info`) are dropped (see [versioning.md](versioning.md)); drives `CHANGELOG.md`; no manual re-sign `workflow_dispatch` (see [versioning.md](versioning.md)) |
 | Release promote | `.github/workflows/release-publish.yml` | manual | **local**: publishes the draft release of a signed tag, which is what moves the `latest` pointer; verifies the tag is annotated and signed by the release bot first (see [versioning.md](versioning.md)) |
-| Release gate | `.github/workflows/release-gate.yml` | PR + manual | **wrapper** over the shared template: blocks human PRs while a release-please PR is open (`release-gate` required check) |
+| Release gate | `.github/workflows/release-gate.yml` | PR + manual | **wrapper** over the shared template: blocks PRs while a release-please PR is open (`release-gate / release-gate` required check) |
 | Auto label | `.github/workflows/auto-label.yml` | PR | **wrapper** over the shared template: labels PRs from the type (`feature`, `bug`, `ci`, `documentation`, `refactor`, `security`, `dependencies`) and changed files — see [labels.md](labels.md) |
 
 ### Template provenance
@@ -204,16 +204,25 @@ branch protection, not by policy. (The previous local gate keyed on the
 reserved head branch `release-please--branches--main`; the shared template keys
 on the title instead — same effect, one release PR at a time.)
 
-The gate is scoped to humans by a job-level `if` on `pull_request.user.type`:
-any bot-authored PR is skipped, not gated. The shared template only knows how to
-exempt the release-please PR by title, so without this guard a Dependabot PR
-raised during a release window fails a required check it can never satisfy —
-Dependabot has no way to hold a PR, it rebases and re-fails, and the queue blocks
-on a PR that is not a human decision. `workflow_dispatch` keeps the full gate so
-the invariant stays manually verifiable. The `if` sits on the job rather than
-the workflow on purpose: a skipped *job* still reports a check run (conclusion
-`skipped`, surfaced as `neutral`), which satisfies the required context, whereas
-a workflow skipped by path filters leaves the context pending forever.
+The reusable workflow is called unconditionally, and that is load-bearing. The
+required context is the **nested** check run `release-gate / release-gate`
+(caller job / callee job), which GitHub only creates if the reusable is
+actually invoked. A job-level `if` that exempts bot-authored PRs does not
+"skip the gate for bots": it skips the whole call, the nested run is never
+created, and the required context has no check run to wait for — so every
+Dependabot or release-please PR hangs on `Expected — waiting for status to be
+reported`. A skipped *job* reports conclusion `skipped`; a job that never runs
+reports nothing, and nothing never satisfies a required context. That
+exemption was tried and removed.
+
+Bot PRs are therefore gated like any other PR: they report the check
+immediately and pass, unless a release PR is actually open. That is a bounded
+wait rather than a deadlock — the gate turns green as soon as the release PR
+merges, and Dependabot re-runs it on the next rebase. A true bot exemption
+requires the condition to live in the *callee*, as an input on the shared
+template, so the nested run is still reported (as `skipped`); that is tracked in
+`sca-templates/CI-CD-Templates` and deliberately not emulated here.
+`workflow_dispatch` keeps the gate manually verifiable.
 
 ## Required checks
 
@@ -229,9 +238,10 @@ contexts below are the nested names:
    required on every PR; blocks on findings.
 3. `IaC (checkov)` and `Guard policies` — the two local `security.yml` jobs.
 4. `CodeQL / Analyze (actions)` — required once stable.
-5. `release-gate / release-gate` — required on every PR (fails while a
-   release PR is open; skipped for bot-authored PRs, including the release
-   PR itself).
+5. `release-gate / release-gate` — required on every PR (fails while a release
+   PR is open; the release PR itself is exempt, because the shared gate
+   detects it by title). Bot-authored PRs are gated like humans and report the
+   check immediately.
 6. Human review — always the last gate for "turns green".
 
 `Security / Dependency Vulnerabilities (osv)` runs the same scan but is **not**
