@@ -53,7 +53,8 @@ and rotation policy in
 
 All CI Python dependencies are hash-pinned. Each install uses
 `pip install --require-hashes -r <lockfile>` so every transitive dependency is
-verified against a SHA-256 digest:
+verified against a SHA-256 digest (checkov is the one install that also needs
+`--no-deps`, for the reason in the override section below):
 
 | Tool | Lockfile | Source |
 | --- | --- | --- |
@@ -66,6 +67,48 @@ Lockfiles are generated, not hand-edited. To regenerate after a tool bump:
 printf 'checkov==<version>\n' | uv pip compile --generate-hashes --python-version 3.11 -o .github/requirements.txt -
 printf 'yamllint==<version>\n' | uv pip compile --generate-hashes --python-version 3.11 -o .github/requirements-yamllint.txt -
 ```
+
+Always pass `--exclude-newer <ISO-8601 cutoff>`: a lockfile is a snapshot of one
+day, and without a cutoff uv also lifts every unrelated package in the closure
+to its newest release, burying the intended bump in a thousand-line diff.
+
+### The asteval override (checkov)
+
+`checkov==3.3.16` hard-pins `asteval==1.0.6` in every 3.3.x release (3.3.16
+through 3.3.19, the latest), and the two advisories that reach us through that
+pin are fixed in `asteval>=1.0.9`. The closure is therefore unsatisfiable as
+resolved, and the default outcome is an accepted-risk ignore. This repo forces
+the fixed version instead, so the lockfile carries the fix rather than the
+manifest carrying a waiver:
+
+- `.github/asteval-override.txt` — the constraint, with the reasoning inline;
+- `.github/requirements.txt` — compiled against it, so `asteval==1.0.9` is
+  hash-pinned and reviewed like every other entry;
+- `.github/workflows/security.yml` — installs the set with
+  `--no-deps --require-hashes`.
+
+```bash
+printf 'checkov==3.3.16\n' | uv pip compile --generate-hashes --python-version 3.11 \
+  --exclude-newer 2026-09-02T14:59:08Z \
+  --overrides .github/asteval-override.txt -o .github/requirements.txt -
+```
+
+`--no-deps` is a requirement of the override, not a shortcut. pip re-checks the
+install against the *declared metadata* of every distribution, and checkov's own
+`asteval==1.0.6` pin conflicts with the overridden version, so a resolving
+install fails with `ResolutionImpossible`. Skipping re-resolution makes the
+reviewed lockfile the truth: every distribution is hash-verified, the closure
+was hand-picked and diffed in review, and only checkov's declared metadata goes
+unchecked at install time — a build-time tool that scans manifests, not a
+runtime component. Regenerate with `uv`, never `pip-compile`, so the override
+applies and the closure stays minimal.
+
+Dependabot watches `/.github/requirements.txt` (declared in
+`.github/dependabot.yml`, so the watch travels with the repo). It does not read
+uv overrides, so when it cannot re-resolve the closure, apply the bump by hand
+with the command above. Retire the override when checkov adopts
+`asteval>=1.0.9`: drop the file, drop `--no-deps`, and delete the two
+`IgnoredVulns` entries.
 
 ### Ignored OSV advisories (via osv-scanner.toml)
 
@@ -87,8 +130,11 @@ it), and `ecdsa<1.0.0,>=0.19.0` resolves to `ecdsa==0.19.2` (latest), which
 still carries the Minerva advisory — upstream explicitly considers side-channel
 attacks out of scope. Both packages are build-time CI tools, not runtime
 components of the platform; their vulnerable surfaces are not reachable from
-`checkov`'s IaC-scanning usage. They will be re-evaluated when checkov adopts a
-fixed `asteval` or `ecdsa` publishes a fix.
+`checkov`'s IaC-scanning usage. The asteval fix is already available to this
+repo through the lockfile override above, so the two asteval entries come out as
+soon as that bumped lockfile lands; `ecdsa` has nothing to re-evaluate until
+upstream publishes. Both are re-evaluated when checkov adopts a fixed `asteval`
+or `ecdsa` publishes a fix.
 
 ## Repository rules that enforce the posture
 
