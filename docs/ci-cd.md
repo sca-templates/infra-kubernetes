@@ -197,6 +197,17 @@ branch protection, not by policy. (The previous local gate keyed on the
 reserved head branch `release-please--branches--main`; the shared template keys
 on the title instead — same effect, one release PR at a time.)
 
+The gate is scoped to humans by a job-level `if` on `pull_request.user.type`:
+any bot-authored PR is skipped, not gated. The shared template only knows how to
+exempt the release-please PR by title, so without this guard a Dependabot PR
+raised during a release window fails a required check it can never satisfy —
+Dependabot has no way to hold a PR, it rebases and re-fails, and the queue blocks
+on a PR that is not a human decision. `workflow_dispatch` keeps the full gate so
+the invariant stays manually verifiable. The `if` sits on the job rather than
+the workflow on purpose: a skipped *job* still reports a check run (conclusion
+`skipped`, surfaced as `neutral`), which satisfies the required context, whereas
+a workflow skipped by path filters leaves the context pending forever.
+
 ## Required checks
 
 `main` is enforced by the active **`main-protected` ruleset** (required
@@ -212,7 +223,8 @@ contexts below are the nested names:
 3. `IaC (checkov)` and `Guard policies` — the two local `security.yml` jobs.
 4. `CodeQL / Analyze (actions)` — required once stable.
 5. `release-gate / release-gate` — required on every PR (fails while a
-   release PR is open; passes on the release PR itself).
+   release PR is open; skipped for bot-authored PRs, including the release
+   PR itself).
 6. Human review — always the last gate for "turns green".
 
 `Security / Dependency Vulnerabilities (osv)` runs the same scan but is **not**
