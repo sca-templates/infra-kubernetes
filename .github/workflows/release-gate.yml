@@ -7,13 +7,22 @@
 # or dependency change bundled in the same release is reflected in the tag and
 # CHANGELOG. This check makes that ordering visible and enforced: a human PR
 # arriving while a release PR is open gets a failing gate and cannot merge.
-# The release PR itself is excluded, so it is never blocked.
+#
+# Scope of the gate is humans only, enforced by the job-level `if` below: a PR
+# whose author is a bot (release-please, Dependabot) is never gated. The
+# shared template already exempts the release-please PR itself by title; it
+# cannot distinguish other bots, so without this guard a Dependabot PR that
+# lands during a release window fails a required check it can never satisfy —
+# Dependabot has no way to wait, it just rebases and re-fails, and the check
+# blocks the queue for a PR that is not a human decision. `workflow_dispatch`
+# keeps the full gate so the invariant stays manually verifiable.
 #
 # Thin wrapper over the org shared template
 # (CI-CD-Templates/.github/workflows/shared-qa-lock-check.yml, SHA-pinned);
 # the shared gate job is named `release-gate`, so the required_status_checks
 # context on `main` stays valid. Detection keys on the release-please PR title
-# `chore(...release...)` rather than the reserved branch name.
+# `chore(...release...)` rather than the reserved branch name. A skipped job
+# reports conclusion `skipped`, which satisfies the required context.
 #
 # Registered as required_status_checks context 'release-gate' on main.
 
@@ -35,4 +44,9 @@ concurrency:
 jobs:
   gate:
     name: release-gate
+    # Humans only. Bot-authored PRs (release-please, Dependabot) are exempt:
+    # `user.type` is 'Bot' for GitHub Apps and Dependabot, 'User' for humans.
+    # workflow_dispatch has no pull_request payload, so the first clause keeps
+    # the manual run fully gated.
+    if: github.event_name != 'pull_request' || github.event.pull_request.user.type != 'Bot'
     uses: sca-templates/CI-CD-Templates/.github/workflows/shared-qa-lock-check.yml@0228c2950c0d269dcf22f64415ea941b5da13102

@@ -16,7 +16,8 @@ a deployment.
 | Validate | `.github/workflows/validate.yml` | push + PR | Static suite: markdownlint, yamllint, YAML parse, `bash -n`, actionlint (workflow lint), kube-linter (K8s manifest lint) — **local** (no template counterpart) |
 | Security | `.github/workflows/security.yml` | push + PR | gitleaks + osv-scanner (SCA) via the shared template; checkov (static IaC baseline) and pin guards (no `latest` tags/charts) stay local |
 | CodeQL | `.github/workflows/codeql.yml` | push + PR + schedule | GitHub CodeQL static analysis on the repo languages — **wrapper** over the shared template |
-| Release | `.github/workflows/release.yml` | push to `main` | **wrapper** over the shared template: release-please opens release PRs/tags (+ signed annotated tags) and GitHub Releases for `feat`/`fix` commits touching the **platform surface** — commits confined to the `exclude-paths` directories (`.github`, `bootstrap`, `0.Project_info`) are dropped (see [versioning.md](versioning.md)); drives `CHANGELOG.md`; no manual re-sign `workflow_dispatch` (see [versioning.md](versioning.md)) |
+| Release | `.github/workflows/release.yml` | push to `main` | **wrapper** over the shared template: release-please opens release PRs/tags (+ signed annotated tags) and **draft** GitHub Releases for `feat`/`fix` commits touching the **platform surface** — commits confined to the `exclude-paths` directories (`.github`, `bootstrap`, `0.Project_info`) are dropped (see [versioning.md](versioning.md)); drives `CHANGELOG.md`; no manual re-sign `workflow_dispatch` (see [versioning.md](versioning.md)) |
+| Release promote | `.github/workflows/release-publish.yml` | manual | **local**: publishes the draft release of a signed tag, which is what moves the `latest` pointer; verifies the tag is annotated and signed by the release bot first (see [versioning.md](versioning.md)) |
 | Release gate | `.github/workflows/release-gate.yml` | PR + manual | **wrapper** over the shared template: blocks human PRs while a release-please PR is open (`release-gate` required check) |
 | Auto label | `.github/workflows/auto-label.yml` | PR | **wrapper** over the shared template: labels PRs from the type (`feature`, `bug`, `ci`, `documentation`, `refactor`, `security`, `dependencies`) and changed files — see [labels.md](labels.md) |
 
@@ -71,14 +72,20 @@ guards in [security.md](security.md).
 
 - **release-please** — runs **only on a push to `main`**; computes the next
   version, opens or updates the release PR, and on merge creates the tag and
-  the GitHub Release. Commits whose files all fall under an `exclude-paths`
-  directory are dropped before parsing, so a CI/tooling/docs-only push releases
-  nothing.
+  the GitHub Release as a **draft**. Commits whose files all fall under an
+  `exclude-paths` directory are dropped before parsing, so a
+  CI/tooling/docs-only push releases nothing.
 - **sign-tag** — runs when a release was created on `main`; re-creates the tag
   as an annotated tag signed by the release-bot GPG key on the same commit. A
   manual re-sign via `workflow_dispatch` is **no longer offered** (the old
   `v0.1.0` lightweight tag was promoted with it once; the shared template
   covers only the push path — see [versioning.md](versioning.md)).
+
+Because the release lands as a draft, the tag exists before anything is
+published. `release-publish.yml` (local, `workflow_dispatch`) is the promotion
+step: it verifies the tag is annotated and signed by the release bot, then
+publishes the draft — the point at which GitHub marks the release `latest`. See
+[versioning.md](versioning.md) for the rule and the guards.
 
 The workflow is the only one that holds repository secrets
 (`APP_ID`, `APP_PRIVATE_KEY`, `RELEASE_GPG_PRIVATE_KEY`) — see
@@ -197,6 +204,17 @@ branch protection, not by policy. (The previous local gate keyed on the
 reserved head branch `release-please--branches--main`; the shared template keys
 on the title instead — same effect, one release PR at a time.)
 
+The gate is scoped to humans by a job-level `if` on `pull_request.user.type`:
+any bot-authored PR is skipped, not gated. The shared template only knows how to
+exempt the release-please PR by title, so without this guard a Dependabot PR
+raised during a release window fails a required check it can never satisfy —
+Dependabot has no way to hold a PR, it rebases and re-fails, and the queue blocks
+on a PR that is not a human decision. `workflow_dispatch` keeps the full gate so
+the invariant stays manually verifiable. The `if` sits on the job rather than
+the workflow on purpose: a skipped *job* still reports a check run (conclusion
+`skipped`, surfaced as `neutral`), which satisfies the required context, whereas
+a workflow skipped by path filters leaves the context pending forever.
+
 ## Required checks
 
 `main` is enforced by the active **`main-protected` ruleset** (required
@@ -212,7 +230,8 @@ contexts below are the nested names:
 3. `IaC (checkov)` and `Guard policies` — the two local `security.yml` jobs.
 4. `CodeQL / Analyze (actions)` — required once stable.
 5. `release-gate / release-gate` — required on every PR (fails while a
-   release PR is open; passes on the release PR itself).
+   release PR is open; skipped for bot-authored PRs, including the release
+   PR itself).
 6. Human review — always the last gate for "turns green".
 
 `Security / Dependency Vulnerabilities (osv)` runs the same scan but is **not**

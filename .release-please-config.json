@@ -3,6 +3,7 @@
   "bump-minor-pre-major": true,
   "include-v-in-tag": true,
   "changelog-path": "CHANGELOG.md",
+  "draft": true,
   "packages": {
     ".": {
       "exclude-paths": [

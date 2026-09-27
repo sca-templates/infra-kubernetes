@@ -15,3 +15,23 @@ updates:
       actions:
         patterns:
           - "*"
+  - package-ecosystem: pip
+    # Keeps the repo clonable standalone: the checkov toolchain lives in
+    # /.github/requirements.txt, and the config that watches it belongs to the
+    # repository, not to org settings. Bumps may be hand-applied when
+    # Dependabot cannot re-resolve the hash-pinned closure — see
+    # docs/security.md.
+    directory: /.github
+    schedule:
+      interval: weekly
+      day: monday
+      time: "08:00"
+      timezone: America/Bogota
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      pip:
+        patterns:
+          - "*"
