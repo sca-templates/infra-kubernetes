@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.9.0](https://github.com/sca-templates/infra-kubernetes/compare/v0.8.0...v0.9.0) (2026-09-27)
+
+
+### Features
+
+* **strimzi:** deploy kafka operator across all environments ([#70](https://github.com/sca-templates/infra-kubernetes/issues/70)) ([96fba13](https://github.com/sca-templates/infra-kubernetes/commit/96fba137a3f8a06b336d49dfe408979df327c768))
+
+
+### Bug Fixes
+
+* **ci:** grant pull-requests: write to the Release wrapper job ([#71](https://github.com/sca-templates/infra-kubernetes/issues/71)) ([bf151bf](https://github.com/sca-templates/infra-kubernetes/commit/bf151bf0556e228c89153263faa16816ca413658))
+
 ## [0.8.0](https://github.com/sca-templates/infra-kubernetes/compare/v0.7.0...v0.8.0) (2026-09-21)
 
 
