@@ -24,4 +24,4 @@
 # --no-deps, and delete the two asteval IgnoredVulns entries for good.
 # =============================================================================
 
-asteval==1.0.9
+asteval==1.0.10
