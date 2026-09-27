@@ -49,4 +49,4 @@ jobs:
     # workflow_dispatch has no pull_request payload, so the first clause keeps
     # the manual run fully gated.
     if: github.event_name != 'pull_request' || github.event.pull_request.user.type != 'Bot'
-    uses: sca-templates/CI-CD-Templates/.github/workflows/shared-qa-lock-check.yml@0228c2950c0d269dcf22f64415ea941b5da13102
+    uses: sca-templates/CI-CD-Templates/.github/workflows/shared-qa-lock-check.yml@e88eb3d2a1bfbfed3a1e6e4aa80b046fb31ed54d
