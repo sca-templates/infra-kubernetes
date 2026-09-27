@@ -3,22 +3,33 @@
 # =============================================================================
 # uv override for the checkov lockfile (.github/requirements.txt)
 # =============================================================================
-# checkov hard-pins asteval==1.0.6 in every 3.3.x release (3.3.16 through
-# 3.3.19, the latest), and two advisories in asteval < 1.0.9 are reachable only
-# through that pin: GHSA-89v8-rhwq-hf77 and GHSA-9w56-46f6-3qhx. Because the
-# lockfile is hash-pinned, the bump is otherwise unresolvable and the two
-# advisories have to sit in .github/osv-scanner.toml as accepted risk.
+# checkov hard-pins asteval==1.0.6 in every 3.3.x release — confirmed against
+# the PyPI metadata of both 3.3.16 (the pinned version) and 3.3.19 (the latest)
+# — and two advisories in asteval < 1.0.9 are reachable only through that pin:
+# GHSA-89v8-rhwq-hf77 and GHSA-9w56-46f6-3qhx. Because the lockfile is
+# hash-pinned, the bump is otherwise unresolvable and the two advisories would
+# have to sit in .github/osv-scanner.toml as accepted risk.
 #
-# Forcing the fixed version keeps the lockfile honest instead of ignoring the
-# advisory. Consume it when compiling:
+# Forcing a fixed version keeps the lockfile honest instead of ignoring the
+# advisory. 1.0.10 is the current release and predates the --exclude-newer
+# cutoff in the command below, so the pin is stable under it. Consume it when
+# compiling:
 #
-#   uv pip compile --generate-hashes --python-version 3.11 \
-#     --overrides .github/asteval-override.txt -o /tmp/req-checkov.txt -
+#   printf 'checkov==3.3.16\n' | uv pip compile --generate-hashes \
+#     --python-version 3.11 --exclude-newer 2026-09-02T14:59:08Z \
+#     --overrides .github/asteval-override.txt -o .github/requirements.txt -
 #
 # and install the result without re-resolving (see .github/workflows/
 # security.yml), otherwise pip rejects the set as unsatisfiable:
 #
 #   python -m pip install --no-deps --require-hashes -r .github/requirements.txt
+#
+# This file must stay out of Dependabot's reach. A `pip` watch on /.github
+# treats this override as a requirements file (the `==` is a valid pin), so the
+# bot would rewrite the version this repository forces into the toolchain, and
+# would re-resolve the whole closure without the override or the cutoff —
+# landing versions that violate checkov's own declared constraints. Bumps are
+# applied by hand with the command above.
 #
 # Re-evaluate when checkov adopts asteval >= 1.0.9: drop this file, drop
 # --no-deps, and delete the two asteval IgnoredVulns entries for good.
