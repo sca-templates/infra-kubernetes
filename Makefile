@@ -45,7 +45,9 @@ cluster-up: ## Create the local kind cluster from bootstrap/kind-config.yaml
 
 .PHONY: cluster-down
 cluster-down: ## Delete the local kind cluster (keeps nothing)
-	kind delete cluster --name "$(KIND_CLUSTER_NAME)" --ignore-not-found
+	# kind 0.32 has no --ignore-not-found, so swallow the "cluster not found"
+	# exit to keep the target idempotent.
+	@kind delete cluster --name "$(KIND_CLUSTER_NAME)" 2>/dev/null || true
 
 .PHONY: argocd-up
 argocd-up: ## Install or upgrade ArgoCD from argocd/install-values.yaml (no apps)
