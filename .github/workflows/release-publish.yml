@@ -1,0 +1,90 @@
+# Copyright (c) 2026 sca-templates contributors
+# SPDX-License-Identifier: MIT
+# =============================================================================
+# infra-kubernetes release promotion — publish the draft GitHub Release
+# =============================================================================
+# The tag is the artifact; the release entry is the announcement. `release.yml`
+# (release-please with `draft: true` in .release-please-config.json) cuts the
+# signed tag and leaves the GitHub Release as a **draft**, so the automation
+# never designates a release as `latest`: GitHub marks the most recent
+# published, non-prerelease release, and that designation is a human go/no-go.
+# This workflow is that go/no-go. It mirrors the rule service releases already
+# follow — a semver tag is cut on merge and marked `latest` only once prod
+# adopted it (see docs/architecture.md, services row).
+#
+# Run it once the release has been validated and adopted, with the tag as
+# input. It refuses anything that is not a signed release tag, so promotion
+# cannot drift onto an unsigned or hand-made ref.
+#
+# Guard rails, in order: the tag exists, it is annotated, its signature verifies
+# against the committed trust anchor (.github/release-bot-gpg.pub, the same key
+# the sign-tag job uses), and the release is still a draft. The token is minted
+# from the org-owned `sca-bot-release` GitHub App — the identity release-please
+# authors with (see docs/secrets.md). Unlike `release.yml`, this workflow is
+# local: the shared template covers only the push path, and a manual promotion
+# is exactly what it does not model.
+# =============================================================================
+
+name: Release promote
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish, e.g. v0.9.0 (no refs/tags/ prefix)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-promote-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    name: Promote to latest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mint release-bot token
+        id: app-token
+        uses: sca-templates/CI-CD-Templates/.github/actions/mint-app-token@66755baa61ec4d5134e0f63f693bcff8722c1759
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0
+
+      - name: Verify the release-bot signature on the tag
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          case "${TAG}" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "::error::'${TAG}' is not a vX.Y.Z release tag"; exit 1 ;;
+          esac
+          git rev-parse --verify --quiet "refs/tags/${TAG}" >/dev/null \
+            || { echo "::error::tag '${TAG}' does not exist"; exit 1; }
+          test "$(git cat-file -t "${TAG}")" = tag \
+            || { echo "::error::'${TAG}' is not an annotated tag; the sign-tag job did not run"; exit 1; }
+          gpg --batch --import .github/release-bot-gpg.pub
+          git tag -v "${TAG}" \
+            || { echo "::error::'${TAG}' is not signed by the release bot; refusing to promote"; exit 1; }
+
+      - name: Publish the release
+        env:
+          TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          gh release view "${TAG}" --json isDraft --jq .isDraft | grep -qx true \
+            || { echo "::error::release '${TAG}' is not a draft (already promoted?)"; exit 1; }
+          gh release edit "${TAG}" --draft=false
+          echo "::notice::${TAG} published; GitHub now marks it as the latest release"
