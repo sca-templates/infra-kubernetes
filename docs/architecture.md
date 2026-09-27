@@ -100,7 +100,7 @@ their own repositories — see
 | linkerd-crds | `linkerd` | linkerd/linkerd-crds | -10 | 4 | deployed (Phase 4) |
 | cloudnative-pg | `cloudnative-pg` | cloudnative-pg/cloudnative-pg | -10 | 5 | deployed (Phase 5) |
 | strimzi | `strimzi` | strimzi/strimzi-kafka-operator | -10 | 6 | deployed (Phase 6) |
-| redis-operator | `data` | ot-container-kit/redis-operator | -10 | 7 | planned (Phase 7) |
+| redis-operator | `data` | ot-container-kit/redis-operator | -10 | 7 | deployed (Phase 7) |
 | kong | `kong` | kong/kong (DB-less) | 20 | 8 | planned (Phase 8) |
 | linkerd control plane | `linkerd` | linkerd/linkerd2 (script) | 30 | 9 | planned (Phase 9) |
 | postgres-app (+ keycloak-db) | `data` | CNPG `Cluster` CR (raw) | 40 | 10 | planned (Phase 10) |
@@ -119,14 +119,17 @@ Notes:
 
 - **Status column** is the source of truth for "is it live?". ArgoCD,
   cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3),
-  linkerd-crds (Phase 4) and cloudnative-pg (Phase 5) are deployed; every
+  linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6) and
+  redis-operator (Phase 7) are deployed; every
   other component is `planned (Phase N)`. The column is flipped to `deployed` inside the phase
   that lands the component, and `status.md` is updated in the same commit.
 - `postgres-app` is a **local-only** raw `Application` (not in the
   `ApplicationSet` generator list) and also defines the `keycloak-db` CNPG
   cluster in `data` used by Keycloak in every environment. The Kafka and Redis
   **operators** (waves -10) are installed everywhere; their **custom resources**
-  live in `data` at wave 40.
+  live in `data` at wave 40. redis-operator shares the `data` namespace with
+  the CRs it reconciles, while Strimzi and CloudNativePG each get a namespace of
+  their own (see [Deviations log](#deviations-log)).
 - `kong` is a dedicated `Application` per environment (not via the
   `ApplicationSet`): flat-schema CRDs break ArgoCD's structured-merge diff
   under `ServerSideApply=true`, so it runs DB-less with `installCRDs: false`
@@ -247,7 +250,7 @@ Full inventory and runbooks: [secrets.md](secrets.md).
 | `cloudnative-pg` | PostgreSQL operator |
 | `strimzi` | Kafka operator |
 | `kong` | API gateway |
-| `data` | Datastores: postgres-app, keycloak-db, Kafka, Redis |
+| `data` | Datastores: postgres-app, keycloak-db, Kafka, Redis — plus the redis-operator (Phase 7) |
 | `keycloak` | OIDC identity provider |
 | `observability` | Metrics + Grafana + Alertmanager, Alloy log collection |
 | `loki` | Log aggregation (named after the chart, unlike the observability ns) |
@@ -270,7 +273,7 @@ Application of the service repo (see
 [workflow.md](workflow.md#services-app-repo-as-source)).
 
 Per-component replica profile (intended values; materialized as each phase
-lands — cert-manager is done):
+lands — through redis-operator, Phase 7):
 
 | Component | local | dev | qa | prod |
 | --- | --- | --- | --- | --- |
@@ -279,6 +282,7 @@ lands — cert-manager is done):
 | external-secrets | 1 | 2 | 3 | 3 |
 | cloudnative-pg | 1 | 1 | 2 | 2 |
 | strimzi | 1 | 1 | 2 | 2 |
+| redis-operator | 1 | 1 | 2 | 2 |
 | redis | 1 | 1 | 2 | 3 |
 | kong (gateway/controller) | 1/1 | 2/2 | 3/3 | 3/3 |
 | keycloak | 1 | 2 | 3 | 3 |
@@ -308,6 +312,9 @@ as each component lands; the log always explains *why*, never just *what*.
 | AppSet (CRD apps) | CRD `ignoreDifferences` extended with `.spec.conversion`, `.spec.names.listKind` and `.spec.preserveUnknownFields` (on top of `.spec.versions[].schema` and `.status`) | The API server defaults these fields on served CRDs even when the chart does not declare them, so without the ignore every CRD-shipping app shows a perpetual, non-convergent `OutOfSync`. The fields are server-derived, not genuine drift — the applied CRD content is still the git-pinned chart |
 | linkerd-crds (local) | Five leftover Linkerd CRDs from the pre-restart bulk install (2026-09-02) removed manually: the conflicting `servers`/`serviceprofiles` and the orphaned `egressnetworks`, `externalworkloads`, `httplocalratelimitpolicies` (managed by no app) | SSA cannot remove extra CRD versions or objects it does not manage, so the newer-version leftovers made the app converge to a permanent `OutOfSync`. After cleanup the chart 1.8.0 app re-applied pristine definitions and re-converged to `Synced`. One-off cluster hygiene, not repo state |
 | cloudnative-pg + future-phase CRDs (local) | Same one-off cluster hygiene extended: **60 orphaned CRDs** from the 2026-09-02 bulk install removed — the 11 `postgresql.cnpg.io` (Phase 5) plus the undeployed groups `kafka.strimzi.io`/`core.strimzi.io` (10, Phase 6), `redis.redis.opstreelabs.in` (4, Phase 7), `configuration.konghq.com` (12, Phase 8), `monitoring.coreos.com`/`monitoring.grafana.com` (11, Phase 14) and `velero.io` (13, Phase 18). All lacked ArgoCD ownership (`helm.sh/resource-policy: keep`, no tracking labels) | Extra CRDs not owned by any app wedge the app that ships them into a permanent `OutOfSync` under SSA (same as the linkerd-crds row); each future phase would have hit the same gate. The converging `cloudnative-pg` app re-created its 11 CRDs as app-owned and converged `Synced`+`Healthy`; the undeployed groups were plain leftovers. ArgoCD, cert-manager, external-secrets and linkerd CRDs untouched |
+| redis-operator | The operator is installed in the **`data` namespace**, sharing it with the datastores it reconciles, instead of getting a namespace of its own like `strimzi` / `cloudnative-pg` | `data` is where the Phase 10/11/12 CRs land; the operator watches every namespace anyway (`watchNamespace: ""` renders no `WATCH_NAMESPACE`, RBAC is cluster-scoped), so a dedicated namespace would only add a second place to look. It also means the wave -10 app is the first thing to create `data` (`CreateNamespace=true`) |
+| redis-operator | **No PodDisruptionBudget** in the `qa`/`prod` overlays (both run 2 replicas with soft anti-affinity), and the chart's **webhook stays off** | This chart ships no PDB value, so a budget would have to be a raw manifest under `infrastructure/redis-operator/manifests/` — and that directory is env-agnostic, so it would also apply to `local`. The operator is stateless and leader-elected, so a voluntary eviction just re-elects a leader. The webhook only gates the `masterSlaveAntiAffinity` feature (and drags a serving certificate in with it); nothing in the platform uses master/slave anti-affinity — Sentinel and cluster topologies arrive as their own CRs at Phase 12 — so it stays off |
+| redis-operator | `chartRepo` is pinned to `https://ot-container-kit.github.io/helm-charts` instead of the documented `https://charts.ot-container-kit.io` | The old host stopped resolving upstream: it answers `NXDOMAIN` authoritatively for `io` (verified against public DNS on 2026-09-27), which wedged the app in `ComparisonError: failed to fetch chart`. The maintainers publish the same charts from the GitHub Pages repo of `ot-container-kit/helm-charts` — same publisher, same chart versions, `redis-operator` 0.26.1 with an identical digest — so the pin stays official and version-pinned, and ArgoCD reaches it as any other `https://` chart repo. Recorded in `docs/roadmap/redis-operator.md` |
 | Releases | The tag is cut automatically when the release PR merges, but the GitHub Release is created as a **draft** and published by the manual `Release promote` workflow — so the automation never designates a release as `latest` | `latest` is whatever GitHub computes as the most recent published, non-prerelease release, and there is no way to publish a release *without* claiming it; a draft is the only lever. Making publication a human step ties the pointer to adoption instead of to merge order, the same rule the Services row follows (see [versioning.md](versioning.md)) |
 | Services | A service is **app-repo-as-source**: its Kubernetes manifests live in the service's own repo (`deploy/`); dev/qa ArgoCD track `main` and are synced to the selected commit by the service's `promote` workflow (ArgoCD API, scoped token), while prod tracks the **version tag pinned** in `services-prod.yaml` (`version`, bumped by a reviewed `chore(services)` PR that also carries the go/no-go). `local` intentionally does **not** run services (`services-<env>.yaml` exists only for `dev`/`qa`/`prod`) | Services iterate daily (multiple deploys a day per service) and a PR-per-deployment in `infra-kubernetes` would turn TBD into a bottleneck. Keeping services self-owned while the catalog components stay centralized (the two `ApplicationSet`s in the root app) preserves git as the deployment gate: dev/qa are ArgoCD app syncs run from the service repo, prod is a one-line version bump (`chore(services)`, so it never opens an infra release PR) plus a human `Sync` (ADR-003). Each service release cuts an immutable semver tag that is marked `latest` only once prod adopted it (the Releases row above), which is what makes prod rollback a revert of the pin. This is a documented deviation from the single-repo-catalog model, constrained to the services registry |
 

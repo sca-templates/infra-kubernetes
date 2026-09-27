@@ -10,7 +10,7 @@ Milestones and Issues.
 
 ## Current state
 
-**Phase 6 — strimzi deployed.** Phase 0 delivered the scaffold
+**Phase 7 — redis-operator deployed.** Phase 0 delivered the scaffold
 (Makefile, `bootstrap/`, `argocd/` with the app-of-apps pattern, the CI
 workflows, the service template, this docs set) and brought the local `kind`
 cluster up with ArgoCD. **Phase 1** lands cert-manager on the `local` profile
@@ -33,23 +33,35 @@ Strimzi — the Kafka operator — at wave -10 in the `strimzi` namespace: chart
 pinned 1.2.0 (operator 1.2.0, `quay.io/strimzi/operator`), watching every
 namespace (`watchAnyNamespace`) so the Kafka datastores can run in `data` at
 Phase 11, with the 10 `kafka.strimzi.io` / `core.strimzi.io` CRDs all
-`Established`. No `Kafka`/`KafkaNodePool` CR exists yet (kafka lands at
-Phase 11). No `Cluster` CR exists yet for the same reason on the PostgreSQL
+`Established`. **Phase 7** lands redis-operator — the Redis operator — at wave
+-10 in the `data` namespace (shared with the datastores it will manage, unlike
+the dedicated `strimzi` / `cloudnative-pg` namespaces): chart pinned 0.26.1
+(operator 0.26.0, `quay.io/opstree/redis-operator`), cluster-wide watch
+(`watchNamespace: ""` renders no `WATCH_NAMESPACE`) so the Redis datastores can
+run in `data` at Phase 12, webhook off, no PDB, with the 4
+`redis.redis.opstreelabs.in` CRDs all `Established`. Its smoke goes one step
+further than the other operators: a throwaway `Redis` CR in a scratch namespace
+must produce a Ready StatefulSet and answer `PING` → `PONG`, which is the
+honest proof that the CR is honored (the `Redis` CRD declares an empty status
+object, so no condition can be asserted). No `Kafka`/`KafkaNodePool` CR exists
+yet (kafka lands at Phase 11), no `Redis` CR either (Phase 12). No `Cluster` CR
+exists yet for the same reason on the PostgreSQL
 side (postgres-app / keycloak-db land at Phase 10). See
 [ci-cd.md](ci-cd.md) for the smoke design.
 
 | Fact | Value |
 | --- | --- |
 | Repository | `infra-kubernetes` (local, fully-local git serve; published to GitHub before promotion) |
-| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6) |
+| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6), redis-operator (Phase 7) |
 | `platform-root-local` | present, `Synced` + `Healthy` against the local git serve (`main`); Phase 0.0 `automated.enabled=false` override dropped |
-| `platform-local` ApplicationSet | present, six elements (`cert-manager` wave -20, `external-secrets` + `linkerd-crds` + `cloudnative-pg` + `strimzi` wave -10, `vault` wave 0) |
+| `platform-local` ApplicationSet | present, seven elements (`cert-manager` wave -20, `external-secrets` + `linkerd-crds` + `cloudnative-pg` + `strimzi` + `redis-operator` wave -10, `vault` wave 0) |
 | cert-manager app | `cert-manager-local` `Synced` + `Healthy`; `sca-ca` ClusterIssuer `Ready`; leaf Certificate smoke green |
 | vault app | `vault-local` `Synced` + `Healthy`; HA raft trio, TLS via `vault-tls` leaf; `make smoke COMPONENT=vault` → initialized=true sealed=false; seed idempotent and HA-aware |
 | external-secrets app | `external-secrets-local` `Synced` + `Healthy`; `ClusterSecretStore vault` Ready (k8s-auth `external-secrets`, TLS via `vault-tls`); short `refreshInterval` (5m); `make smoke COMPONENT=external-secrets` → throwaway ExternalSecret `SecretSynced` + data verified |
 | linkerd-crds app | `linkerd-crds-local` `Synced`, namespace `linkerd` present, CRD-only app (no workloads); `servers`/`serverauthorizations`/`serviceprofiles` + policy group all `Established`; `make smoke COMPONENT=linkerd-crds` green |
 | cloudnative-pg app | `cloudnative-pg-local` `Synced` + `Healthy`; operator Deployment `cloudnative-pg` Ready (chart 0.29.0 / operator 1.30.0); 11 `postgresql.cnpg.io` CRDs present + `Established`; `make smoke COMPONENT=cloudnative-pg` green |
 | strimzi app | `strimzi-local` `Synced` + `Healthy`; operator Deployment `strimzi-cluster-operator` Ready (chart 1.2.0 / operator 1.2.0); watches all namespaces (`STRIMZI_NAMESPACE=*`); 10 `kafka.strimzi.io` + `core.strimzi.io` CRDs present + `Established`; `make smoke COMPONENT=strimzi` green |
+| redis-operator app | `redis-operator-local` `Synced` + `Healthy` in namespace `data`; operator Deployment `redis-operator` Ready (chart 0.26.1 / operator 0.26.0); watches all namespaces (no `WATCH_NAMESPACE` env); 4 `redis.redis.opstreelabs.in` CRDs present + `Established`; `make smoke COMPONENT=redis-operator` → throwaway `Redis` CR honored (StatefulSet ready + `PING` → `PONG`) |
 | git-local-serve | in-cluster git daemon (`git://<node>:9418/sca-infra.git`) `Ready` |
 | Observability / smoke CI | cluster smoke `pr-cluster.yml` **shipped** (Phase 1): selective on PRs as the **required `Smoke` check** on `main` + manual `workflow_dispatch`; no `push` smoke (see [ci-cd.md](ci-cd.md)) |
 | Security CI | checkov **baseline gate** active (Phase 1): `.github/checkov-baseline.json` documents the local-git-server pod findings; new IaC findings fail the PR; re-evaluated at Phase 18 (see [security.md](security.md)) |

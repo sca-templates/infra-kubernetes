@@ -13,8 +13,8 @@ This is a clean restart after the previous `infra-kubernetes` churned in
 `fix(...)` commits — one component, one commit, one reviewed gate per phase.
 ArgoCD is deployed (Phase 0); cert-manager (Phase 1), Vault (Phase 2),
 external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg
-(Phase 5) and strimzi (Phase 6) are deployed; the remaining 11 components are
-`planned`. The delivery plan lives in
+(Phase 5), strimzi (Phase 6) and redis-operator (Phase 7) are deployed; the
+remaining 10 components are `planned`. The delivery plan lives in
 [docs/roadmap.md](docs/roadmap.md) and what is actually deployed lives in
 [docs/status.md](docs/status.md).
 
@@ -74,8 +74,8 @@ The catalog is **17 components** plus ArgoCD. `local` runs the full set;
 `dev`/`qa`/`prod` run the operator/security core plus the gateway and Keycloak.
 **Currently deployed: ArgoCD (Phase 0), cert-manager (Phase 1), Vault
 (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg
-(Phase 5) and strimzi (Phase 6); every other component is
-`planned (Phase N)`.** The status column in
+(Phase 5), strimzi (Phase 6) and redis-operator (Phase 7); every other
+component is `planned (Phase N)`.** The status column in
 [docs/architecture.md](docs/architecture.md) is the source of truth for what is
 live.
 
@@ -83,7 +83,7 @@ live.
 | --- | --- |
 | Security and identity | cert-manager (deployed), Vault (deployed), External Secrets Operator (deployed), Keycloak |
 | Edge and mesh | linkerd-crds (deployed), Kong, Linkerd control plane |
-| Data | CloudNativePG (deployed), Strimzi (deployed), postgres-app/keycloak-db (Phase 10), Kafka, Redis |
+| Data | CloudNativePG (deployed), Strimzi (deployed), redis-operator (deployed), postgres-app/keycloak-db (Phase 10), Kafka, Redis |
 | Observability | kube-prometheus-stack, Loki, Tempo, Alloy |
 | Delivery and resilience | MinIO (local-only), Velero |
 
