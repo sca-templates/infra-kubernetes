@@ -62,7 +62,7 @@ and image pins are set inside each phase and live under
 | linkerd-crds | `linkerd` | linkerd/linkerd-crds | Mesh CRDs | [infra-linkerd](https://github.com/sca-templates/infra-linkerd) | **deployed** (Phase 4) |
 | CloudNativePG | `cloudnative-pg` | cloudnative-pg/cloudnative-pg | PostgreSQL operator | — | planned (Phase 5) |
 | Strimzi | `strimzi` | strimzi/strimzi-kafka-operator | Kafka operator (KRaft) | [infra-kafka](https://github.com/sca-templates/infra-kafka) | **deployed** (Phase 6) |
-| redis-operator | `data` | ot-container-kit/redis-operator | Redis operator | [infra-redis](https://github.com/sca-templates/infra-redis) | planned (Phase 7) |
+| redis-operator | `data` | ot-container-kit/redis-operator | Redis operator | [infra-redis](https://github.com/sca-templates/infra-redis) | **deployed** (Phase 7) |
 | Kong | `kong` | kong/kong (DB-less) | Edge gateway, dedicated Application, no SSA | [infra-kong](https://github.com/sca-templates/infra-kong) | planned (Phase 8) |
 | Linkerd control plane | `linkerd` | linkerd/linkerd2 (script) | mTLS identity, golden signals | [infra-linkerd](https://github.com/sca-templates/infra-linkerd) | planned (Phase 9) |
 | postgres-app (+ keycloak-db) | `data` | CNPG `Cluster` CRs (raw) | App + Keycloak databases; local only | [infra-postgres](https://github.com/sca-templates/infra-postgres) | planned (Phase 10) |

@@ -47,6 +47,13 @@ spec:
             targetRevision: 1.2.0
             wave: "-10"
             path: strimzi/manifests
+          - name: redis-operator
+            namespace: data
+            chartRepo: https://ot-container-kit.github.io/helm-charts
+            chart: redis-operator
+            targetRevision: 0.26.1
+            wave: "-10"
+            path: redis-operator/manifests
           - name: vault
             namespace: vault
             chartRepo: https://helm.releases.hashicorp.com

@@ -1,0 +1,31 @@
+# redis-operator — qa profile (2 replicas, soft anti-affinity). `preferred`
+# anti-affinity keeps the overlay loadable on a single-node kind for
+# promote-test while still spreading replicas in real HA.
+#
+# No PodDisruptionBudget: this chart ships no PDB value (unlike Strimzi's and
+# CloudNativePG's), and the operator is stateless with leader election, so a
+# voluntary eviction simply re-elects a leader. The budget is deliberately left
+# out of the repo rather than bolted on as a raw manifest — see the deviations
+# log in docs/architecture.md.
+
+replicas: 2
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: topology.kubernetes.io/hostname
+          labelSelector:
+            # `name` is the chart's only selector label (see the chart's
+            # selectorLabels helper); the pod template carries it too.
+            matchLabels:
+              name: redis-operator
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 384Mi
+  limits:
+    cpu: 1000m
+    memory: 768Mi

@@ -117,7 +117,9 @@
     "clustersecretstores",
     "codegraph",
     "dotenv",
-    "opencode"
+    "opencode",
+    "opstree",
+    "opstreelabs"
   ],
   "files.exclude": {
     ".codegraph": true,

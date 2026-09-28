@@ -14,6 +14,7 @@ case "$component" in
   linkerd-crds) exec "$(dirname "$0")/smoke-linkerd-crds.sh" ;;
   cloudnative-pg) exec "$(dirname "$0")/smoke-cloudnative-pg.sh" ;;
   strimzi) exec "$(dirname "$0")/smoke-strimzi.sh" ;;
-  "") echo "usage: $0 <component> (cert-manager, vault, external-secrets, linkerd-crds, cloudnative-pg, strimzi)" >&2; exit 2 ;;
+  redis-operator) exec "$(dirname "$0")/smoke-redis-operator.sh" ;;
+  "") echo "usage: $0 <component> (cert-manager, vault, external-secrets, linkerd-crds, cloudnative-pg, strimzi, redis-operator)" >&2; exit 2 ;;
   *) echo "ERROR: no smoke command for component '$component'" >&2; exit 2 ;;
 esac

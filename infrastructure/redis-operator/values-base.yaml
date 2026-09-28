@@ -1,0 +1,66 @@
+# redis-operator — base values (shared across environments; per-env tier
+# overrides live in envs/<env>/redis-operator.yaml).
+# Official chart: ot-container-kit/redis-operator, served by the maintainers from
+# https://ot-container-kit.github.io/helm-charts. The previous host
+# https://charts.ot-container-kit.io no longer resolves upstream (NXDOMAIN), so
+# the GitHub Pages repo of `ot-container-kit/helm-charts` is the pinned source.
+# Chart pin (targetRevision) is set in argocd/apps-<env>.yaml; the image tag is
+# pinned here to the same version the chart ships (appVersion), never `latest`.
+#
+# redis-operator (wave -10) is the Redis operator: it reconciles `Redis` +
+# `RedisCluster` / `RedisReplication` / `RedisSentinel` CRs into managed Redis
+# instances. The chart ships the four `redis.redis.opstreelabs.in` CRDs (in its
+# `crds/` bundle, so Helm applies them on install) and the operator Deployment
+# `redis-operator`. No Redis CR lives here — the cache lands as a raw CR in the
+# `data` namespace at Phase 12 (wave 40).
+
+replicas: 1
+
+redisOperator:
+  name: redis-operator
+  imageName: quay.io/opstree/redis-operator
+  # Pinned to the chart appVersion, which upstream publishes with a `v` prefix
+  # (chart appVersion 0.26.0 → image tag v0.26.0). Pin it explicitly rather than
+  # relying on the chart's `default (printf "v%s" .Chart.AppVersion)`, so the tag
+  # the operator runs on is visible in git like every other image pin.
+  imageTag: "v0.26.0"
+  # The init-config init container ships from the same repository; the chart
+  # default already matches appVersion, pinned here for the same reason.
+  initContainerImageTag: "v0.26.0"
+  # The chart defaults to `Always`; `IfNotPresent` keeps a pinned tag from being
+  # re-pulled on every operator restart on a kind node, matching the other
+  # operator charts in this repo.
+  imagePullPolicy: IfNotPresent
+  # Empty = watch every namespace (the chart then renders no WATCH_NAMESPACE
+  # env at all). The Redis datastores run in `data` (Phase 12), not in the
+  # operator's own namespace. Same reasoning as Strimzi's watchAnyNamespace and
+  # CloudNativePG's config.clusterWide — RBAC is cluster-scoped either way
+  # (rbac.scope: cluster), this only widens what it reconciles.
+  watchNamespace: ""
+  # The webhook server only gates the masterSlaveAntiAffinity feature; it needs
+  # a serving certificate (self-signed by the chart, or cert-manager). Nothing
+  # in the platform uses master/slave anti-affinity — Sentinel/cluster topologies
+  # arrive with their own CRs at Phase 12 — so it stays off.
+  webhook: false
+  metrics:
+    # Serves the operator's own :8080 metrics. The chart renders no Service for
+    # it, so nothing scrapes the endpoint until the observability stack lands
+    # (Phase 14) — that phase adds the PodMonitor for the `data` namespace.
+    enabled: true
+    bindAddress: ":8080"
+
+rbac:
+  enabled: true
+  # Cluster-wide Role/RoleBinding: the operator manages Redis resources in `data`
+  # and any other namespace a CR lands in.
+  scope: cluster
+
+serviceAccountName: redis-operator
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

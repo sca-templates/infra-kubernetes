@@ -36,6 +36,7 @@ else
   docker cp "${BARE}" "${node}:/srv/sca-infra.git" >/dev/null
 fi
 
+kubectl create namespace "${SERVE_NS}" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 sed "s|nodeName: sca-local-control-plane|nodeName: ${node}|" \
   bootstrap/local-git-server.yaml | kubectl apply -f - >/dev/null
 echo "── waiting for git-local-serve (git daemon, port ${PORT}) to be Ready"
@@ -49,7 +50,17 @@ esac
 serve_url="git://${node_ip}:${PORT}/sca-infra.git"
 
 echo "── checking reachability of ${serve_url} from the host"
-git ls-remote "${serve_url}" >/dev/null 2>&1 || { echo "ERROR: cannot reach ${serve_url}"; exit 1; }
+# The pod has no readiness probe and its first act is `apk add git-daemon`, so
+# Ready does not mean the daemon is listening yet: retry the handshake briefly.
+reachable=0
+for attempt in $(seq 1 30); do
+  if git ls-remote "${serve_url}" >/dev/null 2>&1; then
+    reachable=1
+    break
+  fi
+  sleep 2
+done
+[ "$reachable" -eq 1 ] || { echo "ERROR: cannot reach ${serve_url}"; exit 1; }
 
 echo "── rendering served argocd/apps-local.yaml (placeholders → serve values)"
 GIT_REPO_URL="${serve_url}" GIT_TARGET_BRANCH="${GIT_TARGET_BRANCH}" \
