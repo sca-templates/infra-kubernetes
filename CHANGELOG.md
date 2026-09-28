@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/sca-templates/infra-kubernetes/compare/v0.9.0...v0.10.0) (2026-09-28)
+
+
+### Features
+
+* **redis-operator:** deploy ot-container-kit/redis-operator (Phase 7) ([#78](https://github.com/sca-templates/infra-kubernetes/issues/78)) ([24bef44](https://github.com/sca-templates/infra-kubernetes/commit/24bef4494ed240f5af7992a7595a24fb35288a8e))
+
 ## [0.9.0](https://github.com/sca-templates/infra-kubernetes/compare/v0.8.0...v0.9.0) (2026-09-27)
 
 
