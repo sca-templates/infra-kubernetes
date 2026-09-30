@@ -52,8 +52,11 @@ them (the path match works per directory, not per file).
    job** (inside the shared `shared-release-flow.yml` template) as an annotated
    tag signed by the dedicated release bot key, then force-pushed to the same
    commit (see Deviations). The job checks out the tag's commit first, so the
-   GPG import happens inside a git work tree. A draft is never marked
-   `latest`; publishing it is a separate, manual step (next section).
+   GPG import happens inside a git work tree.
+5. The **`hold` job** (local, in [release.yml](../.github/workflows/release.yml))
+   then publishes the release and explicitly declines `latest` in a single
+   PATCH. The next section explains why the draft cannot be left to stand and
+   why this step exists.
 
 A merge opens no release PR when its type is `docs`/`chore`/`ci`/`test`, or
 when every file of its `feat`/`fix` falls under an `exclude-paths` directory.
@@ -79,29 +82,71 @@ of pre-release history.
 
 ## Publishing a release (promotion to `latest`)
 
-**The tag is the artifact; the release entry is the announcement.** Merging the
-release PR produces the tag and a draft release; the draft becomes the visible,
-`latest`-marked release only when a human runs the **`Release promote`**
-workflow (`.github/workflows/release-publish.yml`) with the tag as input, after
-the release has been validated and adopted.
+**The tag is the artifact; the release entry is the announcement; the `latest`
+designation is a third, separate decision.** Merging the release PR produces the
+tag and a public release that is *not* `latest`. `latest` moves only when a human
+runs the **`Release promote`** workflow
+([release-publish.yml](../.github/workflows/release-publish.yml)) with the tag as
+input, after the release has been validated and adopted.
 
-GitHub assigns the `latest` designation itself — the most recent published,
-non-prerelease release — so the automation cannot be *asked* to skip it. The two
-levers that exist are `draft` and `prerelease`, and this repo uses `draft`:
-from the next release on, every tag is cut automatically and the `latest`
-pointer only moves on a human go/no-go. `v0.9.0` predates the rule and is
-published as usual. That is the same rule service releases already follow (a
-semver tag per release, marked `latest` once prod adopted it — see
-[architecture.md](architecture.md)).
+### Why a bot is needed at all
+
+release-please cannot express "publish without claiming `latest`". It calls
+`repos.createRelease` with only `draft`, `prerelease` and `target_commitish`, and
+GitHub's `make_latest` parameter **defaults to `true` for newly published
+releases** — "Drafts and prereleases cannot be set as latest" (REST API, *Create
+a release* / *Update a release*). So the only levers release-please has are
+`draft` and `prerelease`, and any full release it publishes takes the pointer on
+its own. `gh release edit --latest` is the only way to move or withhold it, and
+that is a bot step — the same reason the service flow ends in `mark-latest`
+([workflow.md](workflow.md)).
+
+| State | Public | Notifies | Can be `latest` | Who sets it |
+| --- | --- | --- | --- | --- |
+| draft | no (write access only) | no | no | release-please (`draft: true`) |
+| pre-release | yes, badged | yes | no | release-please (`prerelease: true`) |
+| full, not `latest` | yes, unbadged | yes | no | the `hold` job (`make_latest=false`) |
+| full, `latest` | yes | yes | yes | `Release promote` (human) |
+
+`draft` is the **transient**, not the end state: it is the only creation-time
+lever that keeps a release off `latest` *atomically*. Publishing it into a plain
+full release instead would mean a window in which GitHub has already claimed
+`latest` and the bot has to walk it back.
+
+### Why the `hold` job exists
+
+`draft` alone does not survive the run. The shared `sign-tag` job replaces the
+API-created lightweight tag with the signed annotated one via
+`git push -f refs/tags/<TAG>`, and **that tag rewrite publishes the draft**.
+Measured on this repository: the release's `created_at` lands inside the
+`sign-tag` job window on every release since `v0.7.0`, while `published_at`
+lands inside the `Release please` window.
+
+Left alone, that made every release public and `latest` by itself, and left
+`Release promote` unreachable — its `isDraft` guard could never pass, which is
+why it had zero runs. `hold` runs *after* the shared flow and is the
+authoritative transition: `gh release edit --draft=false --latest=false` in one
+PATCH, so the release never spends a moment published *and* `latest`. Being last
+in the run makes it independent of whatever the tag force-push did to the flags.
+`v0.10.0` had to be unmarked by hand for exactly this reason.
+
+`hold` is local rather than a fix in `CI-CD-Templates` so it can be proven on a
+release before the org-wide semantics change. The bug is upstream and still
+present on the template's `main`; the upstream fix is the same command inside
+`sign-tag`, where the tag is already in `needs.release.outputs.tag_name`.
+
+### The promotion gate
 
 Promotion is guarded, in order: the tag exists, it is **annotated**, its
 signature verifies against the committed trust anchor
-(`.github/release-bot-gpg.pub`), and the release is still a draft. A tag that
-the `sign-tag` job did not sign cannot be promoted, so the `latest` pointer can
-never drift onto a hand-made or unsigned ref.
+([`.github/release-bot-gpg.pub`](../.github/release-bot-gpg.pub)), the release
+is published, and it is not a pre-release. A tag that the `sign-tag` job did not
+sign cannot be promoted, so the `latest` pointer can never drift onto a
+hand-made or unsigned ref. Re-dispatching an already-promoted tag is a no-op, so
+a half-failed promotion can simply be re-run.
 
 ```bash
-gh workflow run release-publish.yml -f tag=v0.9.0
+gh workflow run release-publish.yml -f tag=v0.10.0
 ```
 
 ## Signed release tags
@@ -148,7 +193,7 @@ existing tag ever needs (re)signing again, re-sign it with `git tag -sf` and a
 force-push, or add a manual path to the shared template first.
 
 The `Release promote` dispatch is a different thing and is **not** a re-sign
-path: it publishes a draft release and never touches the tag.
+path: it moves the `latest` pointer and never touches the tag.
 
 ## CHANGELOG.md
 
@@ -163,7 +208,7 @@ file was curated by hand. The release PR must still pass the same static gates
 | Item | Deviation | Reason |
 | --- | --- | --- |
 | Tag lifecycle | The API-created lightweight tag is replaced by an annotated, signed tag at the same commit (force-push by the release bot) | GitHub Releases are created from the API, which only produces lightweight refs; re-signing keeps the release, its notes and the signature on one object |
-| Release publication | The release is created as a **draft** (`draft: true`) and published by the manual `Release promote` workflow, instead of being published and marked `latest` by the automation | `latest` is a human go/no-go tied to adoption, the same rule service releases follow; GitHub offers no way to publish a release *without* claiming `latest`, so the draft is the only lever |
+| Release publication | The release is published **off** `latest` by the `hold` job (`make_latest=false`); only the manual `Release promote` workflow claims `latest` | `latest` is a human go/no-go tied to adoption, the same rule service releases follow. release-please cannot express "publish without claiming `latest`" (`make_latest` defaults to `true`), and the shared flow's tag force-push publishes the draft, so the hold is re-asserted after it. See [Publishing a release](#publishing-a-release-promotion-to-latest) |
 | Release automation token | A per-run installation token minted from the `sca-bot-release` GitHub App (`APP_ID` + `APP_PRIVATE_KEY`, scoped to `infra-kubernetes`) instead of the default `GITHUB_TOKEN` | `GITHUB_TOKEN`-created resources do not trigger workflow runs, so the release PR would never run the required checks and could not merge |
 
 ## Local parity

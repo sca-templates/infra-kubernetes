@@ -1,28 +1,41 @@
 # Copyright (c) 2026 sca-templates contributors
 # SPDX-License-Identifier: MIT
 # =============================================================================
-# infra-kubernetes release promotion — publish the draft GitHub Release
+# infra-kubernetes release promotion — claim `latest` for an adopted release
 # =============================================================================
-# The tag is the artifact; the release entry is the announcement. `release.yml`
-# (release-please with `draft: true` in .release-please-config.json) cuts the
-# signed tag and leaves the GitHub Release as a **draft**, so the automation
-# never designates a release as `latest`: GitHub marks the most recent
-# published, non-prerelease release, and that designation is a human go/no-go.
-# This workflow is that go/no-go. It mirrors the rule service releases already
-# follow — a semver tag is cut on merge and marked `latest` only once prod
-# adopted it (see docs/architecture.md, services row).
+# The tag is the artifact; the release entry is the announcement. And the
+# `latest` designation is a separate, human decision from both.
 #
-# Run it once the release has been validated and adopted, with the tag as
-# input. It refuses anything that is not a signed release tag, so promotion
-# cannot drift onto an unsigned or hand-made ref.
+# This workflow is that decision, and the only thing in the repository that ever
+# claims `latest`. It mirrors the rule service releases already follow — a semver
+# tag is cut on merge and marked `latest` only once prod adopted it (see
+# docs/architecture.md, services row).
+#
+# Why a bot is needed at all: release-please cannot express "publish without
+# claiming latest". It calls `repos.createRelease` with only `draft`,
+# `prerelease` and `target_commitish` (release-please `src/github-api.ts`),
+# while GitHub's `make_latest` **defaults to `true` for newly published
+# releases**. So a full release published by the automation always takes the
+# pointer. `gh release edit --latest` is the only lever, and that is a bot step.
+#
+# Why the release is already public when this runs: it is not a draft. The
+# `hold` job in release.yml publishes it with `--latest=false` right after the
+# shared flow signs the tag, so the state on arrival is a full release *held off*
+# latest. What is left to decide is only the pointer. (It was meant to be a
+# draft, but the shared `sign-tag` job replaces the API-created lightweight tag
+# with a signed annotated one via `git push -f refs/tags/<TAG>`, and that rewrite
+# publishes the draft — see release.yml and docs/versioning.md.)
 #
 # Guard rails, in order: the tag exists, it is annotated, its signature verifies
 # against the committed trust anchor (.github/release-bot-gpg.pub, the same key
-# the sign-tag job uses), and the release is still a draft. The token is minted
-# from the org-owned `sca-bot-release` GitHub App — the identity release-please
-# authors with (see docs/secrets.md). Unlike `release.yml`, this workflow is
-# local: the shared template covers only the push path, and a manual promotion
-# is exactly what it does not model.
+# the sign-tag job uses), the release is published and is not a pre-release. The
+# token is minted from the org-owned `sca-bot-release` GitHub App — the identity
+# release-please authors with (see docs/secrets.md). Unlike `release.yml`, this
+# workflow is local: the shared template covers only the push path, and a manual
+# promotion is exactly what it does not model.
+#
+# Re-running is a no-op once the tag already holds the pointer, so a promotion
+# that half-failed can simply be re-dispatched.
 # =============================================================================
 
 name: Release promote
@@ -31,7 +44,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish, e.g. v0.9.0 (no refs/tags/ prefix)"
+        description: "Release tag to mark as latest, e.g. v0.10.0 (no refs/tags/ prefix)"
         required: true
         type: string
 
@@ -78,13 +91,39 @@ jobs:
           git tag -v "${TAG}" \
             || { echo "::error::'${TAG}' is not signed by the release bot; refusing to promote"; exit 1; }
 
-      - name: Publish the release
+      - name: Check the release is ready to be promoted
         env:
           TAG: ${{ inputs.tag }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
-          gh release view "${TAG}" --json isDraft --jq .isDraft | grep -qx true \
-            || { echo "::error::release '${TAG}' is not a draft (already promoted?)"; exit 1; }
-          gh release edit "${TAG}" --draft=false
-          echo "::notice::${TAG} published; GitHub now marks it as the latest release"
+          # `gh release view` has no isLatest field; it is only on `release list`.
+          RELEASES="$(gh release list --limit 100 --json tagName,isDraft,isPrerelease,isLatest)"
+          TARGET="$(printf '%s' "$RELEASES" | jq -c --arg tag "$TAG" 'map(select(.tagName == $tag)) | .[0] // empty')"
+          if [ -z "$TARGET" ]; then
+            echo "::error::no release entry for '${TAG}'; a tag alone is not promotable"
+            exit 1
+          fi
+          if [ "$(printf '%s' "$TARGET" | jq -r '.isDraft')" = "true" ]; then
+            echo "::error::'${TAG}' is still a draft; the hold job in release.yml has not published it yet"
+            exit 1
+          fi
+          if [ "$(printf '%s' "$TARGET" | jq -r '.isPrerelease')" = "true" ]; then
+            echo "::error::'${TAG}' is a pre-release and cannot be the latest release"
+            exit 1
+          fi
+          if [ "$(printf '%s' "$TARGET" | jq -r '.isLatest')" = "true" ]; then
+            echo "::notice::'${TAG}' already holds latest; nothing to do"
+            exit 0
+          fi
+          CURRENT="$(printf '%s' "$RELEASES" | jq -r '.[] | select(.isLatest == true) | .tagName' | head -n1)"
+          echo "::notice::promoting ${TAG} (currently latest: ${CURRENT:-none})"
+
+      - name: Move the latest pointer
+        env:
+          TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          gh release edit "${TAG}" --latest
+          echo "::notice::${TAG} is now the latest release"
