@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.1](https://github.com/sca-templates/infra-kubernetes/compare/v0.10.0...v0.10.1) (2026-09-30)
+
+
+### Bug Fixes
+
+* **ci:** hold releases off latest until manual promotion ([#80](https://github.com/sca-templates/infra-kubernetes/issues/80)) ([60d6afc](https://github.com/sca-templates/infra-kubernetes/commit/60d6afc50efa9fcace3cd8b26c25176bc118a029))
+
 ## [0.10.0](https://github.com/sca-templates/infra-kubernetes/compare/v0.9.0...v0.10.0) (2026-09-28)
 
 
