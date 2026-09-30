@@ -22,6 +22,36 @@
 #
 # A manual `workflow_dispatch` (tag re-sign) is no longer supported here; the
 # shared template covers only the push path. See docs/versioning.md.
+#
+# The `hold` job is the local half of a two-part design; see
+# docs/versioning.md ("Publishing a release") for the full rationale.
+#
+# release-please cannot express "publish without claiming `latest`": it calls
+# `repos.createRelease` with only `draft`, `prerelease` and `target_commitish`
+# (release-please `src/github-api.ts`), and GitHub's `make_latest` **defaults to
+# `true` for newly published releases** — so a full release always takes the
+# pointer. The shared flow also cannot hold it: its `sign-tag` job replaces the
+# API-created lightweight tag with a signed annotated one via `git push -f
+# refs/tags/<TAG>`, and that rewrite **publishes the draft** (measured: the
+# release's `created_at` lands inside the `sign-tag` job window on every
+# release since v0.7.0, while `published_at` lands inside the `Release please`
+# window). Net effect before this job existed: every release went public and
+# `latest` on its own, and `Release promote` was unreachable — its `isDraft`
+# guard could never pass, which is why it had zero runs.
+#
+# So `hold` runs *after* the shared flow and is the authoritative transition: it
+# publishes the release and explicitly declines `latest` in a single PATCH
+# (`--draft=false --latest=false` → GitHub `make_latest=false`), leaving the
+# state the platform promises: public, full release, **not** `latest`. Being last
+# in the run makes it immune to whatever the tag force-push did to the flags.
+# `Release promote` (release-publish.yml) is the only thing that ever claims
+# `latest`, and only on a human go/no-go.
+#
+# It is local rather than a fix in CI-CD-Templates so it can be proven on the
+# next release before the org-wide semantics change; the upstream version is the
+# same command inside the shared `sign-tag` job, where the tag is already in
+# `needs.release.outputs.tag_name`. The bug is upstream and still present on the
+# template's `main`; this repo stops depending on it.
 
 name: Release
 
@@ -51,3 +81,61 @@ jobs:
       APP_ID: ${{ secrets.APP_ID }}
       APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
       RELEASE_GPG_PRIVATE_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}
+
+  hold:
+    name: Hold release off latest
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Mint release-bot token
+        id: app-token
+        uses: sca-templates/CI-CD-Templates/.github/actions/mint-app-token@fdb0c1fe35fcf704257dc9f61d34ba497370454a
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0
+
+      - name: Publish the release without claiming latest
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          TAG="v$(jq -r '."."' .release-please-manifest.json)"
+          echo "::debug::manifest version: ${TAG}"
+
+          # Self-gating: the shared flow does not re-export its outputs at the
+          # `workflow_call` level, so `releases_created` is not readable here
+          # and this job runs on every push to main. A release was cut by this
+          # push only if the manifest's tag points at this very commit; on any
+          # other push the manifest still names the previous release, whose tag
+          # points at an older commit.
+          if ! git rev-parse --verify --quiet "refs/tags/${TAG}^{commit}" >/dev/null; then
+            echo "::notice::no release tag ${TAG} in this checkout; nothing to hold"
+            exit 0
+          fi
+          if [ "$(git rev-parse "refs/tags/${TAG}^{commit}")" != "${GITHUB_SHA}" ]; then
+            echo "::notice::${TAG} does not point at this commit; no release was cut by this push"
+            exit 0
+          fi
+
+          # Authoritative, and idempotent: `--draft=false` and `--latest=false`
+          # are sent in the same PATCH, so the release never spends a moment
+          # published *and* latest. GitHub's make_latest is a string enum, and
+          # false makes it fall back to the previously designated release.
+          #
+          # `--prerelease` is deliberately absent. This job's whole contract is
+          # "publish it, but do not claim latest", so the pre-release badge is
+          # left exactly as release-please set it from .release-please-config.json
+          # (currently always full). Forcing it to false here would silently
+          # un-badge a pre-release the day the repo enables `prerelease: true`,
+          # and `Release promote` already refuses pre-releases anyway.
+          gh release edit "${TAG}" --draft=false --latest=false
+          echo "::notice::${TAG} published and held off latest"

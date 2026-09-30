@@ -101,9 +101,11 @@ See [architecture.md](architecture.md) and [observability-radar.md](observabilit
 
 A different secret plane from Vault/ESO: the **release** secrets are stored as
 **GitHub Actions secrets** at the **repository** level (not org, not
-environment) and consumed only by the `Release` workflow, which is a thin
-wrapper over the org shared `shared-release-flow.yml`
-([.github/workflows/release.yml](../.github/workflows/release.yml)). Vault stays
+environment) and consumed only by the two **release** workflows: the `Release`
+wrapper over the org shared `shared-release-flow.yml` plus one local `hold` job
+([.github/workflows/release.yml](../.github/workflows/release.yml)), and the
+manual `Release promote` promotion step
+([release-publish.yml](../.github/workflows/release-publish.yml)). Vault stays
 the SSOT for *cluster* secrets; this is where CI *automation* secrets live.
 
 | Secret | Purpose |
@@ -119,7 +121,9 @@ Inside the shared flow, per-run installation tokens are minted from `APP_ID` +
 tag push
 authenticate as `sca-bot-release[bot]` — a GitHub App, not a PAT — triggering
 the required CI checks on the release PR (see [versioning.md](versioning.md),
-[ci-cd.md](ci-cd.md)). The old dedicated PAT (`RELEASE_PLEASE_TOKEN`) was
+[ci-cd.md](ci-cd.md)). The local `hold` job and `Release promote` mint their
+tokens the same way, so every release-related write is attributed to that App
+rather than to a PAT. The old dedicated PAT (`RELEASE_PLEASE_TOKEN`) was
 removed in the swap.
 
 Storage model (GitHub):
@@ -133,8 +137,9 @@ Storage model (GitHub):
   secret **encrypted at rest**; the API returns only `name` / `created_at` /
   `updated_at` — never the value.
 - The secrets are available in CI **only** through
-  `${{ secrets.<NAME> }}` inside the `Release` wrapper, are handed to the runner only
-  for the jobs that reference them, and are masked (`***`) in the logs.
+  `${{ secrets.<NAME> }}` inside the release workflows, are handed to the
+  runner only for the jobs that reference them, and are masked (`***`) in the
+  logs.
 - **Rotating a value** (e.g. regenerating the App private key and replacing
   `APP_PRIVATE_KEY`) changes only the value: fetch the current public key,
   re-encrypt, `PATCH` the secret — or use Settings → Secrets → Actions. No
