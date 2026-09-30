@@ -7,7 +7,8 @@
 # `latest` designation is a separate, human decision from both.
 #
 # This workflow is that decision, and the only thing in the repository that ever
-# claims `latest`. It mirrors the rule service releases already follow — a semver
+# moves `latest` **forward** (release.yml's `finalize` only re-states it on an
+# older release). It mirrors the rule service releases already follow — a semver
 # tag is cut on merge and marked `latest` only once prod adopted it (see
 # docs/architecture.md, services row).
 #
@@ -19,12 +20,18 @@
 # pointer. `gh release edit --latest` is the only lever, and that is a bot step.
 #
 # Why the release is already public when this runs: it is not a draft. The
-# `hold` job in release.yml publishes it with `--latest=false` right after the
-# shared flow signs the tag, so the state on arrival is a full release *held off*
-# latest. What is left to decide is only the pointer. (It was meant to be a
-# draft, but the shared `sign-tag` job replaces the API-created lightweight tag
-# with a signed annotated one via `git push -f refs/tags/<TAG>`, and that rewrite
-# publishes the draft — see release.yml and docs/versioning.md.)
+# `finalize` job in release.yml publishes it right after the shared flow signs
+# the tag, so the state on arrival is a full release *held off* latest. (It was
+# meant to be a draft, but the shared `sign-tag` job replaces the API-created
+# lightweight tag with a signed annotated one via `git push -f refs/tags/<TAG>`,
+# and that rewrite publishes the draft — see release.yml and docs/versioning.md.)
+#
+# The pointer it moves is an explicit server-side designation, not a by-date
+# fallback, and it is deliberately parked on an *older* release: `finalize`
+# re-asserts the previous tag on every release and verifies the result, because
+# `make_latest=false` alone stores nothing and `GET /releases/latest` would fall
+# back to the newest published release — the one that was just cut. Promoting is
+# what moves it forward, and this workflow is the only thing that does.
 #
 # Guard rails, in order: the tag exists, it is annotated, its signature verifies
 # against the committed trust anchor (.github/release-bot-gpg.pub, the same key
@@ -105,7 +112,7 @@ jobs:
             exit 1
           fi
           if [ "$(printf '%s' "$TARGET" | jq -r '.isDraft')" = "true" ]; then
-            echo "::error::'${TAG}' is still a draft; the hold job in release.yml has not published it yet"
+            echo "::error::'${TAG}' is still a draft; the finalize job in release.yml has not published it yet"
             exit 1
           fi
           if [ "$(printf '%s' "$TARGET" | jq -r '.isPrerelease')" = "true" ]; then

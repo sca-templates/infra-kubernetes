@@ -23,35 +23,49 @@
 # A manual `workflow_dispatch` (tag re-sign) is no longer supported here; the
 # shared template covers only the push path. See docs/versioning.md.
 #
-# The `hold` job is the local half of a two-part design; see
-# docs/versioning.md ("Publishing a release") for the full rationale.
+# ---------------------------------------------------------------------------
+# Why the two local jobs exist, in one measured paragraph
+# ---------------------------------------------------------------------------
+# The shared flow cannot hold `latest` off the new release, and neither can we
+# by publishing it with `make_latest=false`. **`make_latest=false` stores no
+# pointer.** `GET /releases/latest` then falls back to "the most recent
+# non-prerelease, non-draft release by `created_at`" (REST docs, *Get the
+# latest release*), and a release that was just published is by definition that
+# one. Measured on this repository: the `hold` job this replaces sent
+# --draft=false --latest=false for v0.10.1, exited 0, and
+# GET /releases/latest still answered v0.10.1 (`make_latest` comes back null for
+# every release here — nothing is designated at all). The shared `sign-tag` job
+# pins that fallback to the newest release: it replaces the API-created
+# lightweight tag with a signed annotated one by force-push, and that rewrite
+# republishes the release with a fresh `created_at` (v0.10.1: `created_at`
+# 17:20:28 against `published_at` 17:17:05 — the sign-tag job window).
 #
-# release-please cannot express "publish without claiming `latest`": it calls
-# `repos.createRelease` with only `draft`, `prerelease` and `target_commitish`
-# (release-please `src/github-api.ts`), and GitHub's `make_latest` **defaults to
-# `true` for newly published releases** — so a full release always takes the
-# pointer. The shared flow also cannot hold it: its `sign-tag` job replaces the
-# API-created lightweight tag with a signed annotated one via `git push -f
-# refs/tags/<TAG>`, and that rewrite **publishes the draft** (measured: the
-# release's `created_at` lands inside the `sign-tag` job window on every
-# release since v0.7.0, while `published_at` lands inside the `Release please`
-# window). Net effect before this job existed: every release went public and
-# `latest` on its own, and `Release promote` was unreachable — its `isDraft`
-# guard could never pass, which is why it had zero runs.
+# The only lever that stores a pointer is `make_latest=true` on an *older*
+# release. Measured in a scratch repository, same three states CI produces:
 #
-# So `hold` runs *after* the shared flow and is the authoritative transition: it
-# publishes the release and explicitly declines `latest` in a single PATCH
-# (`--draft=false --latest=false` → GitHub `make_latest=false`), leaving the
-# state the platform promises: public, full release, **not** `latest`. Being last
-# in the run makes it immune to whatever the tag force-push did to the flags.
-# `Release promote` (release-publish.yml) is the only thing that ever claims
-# `latest`, and only on a human go/no-go.
+#   PATCH newest {"make_latest":"false"}  -> /releases/latest = newest  (no)
+#   PATCH older  {"make_latest":"true"}   -> /releases/latest = older   (yes)
+#   PATCH newest {"make_latest":"legacy"} -> /releases/latest = newest  (no)
 #
-# It is local rather than a fix in CI-CD-Templates so it can be proven on the
-# next release before the org-wide semantics change; the upstream version is the
-# same command inside the shared `sign-tag` job, where the tag is already in
-# `needs.release.outputs.tag_name`. The bug is upstream and still present on the
-# template's `main`; this repo stops depending on it.
+# and publishing a new release clears whatever the older one was designated as,
+# so the previous tag has to be re-asserted on **every** release, not once.
+# Hence `finalize`: publish the release and decline `latest` in one PATCH,
+# then re-assert the `latest` that was there before this push. Both orders
+# converge (measured), but the last write is kept on the previous release so
+# the intent reads top to bottom.
+#
+# `capture` is what makes that re-assertion correct on a re-run: it snapshots
+# the previous latest *excluding the tag this push is about to cut*, so a
+# re-dispatched run can never mistake the new release for the previous one.
+#
+# `Release promote` (release-publish.yml) is therefore still the only thing
+# that ever moves `latest` forward, and only on a human go/no-go — the rule
+# docs/versioning.md states. Accepted deviation: between the shared flow
+# publishing the draft (a side effect of that tag force-push) and the PATCH in
+# `finalize`, `latest` points at the new release for a few seconds. Closing
+# that window would mean taking over release creation or tag signing from the
+# shared template, which is out of scope by design: release-please keeps doing
+# what it does.
 
 name: Release
 
@@ -67,6 +81,57 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  capture:
+    name: Capture previous latest
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      previous: ${{ steps.pick.outputs.previous }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1 # the manifest at HEAD is all this job reads
+
+      - name: Snapshot the latest release before this push can cut one
+        id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          TAG="v$(jq -r '."."' .release-please-manifest.json)"
+          echo "::debug::manifest version: ${TAG}"
+
+          # Never fatal. This job exists only to hand `finalize` a hint, and
+          # `finalize` decides what to do when the hint is missing (legit on
+          # the first release, an error otherwise). A capture that hard-fails
+          # would leave the release published and `latest` with nothing red on
+          # `main`, which is the one outcome this design exists to prevent.
+          if ! RELEASES="$(gh release list --repo "${GITHUB_REPOSITORY}" --limit 100 \
+            --json tagName,isDraft,isPrerelease,publishedAt 2>&1)"; then
+            echo "::warning::could not list releases: ${RELEASES}"
+            echo "previous=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # The tag this push is about to cut is excluded, and that exclusion is
+          # what makes the snapshot correct in every order: whether this job
+          # reads the list before or after release-please created the release,
+          # and whether this is the first attempt or a re-dispatch of it, the
+          # answer is the release that was `latest` *before* this push. Sorting
+          # by `publishedAt` rather than taking `gh`'s `isLatest`, which is a
+          # derived field.
+          PREVIOUS="$(printf '%s' "$RELEASES" | jq -r --arg tag "$TAG" '
+            [ .[] | select(.isDraft == false and .isPrerelease == false and .tagName != $tag) ]
+            | sort_by(.publishedAt) | reverse | .[0].tagName // empty')"
+
+          if [ -z "$PREVIOUS" ]; then
+            echo "::notice::no published release besides ${TAG}; nothing to snapshot"
+          else
+            echo "::notice::previous latest: ${PREVIOUS}"
+          fi
+          echo "previous=${PREVIOUS}" >> "$GITHUB_OUTPUT"
+
   release:
     name: Release flow
     permissions:
@@ -82,9 +147,9 @@ jobs:
       APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
       RELEASE_GPG_PRIVATE_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}
 
-  hold:
-    name: Hold release off latest
-    needs: release
+  finalize:
+    name: Finalize release (publish, hold off latest)
+    needs: [release, capture]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -103,7 +168,8 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
 
-      - name: Publish the release without claiming latest
+      - name: Resolve the release cut by this push
+        id: resolve
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
@@ -116,26 +182,151 @@ jobs:
           # and this job runs on every push to main. A release was cut by this
           # push only if the manifest's tag points at this very commit; on any
           # other push the manifest still names the previous release, whose tag
-          # points at an older commit.
+          # points at an older commit. An empty `tag` output parks the rest of
+          # the job — a step-level `if` is safe here, unlike the case made in
+          # release-gate.yml, because no required status check hangs off this
+          # workflow.
           if ! git rev-parse --verify --quiet "refs/tags/${TAG}^{commit}" >/dev/null; then
-            echo "::notice::no release tag ${TAG} in this checkout; nothing to hold"
+            echo "::notice::no release tag ${TAG} in this checkout; nothing to finalize"
+            echo "tag=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if [ "$(git rev-parse "refs/tags/${TAG}^{commit}")" != "${GITHUB_SHA}" ]; then
             echo "::notice::${TAG} does not point at this commit; no release was cut by this push"
+            echo "tag=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          # Authoritative, and idempotent: `--draft=false` and `--latest=false`
-          # are sent in the same PATCH, so the release never spends a moment
-          # published *and* latest. GitHub's make_latest is a string enum, and
-          # false makes it fall back to the previously designated release.
-          #
-          # `--prerelease` is deliberately absent. This job's whole contract is
-          # "publish it, but do not claim latest", so the pre-release badge is
-          # left exactly as release-please set it from .release-please-config.json
-          # (currently always full). Forcing it to false here would silently
-          # un-badge a pre-release the day the repo enables `prerelease: true`,
-          # and `Release promote` already refuses pre-releases anyway.
-          gh release edit "${TAG}" --draft=false --latest=false
+          # `GET /releases/tags/{tag}` answers 404 while the release is still a
+          # draft, and it can legitimately be one here: the shared `sign-tag`
+          # job is what normally publishes it, but `finalize` must not take
+          # that on trust — it is the step that has to work when the shared
+          # flow half-did its job. So the id is read off the collection, which
+          # does list drafts for a push-capable token. That list can lag a
+          # few hundred ms behind a just-created release (measured), hence the
+          # bounded retry before declaring the release missing.
+          ID=""
+          for attempt in 1 2 3 4 5; do
+            ID="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+              --jq "[.[] | select(.tag_name == \"${TAG}\")][0].id // empty")"
+            [ -n "$ID" ] && break
+            echo "::debug::no release entry for ${TAG} yet (attempt ${attempt})"
+            sleep 3
+          done
+          if [ -z "$ID" ]; then
+            echo "::error::tag ${TAG} has no release entry; cannot finalize"
+            exit 1
+          fi
+
+          # `prerelease` is read, never written: the badge stays exactly as
+          # release-please set it from .release-please-config.json, so the day
+          # the repo enables `prerelease: true` nothing silently un-badges it.
+          PRERELEASE="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            --jq "[.[] | select(.tag_name == \"${TAG}\")][0].prerelease")"
+          {
+            echo "tag=${TAG}"
+            echo "id=${ID}"
+            echo "prerelease=${PRERELEASE}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Verify the release-bot signature on the tag
+        if: steps.resolve.outputs.tag != ''
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+        run: |
+          set -euo pipefail
+          test "$(git cat-file -t "refs/tags/${TAG}")" = tag \
+            || { echo "::error::'${TAG}' is not an annotated tag; the sign-tag job did not run"; exit 1; }
+          gpg --batch --import .github/release-bot-gpg.pub
+          git tag -v "${TAG}" \
+            || { echo "::error::'${TAG}' is not signed by the release bot; refusing to finalize"; exit 1; }
+
+      - name: Publish the release, hold it off latest, restore the previous pointer
+        id: publish
+        if: steps.resolve.outputs.tag != ''
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+          ID: ${{ steps.resolve.outputs.id }}
+          PRERELEASE: ${{ steps.resolve.outputs.prerelease }}
+          PREVIOUS: ${{ needs.capture.outputs.previous }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          RELEASES="repos/${GITHUB_REPOSITORY}/releases"
+
+          if [ "$PRERELEASE" = "true" ]; then
+            # "Drafts and prereleases cannot be set as latest" (REST docs), so
+            # a pre-release neither takes the pointer on publication nor can be
+            # given it: publish it and leave the pointer exactly where it is.
+            gh api --method PATCH "${RELEASES}/${ID}" \
+              --input - <<< '{"draft": false}' >/dev/null
+            echo "::notice::${TAG} is a pre-release: published, latest pointer untouched"
+            echo "expect=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # One PATCH, so the release does not pass through a state where it is
+          # both public *and* latest. That is what this PATCH guarantees; the
+          # window the shared flow's tag force-push opens before it is the
+          # accepted deviation in the header. `make_latest` is a string enum and
+          # `"false"` is as close to "none" as the API gets: it leaves the
+          # release undesignated. On its own that is not enough — the fallback
+          # then hands the pointer back to the newest release, which is the whole
+          # reason this job exists — so the step below is not optional.
+          gh api --method PATCH "${RELEASES}/${ID}" \
+            --input - <<< '{"draft": false, "make_latest": "false"}' >/dev/null
           echo "::notice::${TAG} published and held off latest"
+
+          if [ -z "$PREVIOUS" ]; then
+            # An empty snapshot is legitimate only on the first release. If any
+            # other published full release exists, the capture failed and going
+            # no further would leave the pointer on a release nobody chose —
+            # that is an error, not a fallback to guesswork.
+            OTHERS="$(gh api "${RELEASES}?per_page=100" --jq \
+              "[.[] | select(.tag_name != \"${TAG}\" and .draft == false and .prerelease == false)] | length")"
+            if [ "$OTHERS" != "0" ]; then
+              echo "::error::no previous latest was captured, but ${OTHERS} published release(s) exist;"
+              echo "::error::re-dispatch this run to restore the pointer deliberately"
+              exit 1
+            fi
+            echo "::notice::${TAG} is the first release; there is no previous latest to restore"
+            echo "expect=${TAG}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          PREVIOUS_ID="$(gh api "${RELEASES}?per_page=100" \
+            --jq "[.[] | select(.tag_name == \"${PREVIOUS}\")][0].id // empty")"
+          if [ -z "$PREVIOUS_ID" ]; then
+            echo "::error::captured previous latest ${PREVIOUS} has no release entry"
+            exit 1
+          fi
+
+          # The re-assertion, and the only write that actually moves the
+          # pointer: publishing the new release cleared the previous
+          # designation, so this has to run on every release, not once.
+          gh api --method PATCH "${RELEASES}/${PREVIOUS_ID}" \
+            --input - <<< '{"make_latest": "true"}' >/dev/null
+          echo "::notice::${PREVIOUS} re-designated as latest"
+          echo "expect=${PREVIOUS}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify where latest ended up
+        if: steps.resolve.outputs.tag != ''
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+          EXPECT: ${{ steps.publish.outputs.expect }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          if [ -z "$EXPECT" ]; then
+            echo "::notice::${TAG} claims no latest expectation (pre-release); nothing to verify"
+            exit 0
+          fi
+          # The point of the job: the writes above are not trusted, the state
+          # they were supposed to produce is read back. `gh release edit` exited
+          # 0 on v0.10.1 and the state was still wrong.
+          LATEST="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)"
+          if [ "$LATEST" != "$EXPECT" ]; then
+            echo "::error::latest is ${LATEST}, expected ${EXPECT}; the release is public but the pointer is wrong"
+            exit 1
+          fi
+          echo "::notice::latest = ${LATEST}, as intended"
