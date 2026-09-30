@@ -89,9 +89,29 @@ manifest carrying a waiver:
 
 ```bash
 printf 'checkov==3.3.16\n' | uv pip compile --generate-hashes --python-version 3.11 \
-  --exclude-newer 2026-09-02T14:59:08Z \
+  --exclude-newer 2026-09-16T00:00:00Z \
   --overrides .github/asteval-override.txt -o .github/requirements.txt -
 ```
+
+The cutoff is also what makes a fix installable. When an advisory lands on a
+package already in the closure, the fix is usually released *after* the cutoff,
+so the cutoff moves to the day of the fix release and the package is named
+explicitly:
+
+```bash
+printf 'checkov==3.3.16\n' | uv pip compile --generate-hashes --python-version 3.11 \
+  --exclude-newer 2026-09-16T00:00:00Z \
+  --overrides .github/asteval-override.txt \
+  --upgrade-package urllib3 -o .github/requirements.txt -
+```
+
+`--upgrade-package` is required in that case and easy to forget: `uv pip compile`
+treats the versions already in the output file as *preferences*, so re-running
+the first command keeps `urllib3==2.7.0` even after the cutoff admits
+`urllib3==2.8.0` — nothing constrains it, it is simply never revisited. Without
+the flag the lockfile recompiles unchanged and the advisory stays. The bump
+above is a six-line diff: the cutoff in the generated header plus the
+`urllib3==2.8.0` entry with its new hashes.
 
 `--no-deps` is a requirement of the override, not a shortcut. pip re-checks the
 install against the *declared metadata* of every distribution, and checkov's own
@@ -111,7 +131,7 @@ re-resolves the whole closure to "latest". That lands versions which violate
 checkov's own declared constraints — `networkx<2.7`, `packaging<24.0`,
 `cachetools<6.0.0`, `cyclonedx-python-lib<8.0.0`, `aiodns<4.0.0`,
 `boto3==1.35.49` — so the lockfile stops describing an installable set and the
-IaC gate fails. Bumps are applied by hand with the command above and reviewed
+IaC gate fails. Bumps are applied by hand with the commands above and reviewed
 as the ~6-line diff they are. Retire the override when checkov adopts
 `asteval>=1.0.9`: drop the file, drop `--no-deps`, and delete the two
 `IgnoredVulns` entries.
