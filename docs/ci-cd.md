@@ -16,8 +16,8 @@ a deployment.
 | Validate | `.github/workflows/validate.yml` | push + PR | Static suite: markdownlint, yamllint, YAML parse, `bash -n`, actionlint (workflow lint), kube-linter (K8s manifest lint) — **local** (no template counterpart) |
 | Security | `.github/workflows/security.yml` | push + PR | gitleaks + osv-scanner (SCA) via the shared template; checkov (static IaC baseline) and pin guards (no `latest` tags/charts) stay local |
 | CodeQL | `.github/workflows/codeql.yml` | push + PR + schedule | GitHub CodeQL static analysis on the repo languages — **wrapper** over the shared template |
-| Release | `.github/workflows/release.yml` | push to `main` | **wrapper** over the shared template (plus one local job): release-please opens release PRs/tags (+ signed annotated tags) and **draft** GitHub Releases for `feat`/`fix` commits touching the **platform surface** — commits confined to the `exclude-paths` directories (`.github`, `bootstrap`, `0.Project_info`) are dropped (see [versioning.md](versioning.md)); drives `CHANGELOG.md`; no manual re-sign `workflow_dispatch` (see [versioning.md](versioning.md)). A local **hold** job then publishes the release **off** `latest` |
-| Release promote | `.github/workflows/release-publish.yml` | manual | **local**: the only thing that ever claims `latest`. Moves the pointer for a signed, adopted tag, after verifying the tag is annotated and signed by the release bot (see [versioning.md](versioning.md)) |
+| Release | `.github/workflows/release.yml` | push to `main` | **wrapper** over the shared template (plus two local jobs): release-please opens release PRs/tags (+ signed annotated tags) and **draft** GitHub Releases for `feat`/`fix` commits touching the **platform surface** — commits confined to the `exclude-paths` directories (`.github`, `bootstrap`, `0.Project_info`) are dropped (see [versioning.md](versioning.md)); drives `CHANGELOG.md`; no manual re-sign `workflow_dispatch` (see [versioning.md](versioning.md)). Local **capture** snapshots the previous `latest` and **finalize** publishes the release **off** `latest` and re-asserts it |
+| Release promote | `.github/workflows/release-publish.yml` | manual | **local**: the only thing that ever moves `latest` **forward** (`finalize` only re-states it on the previous release). Moves the pointer for a signed, adopted tag, after verifying the tag is annotated and signed by the release bot (see [versioning.md](versioning.md)) |
 | Release gate | `.github/workflows/release-gate.yml` | PR + manual | **wrapper** over the shared template: blocks PRs while a release-please PR is open (`release-gate / release-gate` required check) |
 | Auto label | `.github/workflows/auto-label.yml` | PR | **wrapper** over the shared template: labels PRs from the type (`feature`, `bug`, `ci`, `documentation`, `refactor`, `security`, `dependencies`) and changed files — see [labels.md](labels.md) |
 
@@ -36,9 +36,10 @@ this repo keeps its remaining local action pins current via its own
 `pr-cluster.yml`, `main-sync.yml` and `deploy.yml` stay local on purpose: the
 static suite (kubeconform/kube-linter on `infrastructure/`) and the cluster
 smoke/EKS-parity pipelines are repo-specific and have no template counterpart.
-`release.yml` is a wrapper **plus** one local job: the shared flow cannot hold
-`latest` off (the tag force-push publishes the draft), so the `hold` job is
-added on top for now and the equivalent fix is owed to the template.
+`release.yml` is a wrapper **plus** two local jobs: the shared flow cannot hold
+`latest` off (the tag force-push publishes the draft, and `make_latest=false`
+stores no pointer), so `capture` + `finalize` are added on top for now and the
+equivalent fix is owed to the template.
 
 ### Scope semantics
 
@@ -83,21 +84,32 @@ guards in [security.md](security.md).
   manual re-sign via `workflow_dispatch` is **no longer offered** (the old
   `v0.1.0` lightweight tag was promoted with it once; the shared template
   covers only the push path — see [versioning.md](versioning.md)).
-- **hold** (local) — runs after the shared flow, on the same push. It is what
-  makes the tag safe to have cut automatically while `latest` stays a human
-  decision; see below.
+- **capture** (local) — runs in parallel with the shared flow on the same push.
+  It snapshots the release that was `latest` *before* this push, excluding the
+  tag the push is about to cut, which is what makes the snapshot correct on a
+  re-dispatched run too. It never blocks the release: it hands `finalize` a
+  hint, and `finalize` decides what a missing hint means.
+- **finalize** (local) — runs after the shared flow. It is what makes the tag
+  safe to have cut automatically while `latest` stays a human decision; see
+  below.
 
 The draft does not survive the shared flow: `sign-tag` replaces the tag by
-force-push, and that rewrite publishes the draft. `hold` therefore re-asserts
-the hold after it, publishing the release with `make_latest=false` in a single
-PATCH. The result is a public, full release that is **not** `latest`.
+force-push, and that rewrite publishes the draft. Declining `latest` afterwards
+is not enough on its own — `make_latest=false` stores no pointer, so
+`GET /releases/latest` falls back to the newest published release, which is the
+one just published. `finalize` therefore publishes the release with
+`{"draft": false, "make_latest": "false"}` in a single PATCH, re-designates the
+captured previous release with `{"make_latest": "true"}` (the only call that
+actually moves the pointer, and it has to be repeated on every release because
+publishing clears the previous designation), and then re-reads
+`/releases/latest` to confirm the result. The result is a public, full release
+that is **not** `latest`, with the previous release still holding it.
 
 `release-publish.yml` (local, `workflow_dispatch`) is the promotion step: it
 verifies the tag is annotated and signed by the release bot, then moves the
-`latest` pointer. It is the only step in the repository that does so. See
-[versioning.md](versioning.md) for the rule, the guards and why a bot is
-required at all (release-please cannot express "publish without claiming
-`latest`").
+`latest` pointer **forward**, onto the adopted release. It is the only step in
+the repository that does so. See [versioning.md](versioning.md) for the rule,
+the guards, and the measurements behind the two PATCHes.
 
 The workflow is the only one that holds repository secrets
 (`APP_ID`, `APP_PRIVATE_KEY`, `RELEASE_GPG_PRIVATE_KEY`) — see

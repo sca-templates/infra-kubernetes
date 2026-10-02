@@ -93,25 +93,35 @@ printf 'checkov==3.3.16\n' | uv pip compile --generate-hashes --python-version 3
   --overrides .github/asteval-override.txt -o .github/requirements.txt -
 ```
 
-The cutoff is also what makes a fix installable. When an advisory lands on a
-package already in the closure, the fix is usually released *after* the cutoff,
-so the cutoff moves to the day of the fix release and the package is named
-explicitly:
+The cutoff is also what makes a fix installable, and `--upgrade-package` is
+required either way: `uv pip compile` treats the versions already in the output
+file as *preferences*, so a re-compile never revisits them. Without the flag the
+lockfile recompiles unchanged and the advisory stays — nothing constrains the
+package, it is simply never re-resolved. What differs is whether the cutoff
+moves:
+
+- **The fixed version predates the current cutoff** — the cutoff already admits
+  it, so only the package is named. `gitpython` is the case in point:
+  `3.1.62` shipped 2026-09-07, inside the `2026-09-16` cutoff, but `3.1.61` had
+  been pinned before it and survived as a preference. Three-line diff, header
+  untouched.
+- **The fixed version postdates the current cutoff** — the cutoff has to move to
+  the day of the fix release, or the version does not exist as far as the
+  resolver is concerned. `urllib3==2.8.0` shipped 2026-09-15, after the
+  `2026-09-02` cutoff, so that bump moved it to `2026-09-16T00:00:00Z`: a
+  six-line diff, the header plus the entry.
 
 ```bash
 printf 'checkov==3.3.16\n' | uv pip compile --generate-hashes --python-version 3.11 \
   --exclude-newer 2026-09-16T00:00:00Z \
   --overrides .github/asteval-override.txt \
-  --upgrade-package urllib3 -o .github/requirements.txt -
+  --upgrade-package <pkg> -o .github/requirements.txt -
 ```
 
-`--upgrade-package` is required in that case and easy to forget: `uv pip compile`
-treats the versions already in the output file as *preferences*, so re-running
-the first command keeps `urllib3==2.7.0` even after the cutoff admits
-`urllib3==2.8.0` — nothing constrains it, it is simply never revisited. Without
-the flag the lockfile recompiles unchanged and the advisory stays. The bump
-above is a six-line diff: the cutoff in the generated header plus the
-`urllib3==2.8.0` entry with its new hashes.
+Read the release date of the fixed version against the cutoff in the header
+before recompiling: it decides the `--exclude-newer` value. Both mistakes are
+cheap to make and only the missing `--upgrade-package` fails silently, as a
+lockfile that diffs to nothing.
 
 `--no-deps` is a requirement of the override, not a shortcut. pip re-checks the
 install against the *declared metadata* of every distribution, and checkov's own
