@@ -35,8 +35,11 @@
 #
 # Guard rails, in order: the tag exists, it is annotated, its signature verifies
 # against the committed trust anchor (.github/release-bot-gpg.pub, the same key
-# the sign-tag job uses), the release is published and is not a pre-release. The
-# token is minted from the org-owned `sca-bot-release` GitHub App — the identity
+# the sign-tag job uses), the release is published, it is not a pre-release, and
+# it is not older than the release currently holding `latest` — that last one
+# enforces the "forward only" claim above, and it matters *because* `finalize`
+# parks the pointer on an older release, so an old tag is the everyday input.
+# The token is minted from the org-owned `sca-bot-release` GitHub App — the identity
 # release-please authors with (see docs/secrets.md). Unlike `release.yml`, this
 # workflow is local: the shared template covers only the push path, and a manual
 # promotion is exactly what it does not model.
@@ -124,6 +127,26 @@ jobs:
             exit 0
           fi
           CURRENT="$(printf '%s' "$RELEASES" | jq -r '.[] | select(.isLatest == true) | .tagName' | head -n1)"
+          # Ordering guard. `finalize` parks the pointer on the *previous*
+          # release, so an older tag is the normal input here — and promoting it
+          # would move `latest` backwards in silence, which is the one outcome
+          # this workflow exists to prevent.
+          #
+          # `sort -V`, never a string compare. Lexicographically
+          # "0.9.0" > "0.10.1", so a "reject if older" test written with `<`
+          # would *accept* v0.9.0 while v0.10.1 holds latest — the exact
+          # regression, on the two-digit-minor case that matters most. Tags are
+          # plain vX.Y.Z, so version order is the intended order.
+          #
+          # No CURRENT means nobody holds the pointer (first release, or it was
+          # cleared), and there is nothing to regress to.
+          if [ -n "$CURRENT" ]; then
+            OLDEST="$(printf '%s\n%s\n' "${CURRENT#v}" "${TAG#v}" | sort -V | head -n1)"
+            if [ "$OLDEST" = "${TAG#v}" ]; then
+              echo "::error::'${TAG}' is older than the current latest (${CURRENT}); refusing to move latest backwards"
+              exit 1
+            fi
+          fi
           echo "::notice::promoting ${TAG} (currently latest: ${CURRENT:-none})"
 
       - name: Move the latest pointer

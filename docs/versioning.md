@@ -200,10 +200,19 @@ re-assertion in step 4.
 Promotion is guarded, in order: the tag exists, it is **annotated**, its
 signature verifies against the committed trust anchor
 ([`.github/release-bot-gpg.pub`](../.github/release-bot-gpg.pub)), the release
-is published, and it is not a pre-release. A tag that the `sign-tag` job did not
+is published, it is not a pre-release, and it is **not older than the release
+that currently holds `latest`**. A tag that the `sign-tag` job did not
 sign cannot be promoted, so the `latest` pointer can never drift onto a
 hand-made or unsigned ref. Re-dispatching an already-promoted tag is a no-op, so
 a half-failed promotion can simply be re-run.
+
+That last guard is what makes "promotion moves `latest` forward" enforced rather
+than merely intended, and `finalize` is precisely what made it necessary:
+because the pointer is parked on the *previous* release, an older tag is the
+everyday input, not a mistake, and without the guard a mistyped dispatch would
+regress the pointer in silence. The comparison is version order (`sort -V`) on
+the bare `X.Y.Z`, never a string compare — `v0.10.0` sorts before `v0.9.0`
+lexically, which is exactly the case that must not regress.
 
 The `isLatest` field it reads is GraphQL's, i.e. the server's own pointer, not a
 local guess — which is why the workflow can tell "already promoted" from "needs
