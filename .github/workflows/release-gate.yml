@@ -57,4 +57,4 @@ concurrency:
 jobs:
   gate:
     name: release-gate
-    uses: sca-templates/CI-CD-Templates/.github/workflows/shared-qa-lock-check.yml@e88eb3d2a1bfbfed3a1e6e4aa80b046fb31ed54d
+    uses: sca-templates/CI-CD-Templates/.github/workflows/shared-qa-lock-check.yml@47b9f3cb040adb8095585511a78c0f3a15079489

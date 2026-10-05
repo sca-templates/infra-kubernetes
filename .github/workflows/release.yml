@@ -137,7 +137,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write # the shared auto-merge job needs it (required by the template)
-    uses: sca-templates/CI-CD-Templates/.github/workflows/shared-release-flow.yml@e88eb3d2a1bfbfed3a1e6e4aa80b046fb31ed54d
+    uses: sca-templates/CI-CD-Templates/.github/workflows/shared-release-flow.yml@47b9f3cb040adb8095585511a78c0f3a15079489
     with:
       release-type: simple
       config-file: .release-please-config.json
@@ -156,7 +156,7 @@ jobs:
     steps:
       - name: Mint release-bot token
         id: app-token
-        uses: sca-templates/CI-CD-Templates/.github/actions/mint-app-token@fdb0c1fe35fcf704257dc9f61d34ba497370454a
+        uses: sca-templates/CI-CD-Templates/.github/actions/mint-app-token@47b9f3cb040adb8095585511a78c0f3a15079489
         with:
           client-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}

@@ -30,7 +30,7 @@ jobs:
     permissions:
       contents: read
       security-events: write # gitleaks SARIF upload to code scanning
-    uses: sca-templates/CI-CD-Templates/.github/workflows/shared-security-scan.yml@e88eb3d2a1bfbfed3a1e6e4aa80b046fb31ed54d
+    uses: sca-templates/CI-CD-Templates/.github/workflows/shared-security-scan.yml@47b9f3cb040adb8095585511a78c0f3a15079489
     with:
       gitleaks: true
       osv-scan: true

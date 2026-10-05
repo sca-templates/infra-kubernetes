@@ -32,6 +32,6 @@ jobs:
       actions: read # fetch the CodeQL bundle
       contents: read
       security-events: write # upload SARIF to code scanning
-    uses: sca-templates/CI-CD-Templates/.github/workflows/shared-codeql.yml@e88eb3d2a1bfbfed3a1e6e4aa80b046fb31ed54d
+    uses: sca-templates/CI-CD-Templates/.github/workflows/shared-codeql.yml@47b9f3cb040adb8095585511a78c0f3a15079489
     with:
       languages: '["actions"]'
