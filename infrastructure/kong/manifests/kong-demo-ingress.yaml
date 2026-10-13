@@ -1,0 +1,38 @@
+# kong-demo — the platform's declarative DB-less route reference. Kong runs
+# DB-less with the Kubernetes Ingress Controller (KIC), so routing is GitOps:
+# committed Ingress resources are translated into Kong Services/Routes; there is
+# no Admin-API/decK config to sync. This is the canonical example
+# (`ingressClassName: kong`, host kong.local) and gives the smoke test a stable
+# endpoint — service charts route the same way (charts/service-template uses
+# `ingress.className: kong`).
+#
+# The route is a pure echo: its only path (/demo) carries the
+# request-termination KongPlugin (demo-termination-plugin.yaml), so Kong
+# responds before any upstream is contacted. The backend Service below is only a
+# schema formality for the Ingress and is never reached (the Admin API has no
+# /demo route, so even a mis-attached plugin would return 404, not leak it).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kong-demo
+  namespace: kong
+  annotations:
+    # KIC reads this annotation to attach the terminating plugin to the route.
+    konghq.com/plugins: demo-termination
+    # Within the Kong Application (app-wide wave 20), apply after the chart's
+    # KIC Deployment and the kong-admin Service (default wave 0), so the plugin
+    # resolves and the referenced Service exists.
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  ingressClassName: kong
+  rules:
+    - host: kong.local
+      http:
+        paths:
+          - path: /demo
+            pathType: Prefix
+            backend:
+              service:
+                name: kong-admin
+                port:
+                  number: 8001
