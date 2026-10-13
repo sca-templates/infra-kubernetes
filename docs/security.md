@@ -89,7 +89,7 @@ manifest carrying a waiver:
 
 ```bash
 printf 'checkov==3.3.16\n' | uv pip compile --generate-hashes --python-version 3.11 \
-  --exclude-newer 2026-09-16T00:00:00Z \
+  --exclude-newer 2026-09-22T00:00:00Z \
   --overrides .github/asteval-override.txt -o .github/requirements.txt -
 ```
 
@@ -102,18 +102,20 @@ moves:
 
 - **The fixed version predates the current cutoff** — the cutoff already admits
   it, so only the package is named. `gitpython` is the case in point:
-  `3.1.62` shipped 2026-09-07, inside the `2026-09-16` cutoff, but `3.1.61` had
+  `3.1.62` shipped 2026-09-07, well inside the cutoff, but `3.1.61` had
   been pinned before it and survived as a preference. Three-line diff, header
   untouched.
 - **The fixed version postdates the current cutoff** — the cutoff has to move to
   the day of the fix release, or the version does not exist as far as the
   resolver is concerned. `urllib3==2.8.0` shipped 2026-09-15, after the
-  `2026-09-02` cutoff, so that bump moved it to `2026-09-16T00:00:00Z`: a
-  six-line diff, the header plus the entry.
+  `2026-09-02` cutoff, so that bump moved it to `2026-09-16T00:00:00Z`; later,
+  `multidict==6.9.1` shipped 2026-09-21, after that cutoff, so the bump moved it
+  again to `2026-09-22T00:00:00Z`. Either way a two-hunk diff: the cutoff in the
+  header plus the single package entry.
 
 ```bash
 printf 'checkov==3.3.16\n' | uv pip compile --generate-hashes --python-version 3.11 \
-  --exclude-newer 2026-09-16T00:00:00Z \
+  --exclude-newer 2026-09-22T00:00:00Z \
   --overrides .github/asteval-override.txt \
   --upgrade-package <pkg> -o .github/requirements.txt -
 ```

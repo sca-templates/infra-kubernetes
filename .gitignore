@@ -67,3 +67,7 @@ logs/
 context/structure.txt
 node_modules/
 .codegraph/
+
+# Local scratch — not part of the repo
+pr-summary-generator.md
+pr.md

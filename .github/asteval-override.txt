@@ -16,7 +16,7 @@
 # compiling:
 #
 #   printf 'checkov==3.3.16\n' | uv pip compile --generate-hashes \
-#     --python-version 3.11 --exclude-newer 2026-09-16T00:00:00Z \
+#     --python-version 3.11 --exclude-newer 2026-09-22T00:00:00Z \
 #     --overrides .github/asteval-override.txt -o .github/requirements.txt -
 #
 # Advancing that cutoff to admit a fix for a package already in the closure also
