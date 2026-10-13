@@ -1,0 +1,84 @@
+# kong — base values (shared across environments; per-env tier overrides live in
+# envs/<env>/kong.yaml).
+# Official chart: kong/kong, served from https://charts.konghq.com. The chart
+# pin (targetRevision) lives in argocd/kong-<env>.yaml, NOT in the platform
+# ApplicationSet: Kong ships flat-schema CRDs (`configuration.konghq.com`) that
+# break ArgoCD's structured-merge diff under `ServerSideApply=true`, so Kong is a
+# DEDICATED Application that leaves SSA off (docs/architecture.md, deviations log).
+#
+# Kong is the edge API gateway (wave 20): routing, rate limiting and OIDC/JWT
+# validation, fronting the services registered in the services registry. It runs
+# DB-less (`env.database: off`): there is no database and therefore no drift —
+# routing is declarative, declared in git as Ingress / Kong* resources and
+# reconciled by the bundled Kubernetes Ingress Controller.
+
+# DB-less mode: no Postgres, no migrations.
+env:
+  database: "off"
+
+# Pin the release name so the Services are `kong-proxy` / `kong-admin` (release
+# name `kong` + chart name `kong` would otherwise render `kong-kong-proxy`).
+fullnameOverride: kong
+
+image:
+  repository: kong
+  # Pinned to the Kong 3.9 patch line; never `latest` (repo image policy).
+  tag: "3.9.4"
+
+# The bundled Kubernetes Ingress Controller renders Kong's configuration from
+# Ingress / Kong* resources — it is what makes the `ingressClassName: kong` used
+# by charts/service-template work. `installCRDs` is a legacy, Helm-2-era toggle:
+# the chart's templated CRD copy defaults to off and the chart's `crds/` bundle
+# is applied by ArgoCD (`--include-crds`). Enabling it would emit every CRD a
+# second time, so it is pinned off explicitly.
+ingressController:
+  enabled: true
+  installCRDs: false
+  image:
+    repository: kong/kubernetes-ingress-controller
+    tag: "3.5.5"
+
+# The proxy Service is the platform edge. Base/default is LoadBalancer (real
+# clusters); the local overlay switches to NodePort (kind maps the node ports to
+# localhost).
+proxy:
+  type: LoadBalancer
+
+# Admin API: the Ingress Controller validates and writes Kong's configuration
+# through it, and `make port-forward APP=kong-admin` reaches it on :8001.
+# ClusterIP only — never exposed outside the cluster. Plaintext HTTP on the pod,
+# no TLS listener (no hybrid CP/DP and no Kong Manager in the OSS chart).
+admin:
+  enabled: true
+  type: ClusterIP
+  http:
+    enabled: true
+  tls:
+    enabled: false
+
+# TLS at the proxy listener from cert-manager (sca-ca ClusterIssuer, Phase 1):
+# Kong terminates the edge TLS with the issued certificate. The admin and cluster
+# (hybrid CP/DP) certificates are disabled — the admin listener is plaintext and
+# there is no CP/DP pair, so the chart would otherwise emit orphan Certificates.
+certificates:
+  enabled: true
+  clusterIssuer: sca-ca
+  proxy:
+    commonName: kong.local
+    # The chart appends commonName to dnsNames, so only the extra SAN is listed.
+    dnsNames:
+      - localhost
+  admin:
+    enabled: false
+  cluster:
+    enabled: false
+
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

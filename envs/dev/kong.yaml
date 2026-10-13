@@ -1,0 +1,6 @@
+# kong — dev profile (shared integration, reduced footprint): a single replica.
+# The proxy keeps the base LoadBalancer type (dev runs on a real cluster, unlike
+# the local kind). The DB-less mode, the ingress controller and the cert-manager
+# TLS wiring all come from the base values; the overlay only states the footprint.
+
+replicaCount: 1
