@@ -53,9 +53,9 @@ them (the path match works per directory, not per file).
    tag signed by the dedicated release bot key, then force-pushed to the same
    commit (see Deviations). The job checks out the tag's commit first, so the
    GPG import happens inside a git work tree.
-5. Two local jobs bracket the shared flow, in parallel with it and after it:
-   **`capture`** snapshots which release was `latest` *before* this push, and
-   **`finalize`** then publishes the release, holds it off `latest`, and
+5. The shared flow runs with `latest-policy: hold`: its **`capture`** job
+   snapshots which release was `latest` *before* this push, and its
+   **`finalize`** job then publishes the release, holds it off `latest`, and
    re-asserts that snapshot. The next section explains why the hold needs two
    steps and not one, and what the release looks like when they are done.
 
@@ -107,7 +107,7 @@ calls, not one; the next section is the measurement that says why.
 | --- | --- | --- | --- | --- |
 | draft | no (write access only) | no | no | release-please (`draft: true`) |
 | pre-release | yes, badged | yes | no | release-please (`prerelease: true`) |
-| full, not `latest` | yes, unbadged | yes | no | the `finalize` job |
+| full, not `latest` | yes, unbadged | yes | no | the shared flow's `finalize` (hold policy) |
 | full, `latest` | yes | yes | yes | `Release promote` (human) |
 
 ### Why the release cannot be held off `latest` with `make_latest=false`
@@ -283,7 +283,7 @@ file was curated by hand. The release PR must still pass the same static gates
 | Item | Deviation | Reason |
 | --- | --- | --- |
 | Tag lifecycle | The API-created lightweight tag is replaced by an annotated, signed tag at the same commit (force-push by the release bot) | GitHub Releases are created from the API, which only produces lightweight refs; re-signing keeps the release, its notes and the signature on one object |
-| Release publication | The release is published **off** `latest` by the local `finalize` job, and the `latest` that was in place before the push is re-designated on the previous release; only the manual `Release promote` workflow moves `latest` forward | `latest` is a human go/no-go tied to adoption, the same rule service releases follow. `make_latest=false` alone does **not** hold a release off `latest` — it stores no pointer and `GET /releases/latest` falls back to the newest published release — and the shared flow's tag force-publishes the draft on the way. See [Publishing a release](#why-the-release-cannot-be-held-off-latest-with-make_latestfalse) |
+| Release publication | The release is published **off** `latest` by the shared flow's `finalize` job (`latest-policy: hold`), and the `latest` that was in place before the push is re-designated on the previous release; only the manual `Release promote` workflow moves `latest` forward | `latest` is a human go/no-go tied to adoption, the same rule service releases follow. `make_latest=false` alone does **not** hold a release off `latest` — it stores no pointer and `GET /releases/latest` falls back to the newest published release — and the shared flow's tag force-publishes the draft on the way. See [Publishing a release](#why-the-release-cannot-be-held-off-latest-with-make_latestfalse) |
 | Release pointer state | `latest` is an explicit server-side designation (`make_latest=true`) rather than a by-date fallback, and `finalize` re-asserts it on every release and verifies the result | A designation is what survives a new publication; the fallback always resolves to the newest release, which is exactly what a hold must not produce |
 | Release automation token | A per-run installation token minted from the `sca-bot-release` GitHub App (`APP_ID` + `APP_PRIVATE_KEY`, scoped to `infra-kubernetes`) instead of the default `GITHUB_TOKEN` | `GITHUB_TOKEN`-created resources do not trigger workflow runs, so the release PR would never run the required checks and could not merge |
 

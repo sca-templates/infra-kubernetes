@@ -72,7 +72,7 @@ jobs:
     steps:
       - name: Mint release-bot token
         id: app-token
-        uses: sca-templates/CI-CD-Templates/.github/actions/mint-app-token@fdb0c1fe35fcf704257dc9f61d34ba497370454a
+        uses: sca-templates/CI-CD-Templates/.github/actions/mint-app-token@684819efa838ed7f653723f9f58ed18c48697b37
         with:
           client-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
