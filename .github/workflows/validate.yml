@@ -51,7 +51,7 @@ jobs:
         run: |
           KUBECONFORM_VERSION="v0.8.0"
           KUBECONFORM_SHA256="9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883"
-          curl -fsSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
             -o /tmp/kubeconform.tar.gz
           printf '%s  %s\n' "${KUBECONFORM_SHA256}" /tmp/kubeconform.tar.gz | sha256sum -c -
           tar -xzf /tmp/kubeconform.tar.gz -C /tmp kubeconform
@@ -82,7 +82,7 @@ jobs:
         run: |
           KUBELINTER_VERSION="v0.8.3"
           KUBELINTER_SHA256="1a6d8419b11971372971fdbc22682b684ebfb7cf1c39591662d1b6ca736c41df"
-          curl -fsSL "https://github.com/stackrox/kube-linter/releases/download/${KUBELINTER_VERSION}/kube-linter-linux.tar.gz" \
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 "https://github.com/stackrox/kube-linter/releases/download/${KUBELINTER_VERSION}/kube-linter-linux.tar.gz" \
             -o /tmp/kube-linter.tar.gz
           printf '%s  %s\n' "${KUBELINTER_SHA256}" /tmp/kube-linter.tar.gz | sha256sum -c -
           tar -xzf /tmp/kube-linter.tar.gz -C /tmp kube-linter
