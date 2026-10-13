@@ -98,31 +98,43 @@ REF ?= $(shell git branch --show-current)
 
 .PHONY: smoke
 smoke: ## Smoke a deployed component: make smoke COMPONENT=cert-manager
-	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cert-manager, vault, external-secrets, linkerd-crds, cloudnative-pg, strimzi, redis-operator)'; exit 1; }
+	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cert-manager, vault, external-secrets, linkerd-crds, cloudnative-pg, strimzi, redis-operator, kong)'; exit 1; }
 	bootstrap/smoke-target.sh "$(COMPONENT)"
 
 .PHONY: smoke-app
 smoke-app: ## Apply the touched component as "<name>-smoke" for REF (fresh ArgoCD only)
 	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke-app COMPONENT=<component> REF=<branch|sha>'; exit 1; }
-	@[ -f argocd/apps-local.yaml ] || { echo 'argocd/apps-local.yaml is missing'; exit 1; }
 	@mkdir -p .generated
-	@count_refs="$$(grep -c '{{GIT_TARGET_BRANCH}}' argocd/apps-local.yaml)"; \
-	[ "$$count_refs" = "2" ] || { echo "ERROR: expected 2 '{{GIT_TARGET_BRANCH}}' refs in apps-local.yaml, got $$count_refs"; exit 1; }; \
-	grep -q 'name: platform-local' argocd/apps-local.yaml || { echo 'ERROR: appset platform-local not found'; exit 1; }; \
-	grep -q "name: '{{.name}}-local'" argocd/apps-local.yaml || { echo 'ERROR: app name template not found'; exit 1; }
 	@echo '⚠ smoke-app targets a FRESH ArgoCD (CI/kind). Alongside an existing platform install the same Helm release collides.'
-	sed -e 's|name: platform-local|name: platform-local-smoke|' \
-	    -e "s|name: '{{.name}}-local'|name: '{{.name}}-smoke'|" \
-	    -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" \
-	    -e "s|{{GIT_TARGET_BRANCH}}|$(REF)|g" \
-	    argocd/apps-local.yaml > .generated/apps-local-smoke.yaml
-	@echo '── Applying smoke ApplicationSet (.generated/apps-local-smoke.yaml, REF=$(REF))'
-	kubectl apply -f .generated/apps-local-smoke.yaml
-	@echo 'ArgoCD is reconciling <component>-smoke. Watch progress with: make status'
+	@if [ "$(COMPONENT)" = "kong" ]; then
+		[ -f argocd/kong-local.yaml ] || { echo 'argocd/kong-local.yaml is missing'; exit 1; }
+		grep -q 'name: kong-local' argocd/kong-local.yaml || { echo 'ERROR: Application kong-local not found in argocd/kong-local.yaml'; exit 1; }
+		sed -e 's|name: kong-local|name: kong-smoke|' \
+		    -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" \
+		    -e "s|{{GIT_TARGET_BRANCH}}|$(REF)|g" \
+		    argocd/kong-local.yaml > .generated/kong-smoke.yaml
+		out=.generated/kong-smoke.yaml
+	else
+		[ -f argocd/apps-local.yaml ] || { echo 'argocd/apps-local.yaml is missing'; exit 1; }
+		count_refs="$$(grep -c '{{GIT_TARGET_BRANCH}}' argocd/apps-local.yaml)"
+		[ "$$count_refs" = "2" ] || { echo "ERROR: expected 2 '{{GIT_TARGET_BRANCH}}' refs in apps-local.yaml, got $$count_refs"; exit 1; }
+		grep -q 'name: platform-local' argocd/apps-local.yaml || { echo 'ERROR: appset platform-local not found'; exit 1; }
+		grep -q "name: '{{.name}}-local'" argocd/apps-local.yaml || { echo 'ERROR: app name template not found'; exit 1; }
+		sed -e 's|name: platform-local|name: platform-local-smoke|' \
+		    -e "s|name: '{{.name}}-local'|name: '{{.name}}-smoke'|" \
+		    -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" \
+		    -e "s|{{GIT_TARGET_BRANCH}}|$(REF)|g" \
+		    argocd/apps-local.yaml > .generated/apps-local-smoke.yaml
+		out=.generated/apps-local-smoke.yaml
+	fi
+	@echo "── Applying smoke manifest ($$out, REF=$(REF))"
+	kubectl apply -f "$$out"
+	@echo 'ArgoCD is reconciling $(COMPONENT)-smoke. Watch progress with: make status'
 
 .PHONY: smoke-clean
-smoke-clean: ## Remove the smoke ApplicationSet after a local smoke run
+smoke-clean: ## Remove the smoke ApplicationSet/Application after a local smoke run
 	kubectl delete applicationset platform-local-smoke --namespace argocd --ignore-not-found 2>/dev/null || true
+	kubectl delete application kong-smoke --namespace argocd --ignore-not-found 2>/dev/null || true
 	@echo 'Done.'
 
 ##@ Local Git serve
