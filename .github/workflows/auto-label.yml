@@ -31,7 +31,7 @@ jobs:
       contents: read
       pull-requests: write # apply labels to the PR
       issues: write # labels can be issue-scoped too
-    uses: sca-templates/CI-CD-Templates/.github/workflows/shared-auto-label.yml@e88eb3d2a1bfbfed3a1e6e4aa80b046fb31ed54d
+    uses: sca-templates/CI-CD-Templates/.github/workflows/shared-auto-label.yml@e203b26bdc2a05e91715dd411faf9f6a9181a25b
     with:
       type-labels: true
       stack-labels: false
