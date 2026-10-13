@@ -13,10 +13,10 @@ a deployment.
 
 | Workflow | File | Runs on | What it does |
 | --- | --- | --- | --- |
-| Validate | `.github/workflows/validate.yml` | push + PR | Static suite: markdownlint, yamllint, YAML parse, `bash -n`, actionlint (workflow lint), kube-linter (K8s manifest lint) — **local** (no template counterpart) |
-| Security | `.github/workflows/security.yml` | push + PR | gitleaks + osv-scanner (SCA) via the shared template; checkov (static IaC baseline) and pin guards (no `latest` tags/charts) stay local |
+| Validate | `.github/workflows/validate.yml` | push + PR | **wrapper** over the shared template (markdownlint, yamllint, `bash -n`, actionlint) plus a local `Kubernetes and Helm` job (kubeconform/kube-linter on `infrastructure/` and the Helm service template); the static-suite checks now have a template counterpart, manifest lint stays local |
+| Security | `.github/workflows/security.yml` | push + PR | **wrapper** over the shared template: gitleaks, osv-scanner (SCA) and checkov (static IaC baseline); only the pin guards (no `latest` tags/charts) stay local |
 | CodeQL | `.github/workflows/codeql.yml` | push + PR + schedule | GitHub CodeQL static analysis on the repo languages — **wrapper** over the shared template |
-| Release | `.github/workflows/release.yml` | push to `main` | **wrapper** over the shared template (plus two local jobs): release-please opens release PRs/tags (+ signed annotated tags) and **draft** GitHub Releases for `feat`/`fix` commits touching the **platform surface** — commits confined to the `exclude-paths` directories (`.github`, `bootstrap`, `0.Project_info`) are dropped (see [versioning.md](versioning.md)); drives `CHANGELOG.md`; no manual re-sign `workflow_dispatch` (see [versioning.md](versioning.md)). Local **capture** snapshots the previous `latest` and **finalize** publishes the release **off** `latest` and re-asserts it |
+| Release | `.github/workflows/release.yml` | push to `main` | **wrapper** over the shared template with `latest-policy: hold`: release-please opens release PRs/tags (+ signed annotated tags) and **draft** GitHub Releases for `feat`/`fix` commits touching the **platform surface** — commits confined to the `exclude-paths` directories (`.github`, `bootstrap`, `0.Project_info`) are dropped (see [versioning.md](versioning.md)); drives `CHANGELOG.md`; no manual re-sign `workflow_dispatch` (see [versioning.md](versioning.md)). The template's `hold` policy captures the previous `latest` and finalizes the release **off** `latest`, re-asserting the previous pointer |
 | Release promote | `.github/workflows/release-publish.yml` | manual | **local**: the only thing that ever moves `latest` **forward** (`finalize` only re-states it on the previous release). Moves the pointer for a signed, adopted tag, after verifying the tag is annotated and signed by the release bot (see [versioning.md](versioning.md)) |
 | Release gate | `.github/workflows/release-gate.yml` | PR + manual | **wrapper** over the shared template: blocks PRs while a release-please PR is open (`release-gate / release-gate` required check) |
 | Auto label | `.github/workflows/auto-label.yml` | PR | **wrapper** over the shared template: labels PRs from the type (`feature`, `bug`, `ci`, `documentation`, `refactor`, `security`, `dependencies`) and changed files — see [labels.md](labels.md) |
@@ -26,20 +26,23 @@ a deployment.
 The named **wrapper** workflows delegate their logic to reusable workflows in
 [sca-templates/CI-CD-Templates](https://github.com/sca-templates/CI-CD-Templates),
 referenced **pinned to a commit SHA** (this repo's strict-pin policy; the
-template repo recommends `@main`). `CodeQL` → `shared-codeql.yml`,
-`Security` (gitleaks + osv) →
-`shared-security-scan.yml`, `Release` → `shared-release-flow.yml`, Release gate
+template repo recommends `@main`). `Validate` →
+`shared-validate.yml`, `CodeQL` → `shared-codeql.yml`,
+`Security` (gitleaks + osv + checkov) →
+`shared-security-scan.yml`, `Release` → `shared-release-flow.yml` (with
+`latest-policy: hold`), Release gate
 → `shared-qa-lock-check.yml`, Auto label → `shared-auto-label.yml`. The templates' own pins (actions, versions,
 `mint-app-token` composite) are maintained by the template repo's dependabot;
 this repo keeps its remaining local action pins current via its own
-[`.github/dependabot.yml`](../.github/dependabot.yml). `validate.yml`,
-`pr-cluster.yml`, `main-sync.yml` and `deploy.yml` stay local on purpose: the
-static suite (kubeconform/kube-linter on `infrastructure/`) and the cluster
+[`.github/dependabot.yml`](../.github/dependabot.yml). `pr-cluster.yml`,
+`main-sync.yml` and `deploy.yml` stay local on purpose: the cluster
 smoke/EKS-parity pipelines are repo-specific and have no template counterpart.
-`release.yml` is a wrapper **plus** two local jobs: the shared flow cannot hold
-`latest` off (the tag force-push publishes the draft, and `make_latest=false`
-stores no pointer), so `capture` + `finalize` are added on top for now and the
-equivalent fix is owed to the template.
+The Kubernetes/Helm manifest lint inside `validate.yml` also stays local for
+the same reason; the `Kubernetes and Helm` job lives in the caller next to the
+`shared-validate.yml` call. `Security`'s pin guards are the other local
+hold-out. The `latest` hold (`capture` + `finalize`) that used to be local now
+ships inside the shared flow's `latest-policy: hold`, so `release.yml` is a
+plain wrapper.
 
 ### Scope semantics
 
@@ -72,7 +75,7 @@ guards in [security.md](security.md).
 ### Release workflow
 
 `release.yml` is a thin wrapper over the org shared
-`shared-release-flow.yml`, which has two jobs, plus one local job of its own:
+`shared-release-flow.yml`, run with `latest-policy: hold`. The template runs:
 
 - **release-please** — runs **only on a push to `main`**; computes the next
   version, opens or updates the release PR, and on merge creates the tag and
@@ -84,14 +87,14 @@ guards in [security.md](security.md).
   manual re-sign via `workflow_dispatch` is **no longer offered** (the old
   `v0.1.0` lightweight tag was promoted with it once; the shared template
   covers only the push path — see [versioning.md](versioning.md)).
-- **capture** (local) — runs in parallel with the shared flow on the same push.
-  It snapshots the release that was `latest` *before* this push, excluding the
-  tag the push is about to cut, which is what makes the snapshot correct on a
-  re-dispatched run too. It never blocks the release: it hands `finalize` a
-  hint, and `finalize` decides what a missing hint means.
-- **finalize** (local) — runs after the shared flow. It is what makes the tag
-  safe to have cut automatically while `latest` stays a human decision; see
-  below.
+- **capture** (hold policy) — runs on the same push. It snapshots the release
+  that was `latest` *before* this push, excluding the tag the push is about to
+  cut, which is what makes the snapshot correct on a re-dispatched run too. It
+  never blocks the release: it hands `finalize` a hint, and `finalize` decides
+  what a missing hint means.
+- **finalize** (hold policy) — runs after `release-please`. It is what makes
+  the tag safe to have cut automatically while `latest` stays a human decision;
+  see below.
 
 The draft does not survive the shared flow: `sign-tag` replaces the tag by
 force-push, and that rewrite publishes the draft. Declining `latest` afterwards
@@ -256,17 +259,20 @@ status checks + one human review + DCO). Ruleset contexts match the
 a reusable template, GitHub reports its jobs as `<caller> / <scan>`, so the
 contexts below are the nested names:
 
-1. `Markdown`, `YAML and Shell`, `Kubernetes and Helm` — the three
-   `validate.yml` linters (required on every PR).
-2. `Security / Secrets (gitleaks)` — gitleaks (via the shared template) —
+1. `Validate / Markdown`, `Validate / YAML and Shell` — the shared-hygiene
+   checks called from `validate.yml` (required on every PR).
+2. `Kubernetes and Helm` — the local manifest and Helm lint in `validate.yml`
+   (required on every PR).
+3. `Security / Secrets (gitleaks)` — gitleaks (via the shared template) —
    required on every PR; blocks on findings.
-3. `IaC (checkov)` and `Guard policies` — the two local `security.yml` jobs.
-4. `CodeQL / Analyze (actions)` — required once stable.
-5. `release-gate / release-gate` — required on every PR (fails while a release
+4. `Security / IaC posture (checkov)` and `Guard policies` — checkov (via the
+   shared template) and the local pin guards.
+5. `CodeQL / Analyze (actions)` — required once stable.
+6. `release-gate / release-gate` — required on every PR (fails while a release
    PR is open; the release PR itself is exempt, because the shared gate
    detects it by title). Bot-authored PRs are gated like humans and report the
    check immediately.
-6. Human review — always the last gate for "turns green".
+7. Human review — always the last gate for "turns green".
 
 `Security / Dependency Vulnerabilities (osv)` runs the same scan but is **not**
 a required context. A clear PR must satisfy Markdown + YAML + shell + workflow

@@ -13,17 +13,17 @@ the CI workflow map see [ci-cd.md](ci-cd.md).
 | Control | Workflow | Behavior today |
 | --- | --- | --- |
 | gitleaks | security.yml (via shared template) | Secrets/password scan on push and PR; blocks on findings |
-| checkov (static IaC) | security.yml (local job) | IaC misconfiguration scan of YAML manifests |
+| checkov (static IaC) | security.yml (via shared template) | IaC misconfiguration scan of YAML manifests |
 | osv-scanner (SCA) | security.yml (via shared template) | Open-source dependency vulnerability scan on push + PR; honours `.github/osv-scanner.toml` ignores |
-| checkov baseline | security.yml (local job) | `.github/checkov-baseline.json` gates **new** findings since Phase 1 — the pod on `bootstrap/local-git-server.yaml` is documented (local-only tooling); anything else fails the PR as it would without the baseline |
+| checkov baseline | security.yml (via shared template) | `.github/checkov-baseline.json` gates **new** findings since Phase 1 — the pod on `bootstrap/local-git-server.yaml` is documented (local-only tooling); anything else fails the PR as it would without the baseline |
 | CodeQL | codeql.yml (shared template) | Static analysis on push + PR + weekly schedule |
 | Pin guards | security.yml (local job) | Fails any chart reference or image tag that is `latest` or floating |
 | Release tag signing | release.yml (shared template) | Every release tag is re-signed with the dedicated **release-bot** GPG key (private key in repo secret `RELEASE_GPG_PRIVATE_KEY`) |
 
-`security.yml` runs gitleaks + osv-scanner through the org shared
-`shared-security-scan.yml` (SHA-pinned to the v3.0.0 release; gitleaks + osv
-only) and keeps checkov + pin guards as local jobs. The
-wrapper workflows delegate to
+`security.yml` runs gitleaks, osv-scanner and checkov through the org shared
+`shared-security-scan.yml` (SHA-pinned; the checkov baseline, framework and
+hash-pinned requirements use the template defaults) and keeps only the pin
+guards as a local job. The wrapper workflows delegate to
 [sca-templates/CI-CD-Templates](https://github.com/sca-templates/CI-CD-Templates)
 — see [ci-cd.md](ci-cd.md) for the map. A gitleaks finding still fails the PR;
 the shared template uploads the SARIF only on non-PR events, so PR runs block
