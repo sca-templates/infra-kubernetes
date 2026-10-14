@@ -42,7 +42,7 @@ script adapts as components land).
 | `secret/cert-manager/acme` | Phase 1 seed | cert-manager (ACME/issuer creds, if any) |
 | `secret/vault/unseal` | Phase 2 | Vault unseal workflow |
 | `secret/external-secrets/k8s-auth` | Phase 2 | k8s auth role/SA binding |
-| `secret/kong/admin` | Phase 8 | Kong admin |
+| `secret/kong/admin` | — (reserved) | **not consumed**: Kong runs DB-less with a plaintext `ClusterIP` admin listener, so no admin credential is projected; the path is reserved for a future admin-auth use |
 | `secret/postgres-app/<env>` | Phase 10 | postgres-app `Cluster` via CNPG |
 | `secret/keycloak-db/<env>` | Phase 10 | keycloak-db `Cluster` via CNPG |
 | `secret/kafka/<env>` | Phase 11 | Kafka SCRAM users |
@@ -57,6 +57,10 @@ Nothing above is written by Vault itself yet — Vault arrives at Phase 2 and
 `bootstrap/seed-vault.sh` populates the catalog's placeholder secrets on the
 `local` profile (see below); each consuming component's real, env-scoped path is
 written by the phase that lands it.
+
+Kong (Phase 8) is the first component whose KV path is deliberately **not
+consumed**: it runs DB-less and its admin listener is a plaintext `ClusterIP`
+(port-forward only), so `secret/kong/admin` stays reserved and is not seeded.
 
 ## Seed script
 

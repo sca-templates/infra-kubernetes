@@ -3,7 +3,7 @@
 Area: Edge & Mesh · Wave -10 · Environments: local→dev→qa→prod
 Depends on: — (CRDs install before the control plane, wave -10)
 Project done when: linkerd CRDs present in the cluster and amAlive; control
-plane (project #9) installs cleanly against them.
+plane (project #14) installs cleanly against them.
 
 No natural phases → issues directly under the project.
 

@@ -1,7 +1,7 @@
 # Project: Implement Kafka
 
 Area: Data · Wave 40 · Environments: local→dev→qa→prod
-Depends on: strimzi (#6) — operator must be present.
+Depends on: strimzi (#11) — operator must be present.
 Project done when: `Kafka`/`KafkaNodePool` CRs present; broker pods `Running`;
 SCRAM auth works; topic can be produced/consumed.
 
@@ -9,8 +9,8 @@ SCRAM auth works; topic can be produced/consumed.
 
 M1 done when: brokers stable + SCRAM-auth produce/consume works.
 
-- [ ] Issue #11 · `Kafka`/`KafkaNodePool` CRs + SCRAM auth
-  Depends on: strimzi (#6)
+- [ ] Issue #16 · `Kafka`/`KafkaNodePool` CRs + SCRAM auth
+  Depends on: strimzi (#11)
   - [ ] `infrastructure/kafka/` CRs for 4 envs
         - [ ] local/dev: 1 broker; qa/prod: 3 brokers + TLS/SCRAM
         - Commits: `feat(kafka): kafka cluster and node pool CRs`

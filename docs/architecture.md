@@ -3,9 +3,10 @@
 Reference for the `sca` platform on Kubernetes: layers, the component catalog,
 sync-waves, namespaces, the secret flow and the environment model. This is a
 **state document** — how the platform *is*. Beyond ArgoCD, cert-manager
-(Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4)
-and cloudnative-pg (Phase 5) are deployed; every other catalog entry is marked
-`planned` until its phase lands. For how changes *flow* through the platform, see
+(Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4),
+cloudnative-pg (Phase 5), strimzi (Phase 6), redis-operator (Phase 7) and Kong
+(Phase 8) are deployed; every other catalog entry is marked `planned` until its
+phase lands. For how changes *flow* through the platform, see
 [workflow.md](workflow.md); for what is done and what is next, see
 [status.md](status.md).
 
@@ -84,7 +85,8 @@ upstream chart, ArgoCD sync-wave and roadmap phase. Chart and image pins are
 set per component when that phase lands (values live under
 `infrastructure/<component>/` and `envs/<env>/` from Phase 1 on); in the table
 ArgoCD, cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3),
-linkerd-crds (Phase 4) and cloudnative-pg (Phase 5) are deployed, the rest are
+linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6),
+redis-operator (Phase 7) and Kong (Phase 8) are deployed, the rest are
 `planned`.
 
 **Services are not part of this catalog.** They are registered in
@@ -101,7 +103,7 @@ their own repositories — see
 | cloudnative-pg | `cloudnative-pg` | cloudnative-pg/cloudnative-pg | -10 | 5 | deployed (Phase 5) |
 | strimzi | `strimzi` | strimzi/strimzi-kafka-operator | -10 | 6 | deployed (Phase 6) |
 | redis-operator | `data` | ot-container-kit/redis-operator | -10 | 7 | deployed (Phase 7) |
-| kong | `kong` | kong/kong (DB-less) | 20 | 8 | planned (Phase 8) |
+| kong | `kong` | kong/kong (DB-less) | 20 | 8 | deployed (Phase 8) |
 | linkerd control plane | `linkerd` | linkerd/linkerd2 (script) | 30 | 9 | planned (Phase 9) |
 | postgres-app (+ keycloak-db) | `data` | CNPG `Cluster` CR (raw) | 40 | 10 | planned (Phase 10) |
 | kafka (CR) | `data` | `Kafka` + `KafkaNodePool` CRs | 40 | 11 | planned (Phase 11) |
@@ -119,8 +121,8 @@ Notes:
 
 - **Status column** is the source of truth for "is it live?". ArgoCD,
   cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3),
-  linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6) and
-  redis-operator (Phase 7) are deployed; every
+  linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6),
+  redis-operator (Phase 7) and Kong (Phase 8) are deployed; every
   other component is `planned (Phase N)`. The column is flipped to `deployed` inside the phase
   that lands the component, and `status.md` is updated in the same commit.
 - `postgres-app` is a **local-only** raw `Application` (not in the
@@ -133,7 +135,10 @@ Notes:
 - `kong` is a dedicated `Application` per environment (not via the
   `ApplicationSet`): flat-schema CRDs break ArgoCD's structured-merge diff
   under `ServerSideApply=true`, so it runs DB-less with `installCRDs: false`
-  and no SSA (see [Deviations log](#deviations-log)).
+  and no SSA. Routing is declarative in git — a committed `Ingress`
+  (`ingressClassName: kong`) plus the `Kong*` CRs the bundled Ingress
+  Controller programs into Kong; the proxy serves TLS from a cert-manager leaf
+  (`sca-ca`). See [Deviations log](#deviations-log).
 - The Linkerd control plane is **not** an ArgoCD app: it is deployed by a
   script (Phase 9) after cert-manager and linkerd-crds are up.
 - `local` is the only environment running the full catalog including the
@@ -273,7 +278,7 @@ Application of the service repo (see
 [workflow.md](workflow.md#services-app-repo-as-source)).
 
 Per-component replica profile (intended values; materialized as each phase
-lands — through redis-operator, Phase 7):
+lands — through Kong, Phase 8):
 
 | Component | local | dev | qa | prod |
 | --- | --- | --- | --- | --- |
@@ -284,7 +289,7 @@ lands — through redis-operator, Phase 7):
 | strimzi | 1 | 1 | 2 | 2 |
 | redis-operator | 1 | 1 | 2 | 2 |
 | redis | 1 | 1 | 2 | 3 |
-| kong (gateway/controller) | 1/1 | 2/2 | 3/3 | 3/3 |
+| kong (gateway + controller, one Deployment) | 1 | 1 | 2 | 2 |
 | keycloak | 1 | 2 | 3 | 3 |
 | postgres-app | 1 | local-only | local-only | local-only |
 

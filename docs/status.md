@@ -10,7 +10,7 @@ Milestones and Issues.
 
 ## Current state
 
-**Phase 7 — redis-operator deployed.** Phase 0 delivered the scaffold
+**Phase 8 — Kong deployed.** Phase 0 delivered the scaffold
 (Makefile, `bootstrap/`, `argocd/` with the app-of-apps pattern, the CI
 workflows, the service template, this docs set) and brought the local `kind`
 cluster up with ArgoCD. **Phase 1** lands cert-manager on the `local` profile
@@ -46,13 +46,25 @@ honest proof that the CR is honored (the `Redis` CRD declares an empty status
 object, so no condition can be asserted). No `Kafka`/`KafkaNodePool` CR exists
 yet (kafka lands at Phase 11), no `Redis` CR either (Phase 12). No `Cluster` CR
 exists yet for the same reason on the PostgreSQL
-side (postgres-app / keycloak-db land at Phase 10). See
+side (postgres-app / keycloak-db land at Phase 10). **Phase 8** lands Kong — the
+edge gateway — as a **dedicated `Application` per environment (`kong-<env>`)** at
+wave 20 in the `kong` namespace, deliberately *outside* the `ApplicationSet`:
+chart pinned 3.4.1 (`kong/kong`), gateway `kong:3.9.4` plus the bundled
+Kubernetes Ingress Controller (`kubernetes-ingress-controller:3.5.5`), DB-less
+(`env.database: off`) with `installCRDs: false` (ArgoCD applies the chart's
+`crds/` bundle) and, critically, **no `ServerSideApply`** — the appset's SSA
+breaks the structured-merge diff on Kong's flat-schema `configuration.konghq.com`
+CRDs, which is why the gateway is the one catalog component with a dedicated app
+per env. Routing is declarative in git (`infrastructure/kong/manifests/`: an
+`Ingress` on `ingressClassName: kong` plus a `request-termination` `KongPlugin`)
+and the proxy serves TLS from a cert-manager leaf (`kong-proxy` /
+`kong-proxy-cert` off the `sca-ca` ClusterIssuer). See
 [ci-cd.md](ci-cd.md) for the smoke design.
 
 | Fact | Value |
 | --- | --- |
 | Repository | `infra-kubernetes` (local, fully-local git serve; published to GitHub before promotion) |
-| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6), redis-operator (Phase 7) |
+| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6), redis-operator (Phase 7), Kong (Phase 8) |
 | `platform-root-local` | present, `Synced` + `Healthy` against the local git serve (`main`); Phase 0.0 `automated.enabled=false` override dropped |
 | `platform-local` ApplicationSet | present, seven elements (`cert-manager` wave -20, `external-secrets` + `linkerd-crds` + `cloudnative-pg` + `strimzi` + `redis-operator` wave -10, `vault` wave 0) |
 | cert-manager app | `cert-manager-local` `Synced` + `Healthy`; `sca-ca` ClusterIssuer `Ready`; leaf Certificate smoke green |
@@ -62,6 +74,7 @@ side (postgres-app / keycloak-db land at Phase 10). See
 | cloudnative-pg app | `cloudnative-pg-local` `Synced` + `Healthy`; operator Deployment `cloudnative-pg` Ready (chart 0.29.0 / operator 1.30.0); 11 `postgresql.cnpg.io` CRDs present + `Established`; `make smoke COMPONENT=cloudnative-pg` green |
 | strimzi app | `strimzi-local` `Synced` + `Healthy`; operator Deployment `strimzi-cluster-operator` Ready (chart 1.2.0 / operator 1.2.0); watches all namespaces (`STRIMZI_NAMESPACE=*`); 10 `kafka.strimzi.io` + `core.strimzi.io` CRDs present + `Established`; `make smoke COMPONENT=strimzi` green |
 | redis-operator app | `redis-operator-local` `Synced` + `Healthy` in namespace `data`; operator Deployment `redis-operator` Ready (chart 0.26.1 / operator 0.26.0); watches all namespaces (no `WATCH_NAMESPACE` env); 4 `redis.redis.opstreelabs.in` CRDs present + `Established`; `make smoke COMPONENT=redis-operator` → throwaway `Redis` CR honored (StatefulSet ready + `PING` → `PONG`) |
+| kong app | `kong-local` `Synced` + `Healthy` in namespace `kong` (dedicated Application, **no SSA**); chart 3.4.1, gateway Deployment `kong` Ready (containers `ingress-controller` KIC 3.5.5 + `proxy` kong 3.9.4), DB-less (`KONG_DATABASE=off`); IngressClass `kong`; `configuration.konghq.com` CRDs `Established`; `Certificate/kong-proxy` Ready (leaf off `sca-ca`); declarative `Ingress kong-demo` + `KongPlugin demo-termination`; `make smoke COMPONENT=kong` → `GET https://kong.local/demo` → 200 |
 | git-local-serve | in-cluster git daemon (`git://<node>:9418/sca-infra.git`) `Ready` |
 | Observability / smoke CI | cluster smoke `pr-cluster.yml` **shipped** (Phase 1): selective on PRs as the **required `Smoke` check** on `main` + manual `workflow_dispatch`; no `push` smoke (see [ci-cd.md](ci-cd.md)) |
 | Security CI | checkov **baseline gate** active (Phase 1): `.github/checkov-baseline.json` documents the local-git-server pod findings; new IaC findings fail the PR; re-evaluated at Phase 18 (see [security.md](security.md)) |
@@ -73,7 +86,7 @@ side (postgres-app / keycloak-db land at Phase 10). See
 
 | # | Limitation | Current behavior | To close |
 | --- | --- | --- | --- |
-| 1 | **Fully-local git serve (not GitHub)** | Local ArgoCD reconciles the in-cluster git serve (`git://<node>:9418`), not the GitHub repo; the serve carries a **rendered** `argocd/apps-local.yaml` (`bootstrap/render-served-apps.sh`), while the repo templates keep the `{{GIT_REPO_URL}}`/`{{GIT_TARGET_BRANCH}}` placeholders for the `make bootstrap` seam | Publish the repo and swap `GIT_REPO_URL` back to GitHub to exercise the real source-of-truth path; dev / qa / prod must render their `apps-<env>.yaml` the same way when those clusters bootstrap |
+| 1 | **Fully-local git serve (not GitHub)** | Local ArgoCD reconciles the in-cluster git serve (`git://<node>:9418`), not the GitHub repo; the serve carries the platform Applications with the `{{GIT_REPO_URL}}`/`{{GIT_TARGET_BRANCH}}` placeholders **rendered** (`bootstrap/render-served-apps.sh` writes `argocd/apps-local.yaml` for the `ApplicationSet` and `argocd/kong-local.yaml` for the dedicated Kong app), while the repo templates keep the placeholders for the `make bootstrap` seam | Publish the repo and swap `GIT_REPO_URL` back to GitHub to exercise the real source-of-truth path; dev / qa / prod must render their `apps-<env>.yaml` (`ApplicationSet` **and** the dedicated `kong-<env>` app) the same way when those clusters bootstrap |
 | 2 | **dev / qa / prod clusters pending** | Not provisioned (terraform/ansible outside this repo) | Provision per env; promote via `promote-test` (see [workflow.md](workflow.md)) |
 | 3 | **OpenSSF Best Practices badge — silver blocked** | All silver criteria are met except `contributors_unassociated` and `bus_factor` (≥2): the project has a single maintainer (`CODEOWNERS` = `@Santiago1010`) | Achieved once a second **unassociated** contributor joins and is reflected in `CODEOWNERS` + `.github/GOVERNANCE.md`; passing badge is already achievable (see [.github/GOVERNANCE.md](../.github/GOVERNANCE.md), [docs/ci-cd.md](ci-cd.md)) |
 | 4 | **OpenSSF Best Practices badge — gold blocked** | Beyond the silver gaps, gold requires `two_person_review` (≥50% of changes reviewed by someone other than the author), which is unrealisable while there is a single maintainer; all other gold criteria are Met or N/A (see [.github/SECURITY.md](../.github/SECURITY.md) security review, SPDX + copyright headers per source file) | Unblocked together with silver once a second, **unassociated** reviewer/maintainer exists; `two_person_review` then requires an explicit second reviewer on gold PRs |

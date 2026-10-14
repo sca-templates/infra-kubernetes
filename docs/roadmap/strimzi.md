@@ -3,7 +3,7 @@
 Area: Data · Wave -10 · Environments: local→dev→qa→prod
 Depends on: — (operator only, wave -10)
 Project done when: `strimzi-cluster-operator` `Running`; a `Kafka`/
-`KafkaNodePool` review shows the CRs are honored (data project #11 waits on it).
+`KafkaNodePool` review shows the CRs are honored (data project #16 waits on it).
 
 No natural phases → issues directly under the project.
 

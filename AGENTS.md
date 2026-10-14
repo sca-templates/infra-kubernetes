@@ -63,7 +63,7 @@ and image pins are set inside each phase and live under
 | CloudNativePG | `cloudnative-pg` | cloudnative-pg/cloudnative-pg | PostgreSQL operator | — | planned (Phase 5) |
 | Strimzi | `strimzi` | strimzi/strimzi-kafka-operator | Kafka operator (KRaft) | [infra-kafka](https://github.com/sca-templates/infra-kafka) | **deployed** (Phase 6) |
 | redis-operator | `data` | ot-container-kit/redis-operator | Redis operator | [infra-redis](https://github.com/sca-templates/infra-redis) | **deployed** (Phase 7) |
-| Kong | `kong` | kong/kong (DB-less) | Edge gateway, dedicated Application, no SSA | [infra-kong](https://github.com/sca-templates/infra-kong) | planned (Phase 8) |
+| Kong | `kong` | kong/kong (DB-less) | Edge gateway, dedicated Application, no SSA | [infra-kong](https://github.com/sca-templates/infra-kong) | **deployed** (Phase 8) |
 | Linkerd control plane | `linkerd` | linkerd/linkerd2 (script) | mTLS identity, golden signals | [infra-linkerd](https://github.com/sca-templates/infra-linkerd) | planned (Phase 9) |
 | postgres-app (+ keycloak-db) | `data` | CNPG `Cluster` CRs (raw) | App + Keycloak databases; local only | [infra-postgres](https://github.com/sca-templates/infra-postgres) | planned (Phase 10) |
 | Kafka | `data` | `Kafka`/`KafkaNodePool` CRs | Event backbone, SCRAM | [infra-kafka](https://github.com/sca-templates/infra-kafka) | planned (Phase 11) |

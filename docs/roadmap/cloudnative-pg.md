@@ -3,7 +3,7 @@
 Area: Data · Wave -10 · Environments: local→dev→qa→prod
 Depends on: — (operator only, wave -10)
 Project done when: `cloudnative-pg` operator `Running`; a `Cluster` CR review
-(`postgres-app`) can be created (data project #10 waits on it).
+(`postgres-app`) can be created (data project #15 waits on it).
 
 No natural phases → issues directly under the project.
 
