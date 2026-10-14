@@ -41,6 +41,24 @@ spec:
         - .spec.conversion
         - .spec.names.listKind
         - .spec.preserveUnknownFields
+    # The bundled Ingress Controller's admission-webhook certificate is generated
+    # by Helm (`genCA`/`genSignedCert` + `lookup`); `lookup` is empty in ArgoCD's
+    # offline render, so the CA/keypair Secrets and the webhook `caBundle` differ
+    # on every render. Ignore those fields so the Application converges to Synced
+    # (the live bundle is created once on first sync and is self-consistent).
+    - kind: Secret
+      name: kong-validation-webhook-ca-keypair
+      jqPathExpressions:
+        - .data
+    - kind: Secret
+      name: kong-validation-webhook-keypair
+      jqPathExpressions:
+        - .data
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      name: kong-kong-validations
+      jqPathExpressions:
+        - .webhooks[].clientConfig.caBundle
   destination:
     server: https://kubernetes.default.svc
     namespace: kong

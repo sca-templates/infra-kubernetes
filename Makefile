@@ -113,6 +113,28 @@ smoke-app: ## Apply the touched component as "<name>-smoke" for REF (fresh ArgoC
 		    -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" \
 		    -e "s|{{GIT_TARGET_BRANCH}}|$(REF)|g" \
 		    argocd/kong-local.yaml > .generated/kong-smoke.yaml
+		# Kong is a DEDICATED Application, so it is not part of the platform
+		# ApplicationSet — but its proxy Certificate is rendered only when the
+		# cert-manager CRDs are served (charts/kong templates/certificate.yaml
+		# gates on `.Capabilities.APIVersions.Has "cert-manager.io/v1"`). A fresh
+		# smoke ArgoCD has no platform, so also apply the platform ApplicationSet
+		# (cert-manager + sca-ca) and wait for it before the kong app renders.
+		[ -f argocd/apps-local.yaml ] || { echo 'argocd/apps-local.yaml is missing'; exit 1; }
+		sed -e 's|name: platform-local|name: platform-local-smoke|' \
+		    -e "s|name: '{{.name}}-local'|name: '{{.name}}-smoke'|" \
+		    -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" \
+		    -e "s|{{GIT_TARGET_BRANCH}}|$(REF)|g" \
+		    argocd/apps-local.yaml > .generated/apps-local-smoke.yaml
+		echo '── Applying platform ApplicationSet (cert-manager dependency for kong)'
+		kubectl apply -f .generated/apps-local-smoke.yaml
+		echo '── Waiting for cert-manager-smoke Synced/Healthy before kong renders'
+		deadline=$$(( $$(date +%s) + 600 ))
+		while true; do
+			state="$$(kubectl -n argocd get application cert-manager-smoke -o jsonpath='{.status.sync.status}/{.status.health.status}' 2>/dev/null || true)"
+			if [ "$$state" = "Synced/Healthy" ]; then echo '  cert-manager-smoke Synced/Healthy'; break; fi
+			if [ "$$(date +%s)" -ge "$$deadline" ]; then echo 'ERROR: cert-manager-smoke did not converge within 600s; the kong Certificate would not render' >&2; exit 1; fi
+			sleep 5
+		done
 		out=.generated/kong-smoke.yaml
 	else
 		[ -f argocd/apps-local.yaml ] || { echo 'argocd/apps-local.yaml is missing'; exit 1; }

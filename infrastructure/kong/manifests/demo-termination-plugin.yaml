@@ -19,5 +19,7 @@ metadata:
 plugin: request-termination
 config:
   status_code: 200
-  message: "kong ok"
+  # `body` (verbatim response body) + `content_type`; the request-termination
+  # schema forbids `message` together with `content_type`/`body`.
+  body: "kong ok"
   content_type: text/plain
