@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/sca-templates/infra-kubernetes/compare/v0.10.2...v0.11.0) (2026-10-14)
+
+
+### Features
+
+* **kong:** deploy DB-less edge gateway as dedicated app ([#88](https://github.com/sca-templates/infra-kubernetes/issues/88)) ([ca279e1](https://github.com/sca-templates/infra-kubernetes/commit/ca279e1cb817e5f00511c1d1469ee260dee65263))
+
 ## [0.10.2](https://github.com/sca-templates/infra-kubernetes/compare/v0.10.1...v0.10.2) (2026-10-02)
 
 
