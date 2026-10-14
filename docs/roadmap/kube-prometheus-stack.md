@@ -1,7 +1,7 @@
 # Project: Implement kube-prometheus-stack
 
 Area: Observability · Wave 60 · Environments: local→dev→qa→prod
-Depends on: cert-manager (#1) for TLS; linkerd (#9) for mesh golden signals.
+Depends on: cert-manager (#6) for TLS; linkerd (#14) for mesh golden signals.
 Project done when: Prometheus/Grafana/Alertmanager deployed; radar alerts
 configured per [observability-radar.md](../observability-radar.md); `make
 status` shows no new `Degraded`.
@@ -10,8 +10,8 @@ status` shows no new `Degraded`.
 
 M1 done when: Prometheus `ProbablyHealthy`, Grafana reachable, Alertmanager ok.
 
-- [ ] Issue #14 · Deploy `kube-prometheus-stack`
-  Depends on: cert-manager (#1), linkerd (#9)
+- [ ] Issue #19 · Deploy `kube-prometheus-stack`
+  Depends on: cert-manager (#6), linkerd (#14)
   - [ ] `infrastructure/kube-prometheus-stack/` values-base + overlays 4 envs
         - [ ] envs/local, dev, qa, prod
         - Commits: `feat(kube-prometheus-stack): add chart reference and per-env overlays`
@@ -28,7 +28,7 @@ M1 done when: Prometheus `ProbablyHealthy`, Grafana reachable, Alertmanager ok.
 M2 done when: radar alert rules evaluated; notifications reach the configured
 receiver.
 
-- [ ] Issue #14-2 · Radar alerts + notification routing
+- [ ] Issue #29 · Radar alerts + notification routing
   - [ ] radar alert rules per [observability-radar.md](../observability-radar.md)
         Commits: `feat(kube-prometheus-stack): radar alert rules`
   - [ ] route/notification to the configured receiver

@@ -1,0 +1,25 @@
+# demo-termination — a request-termination KongPlugin. It makes Kong itself
+# answer the reference route (HTTP 200 + a fixed body) instead of proxying to an
+# upstream, so the demo needs no backing workload and no extra container image
+# (this repo builds nothing and pins upstream images only).
+#
+# Kong runs DB-less with the Kubernetes Ingress Controller (KIC); plugins are
+# plain CRs that KIC programs into Kong — there is no Admin-API/decK config to
+# sync (see infrastructure/kong/values-base.yaml env.database: "off").
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: demo-termination
+  namespace: kong
+  annotations:
+    # Within the Kong Application (app-wide wave 20), apply after the chart's
+    # KIC Deployment (default wave 0); the kongplugins CRD itself is applied
+    # first, in ArgoCD's CRD pre-sync phase.
+    argocd.argoproj.io/sync-wave: "5"
+plugin: request-termination
+config:
+  status_code: 200
+  # `body` (verbatim response body) + `content_type`; the request-termination
+  # schema forbids `message` together with `content_type`/`body`.
+  body: "kong ok"
+  content_type: text/plain

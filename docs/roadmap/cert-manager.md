@@ -7,7 +7,7 @@ signed and usable; TLS issuers are available to all namespaces.
 
 No natural phases → issues directly under the project.
 
-- [x] Issue #1 · Deploy `jetstack/cert-manager` (+ CRDs) and the `sca-ca` issuer
+- [x] Issue #6 · Deploy `jetstack/cert-manager` (+ CRDs) and the `sca-ca` issuer
   Depends on: —
   - [x] `infrastructure/cert-manager/` values-base + overlays for 4 envs
         - [x] envs/local, dev, qa, prod

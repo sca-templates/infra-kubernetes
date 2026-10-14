@@ -1,7 +1,7 @@
 # Project: Implement Keycloak
 
 Area: Security & Identity · Wave 50 · Environments: local→dev→qa→prod
-Depends on: postgres-app/keycloak-db (#10) — its database; cert-manager (#1) for TLS.
+Depends on: postgres-app/keycloak-db (#15) — its database; cert-manager (#6) for TLS.
 Project done when: Keycloak pod `Running`; realm `sca` exists with a test client;
 login/redirect works over TLS.
 
@@ -9,8 +9,8 @@ login/redirect works over TLS.
 
 M1 done when: pod `Running`, app `Synced`/`Healthy`.
 
-- [ ] Issue #13 · Deploy `bitnami/keycloak` (+ realm `sca`)
-  Depends on: postgres-app/keycloak-db (#10), cert-manager (#1)
+- [ ] Issue #18 · Deploy `bitnami/keycloak` (+ realm `sca`)
+  Depends on: postgres-app/keycloak-db (#15), cert-manager (#6)
   - [ ] `infrastructure/keycloak/` values-base + overlays for 4 envs
         - [ ] envs/local, dev, qa, prod
         - Commits: `feat(keycloak): add chart reference and per-env overlays`

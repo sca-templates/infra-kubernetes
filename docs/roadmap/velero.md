@@ -1,7 +1,7 @@
 # Project: Implement Velero
 
 Area: Delivery & Resilience · Wave 80 · Environments: local→dev→qa→prod
-Depends on: minio (#17, local) for the backup backend.
+Depends on: minio (#22, local) for the backup backend.
 Project done when: Velero installed; a scheduled backup of a test namespace runs;
 restore proves the backup (`Backup` `Completed` + `Restore` succeeds).
 
@@ -9,8 +9,8 @@ restore proves the backup (`Backup` `Completed` + `Restore` succeeds).
 
 M1 done when: Velero pod `Running`, backup location available.
 
-- [ ] Issue #18 · Deploy `vmware-tanzu/velero`
-  Depends on: minio (#17)
+- [ ] Issue #23 · Deploy `vmware-tanzu/velero`
+  Depends on: minio (#22)
   - [ ] `infrastructure/velero/` values-base + overlays for 4 envs
         - [ ] envs/local, dev, qa, prod
         - Commits: `feat(velero): add chart reference and per-env overlays`
@@ -26,7 +26,7 @@ M1 done when: Velero pod `Running`, backup location available.
 
 M2 done when: a `Restore` from the completed backup succeeds.
 
-- [ ] Issue #18-2 · Restore proof
+- [ ] Issue #30 · Restore proof
   - [ ] `velero restore` from the completed backup
         Commits: `feat(velero): restore flow`
   - [ ] smoke: restored namespace has its resources back

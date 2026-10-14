@@ -1,0 +1,76 @@
+# kong-local — Kong gateway, DEDICATED Application (not via the platform
+# ApplicationSet; see docs/architecture.md#deviations-log).
+#
+# Kong ships flat-schema CRDs (`configuration.konghq.com`) whose structural-merge
+# diff breaks under ServerSideApply, so — unlike every catalog component, whose
+# generated Application carries `ServerSideApply=true` — this Application
+# deliberately does NOT. Everything else mirrors the catalog template:
+# multi-source (upstream chart + `$values` ref + the repo's own manifests path),
+# the standard CRD `ignoreDifferences` (the chart's `crds/` bundle is applied via
+# ArgoCD's `--include-crds`), and auto-sync + prune (local tier). The chart pin
+# lives here; the values live under infrastructure/kong/ + envs/local/.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kong-local
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+spec:
+  project: default
+  sources:
+    - repoURL: https://charts.konghq.com
+      chart: kong
+      targetRevision: 3.4.1
+      helm:
+        releaseName: kong
+        valueFiles:
+          - $values/infrastructure/kong/values-base.yaml
+          - $values/envs/local/kong.yaml
+    - repoURL: "{{GIT_REPO_URL}}"
+      targetRevision: {{GIT_TARGET_BRANCH}}
+      ref: values
+    - repoURL: "{{GIT_REPO_URL}}"
+      targetRevision: {{GIT_TARGET_BRANCH}}
+      path: infrastructure/kong/manifests
+      directory:
+        recurse: true
+  ignoreDifferences:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      jqPathExpressions:
+        - .spec.versions[].schema
+        - .status
+        - .spec.conversion
+        - .spec.names.listKind
+        - .spec.preserveUnknownFields
+    # The bundled Ingress Controller's admission-webhook certificate is generated
+    # by Helm (`genCA`/`genSignedCert` + `lookup`); `lookup` is empty in ArgoCD's
+    # offline render, so the CA/keypair Secrets and the webhook `caBundle` differ
+    # on every render. Ignore those fields so the Application converges to Synced
+    # (the live bundle is created once on first sync and is self-consistent).
+    - kind: Secret
+      name: kong-validation-webhook-ca-keypair
+      jqPathExpressions:
+        - .data
+    - kind: Secret
+      name: kong-validation-webhook-keypair
+      jqPathExpressions:
+        - .data
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      name: kong-kong-validations
+      jqPathExpressions:
+        - .webhooks[].clientConfig.caBundle
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kong
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true

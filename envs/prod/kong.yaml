@@ -1,0 +1,33 @@
+# kong — prod profile (2 replicas, PodDisruptionBudget, soft anti-affinity,
+# manual sync tier). Mirrors the qa footprint: the gateway is stateless (routing
+# is DB-less and lives in git), so the difference from qa is the manual sync
+# policy, not the replica count.
+
+replicaCount: 2
+
+podDisruptionBudget:
+  enabled: true
+  maxUnavailable: 1
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: topology.kubernetes.io/hostname
+          labelSelector:
+            # Subset of the pod template labels the chart renders (kong.metaLabels
+            # + app.kubernetes.io/component: app); select on the same labels the
+            # chart's own selectors use.
+            matchLabels:
+              app.kubernetes.io/name: kong
+              app.kubernetes.io/instance: kong
+              app.kubernetes.io/component: app
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 384Mi
+  limits:
+    cpu: 1000m
+    memory: 768Mi

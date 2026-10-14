@@ -1,14 +1,14 @@
 # Project: Implement Tempo
 
 Area: Observability · Wave 60 · Environments: local→dev→qa→prod
-Depends on: cert-manager (#1); MinIO (#17, local) for storage where applicable.
+Depends on: cert-manager (#6); MinIO (#22, local) for storage where applicable.
 Project done when: Tempo ingests OTLP traces; a trace is queryable; Grafana shows
 traces correlated with logs/metrics.
 
 No natural phases → issues directly under the project.
 
-- [ ] Issue #16 · Deploy `grafana/tempo`
-  Depends on: cert-manager (#1)
+- [ ] Issue #21 · Deploy `grafana/tempo`
+  Depends on: cert-manager (#6)
   - [ ] `infrastructure/tempo/` values-base + overlays for 4 envs
         - [ ] envs/local, dev, qa, prod
         - Commits: `feat(tempo): add chart reference and per-env overlays`

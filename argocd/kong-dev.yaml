@@ -1,0 +1,71 @@
+# kong-dev — Kong gateway, DEDICATED Application (not via the platform
+# ApplicationSet; see docs/architecture.md#deviations-log).
+#
+# No `ServerSideApply` on purpose (Kong's flat-schema CRDs break the
+# structured-merge diff under SSA); mirrors apps-dev.yaml otherwise (auto-sync +
+# prune). Chart pin + shared values live under infrastructure/kong/ + envs/dev/.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kong-dev
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+spec:
+  project: default
+  sources:
+    - repoURL: https://charts.konghq.com
+      chart: kong
+      targetRevision: 3.4.1
+      helm:
+        releaseName: kong
+        valueFiles:
+          - $values/infrastructure/kong/values-base.yaml
+          - $values/envs/dev/kong.yaml
+    - repoURL: "{{GIT_REPO_URL}}"
+      targetRevision: {{GIT_TARGET_BRANCH}}
+      ref: values
+    - repoURL: "{{GIT_REPO_URL}}"
+      targetRevision: {{GIT_TARGET_BRANCH}}
+      path: infrastructure/kong/manifests
+      directory:
+        recurse: true
+  ignoreDifferences:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      jqPathExpressions:
+        - .spec.versions[].schema
+        - .status
+        - .spec.conversion
+        - .spec.names.listKind
+        - .spec.preserveUnknownFields
+    # The bundled Ingress Controller's admission-webhook certificate is generated
+    # by Helm (`genCA`/`genSignedCert` + `lookup`); `lookup` is empty in ArgoCD's
+    # offline render, so the CA/keypair Secrets and the webhook `caBundle` differ
+    # on every render. Ignore those fields so the Application converges to Synced
+    # (the live bundle is created once on first sync and is self-consistent).
+    - kind: Secret
+      name: kong-validation-webhook-ca-keypair
+      jqPathExpressions:
+        - .data
+    - kind: Secret
+      name: kong-validation-webhook-keypair
+      jqPathExpressions:
+        - .data
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      name: kong-kong-validations
+      jqPathExpressions:
+        - .webhooks[].clientConfig.caBundle
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kong
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true

@@ -1,14 +1,14 @@
 # Project: Implement External Secrets
 
 Area: Security & Identity · Wave -10 · Environments: local→dev→qa→prod
-Depends on: vault (#2) — ClusterSecretStore consumes Vault; syncs land after Vault is seeded.
+Depends on: vault (#7) — ClusterSecretStore consumes Vault; syncs land after Vault is seeded.
 Project done when: `ClusterSecretStore vault` Ready; a projected Secret is
 `Synced` with its Vault KV source; syncs use short refresh (~5 min).
 
 No natural phases → issues directly under the project.
 
-- [x] Issue #3 · Deploy `external-secrets/external-secrets` + `ClusterSecretStore`
-  Depends on: vault (#2)
+- [x] Issue #8 · Deploy `external-secrets/external-secrets` + `ClusterSecretStore`
+  Depends on: vault (#7)
   - [x] `infrastructure/external-secrets/` values-base + overlays for 4 envs
         - [x] envs/local, dev, qa, prod
         - Commits: `feat(external-secrets): add chart reference and per-env overlays`

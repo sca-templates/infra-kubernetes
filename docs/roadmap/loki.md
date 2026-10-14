@@ -1,7 +1,7 @@
 # Project: Implement Loki + Alloy
 
 Area: Observability · Wave 60 · Environments: local→dev→qa→prod
-Depends on: cert-manager (#1); storage on MinIO (#17, local) once available —
+Depends on: cert-manager (#6); storage on MinIO (#22, local) once available —
 `loki` config references the MinIO S3 endpoint.
 Project done when: Loki ingests; Alloy ships pod logs to Loki; logs queryable
 across namespaces.
@@ -10,8 +10,8 @@ across namespaces.
 
 M1 done when: Loki `Running`, a log line is queryable.
 
-- [ ] Issue #15 · Deploy `grafana/loki`
-  Depends on: cert-manager (#1)
+- [ ] Issue #20 · Deploy `grafana/loki`
+  Depends on: cert-manager (#6)
   - [ ] `infrastructure/loki/` values-base + overlays for 4 envs
         - [ ] envs/local, dev, qa, prod
         - Commits: `feat(loki): add chart reference and per-env overlays`
@@ -27,7 +27,7 @@ M1 done when: Loki `Running`, a log line is queryable.
 
 M2 done when: pod logs appear in Loki across namespaces.
 
-- [ ] Issue #15-2 · Deploy `grafana/alloy` (log shipping)
+- [ ] Issue #20 · Deploy `grafana/alloy` (log shipping)
   - [ ] `infrastructure/alloy/` values-base + overlays for 4 envs
         - Commits: `feat(alloy): add chart reference and per-env overlays`
   - [ ] pod-log wiring to Loki
