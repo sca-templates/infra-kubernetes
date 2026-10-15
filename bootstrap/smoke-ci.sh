@@ -11,25 +11,44 @@
 # selective, real chart/CR, no self-heal disabling, profile `local`.
 #
 # Usage:
-#   bootstrap/smoke-ci.sh <component> <ref> [--keep] [--no-cluster]
+#   bootstrap/smoke-ci.sh <component> <ref> [--keep] [--no-cluster] [--no-cloud]
 #   <component>  name of the component to smoke (maps to bootstrap/smoke-<c>.sh)
 #   <ref>        git ref (branch/sha) the smoke Application tracks
 #   --keep       do not delete the kind cluster on exit (diagnosis)
 #   --no-cluster skip cluster-up/argocd-up (use an existing, bootstrapped cluster)
+#   --no-cloud   skip the cloud emulator (Floci) and its cloud-integration smoke
+#                (SMOKE_CLOUD=0 does the same; the smoke is on by default)
 set -euo pipefail
+
+# Load the local `.env` seam if present (same behaviour as bootstrap/sca.sh):
+# KEY=value lines become shell variables here, so SMOKE_CLOUD / SMOKE_TIMEOUT
+# knobs set in `.env` reach this framework without needing `export`.
+for _sca_env in "$(dirname "$0")/../.env" ".env"; do
+  if [ -f "$_sca_env" ]; then
+    # shellcheck disable=SC1090,SC1091
+    . "$_sca_env"
+    break
+  fi
+done
+unset _sca_env
 
 component="${1:-}"
 ref="${2:-}"
 KEEP_CLUSTER=0
 BOOT_CLUSTER=1
+CLOUD_ON=1
+if [ -n "${SMOKE_CLOUD:-}" ] && [ "${SMOKE_CLOUD}" = "0" ]; then
+  CLOUD_ON=0
+fi
 for a in "$@"; do
   case "$a" in
     --keep) KEEP_CLUSTER=1 ;;
     --no-cluster) BOOT_CLUSTER=0 ;;
+    --no-cloud) CLOUD_ON=0 ;;
   esac
 done
 
-[ -n "$component" ] || { echo "ERROR: usage: $0 <component> <ref> [--keep] [--no-cluster]" >&2; exit 2; }
+[ -n "$component" ] || { echo "ERROR: usage: $0 <component> <ref> [--keep] [--no-cluster] [--no-cloud]" >&2; exit 2; }
 [ -n "$ref" ] || { echo "ERROR: <ref> is required (head branch/sha for the smoke Application)" >&2; exit 2; }
 
 STATE_DIR=".generated"
@@ -40,6 +59,14 @@ POLL="${SMOKE_POLL:-10}"
 mkdir -p "${STATE_DIR}"
 
 cleanup() {
+  if [ "${CLOUD_ON}" = "1" ]; then
+    if [ "${KEEP_CLUSTER}" = "1" ]; then
+      echo "── smoke-ci: keeping cloud emulator (--keep) — remove with: make cloud-down"
+    else
+      echo "── smoke-ci: tearing down cloud emulator"
+      make cloud-down 2>/dev/null || true
+    fi
+  fi
   if [ "${KEEP_CLUSTER}" = "1" ]; then
     echo "── smoke-ci: keeping kind cluster (--keep) — remove with: make cluster-down"
   elif [ "${BOOT_CLUSTER}" = "1" ]; then
@@ -77,15 +104,42 @@ diagnose() {
   done < <(kubectl -n "${component}" get pods -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true)
   echo "── diagnose: endpoint slices backing ${component} services"
   kubectl -n "${component}" get endpointslice -o wide 2>/dev/null || true
+  echo "── diagnose: cloud emulator (ns ${CLOUD_NAMESPACE:-cloud})"
+  kubectl -n "${CLOUD_NAMESPACE:-cloud}" get svc,endpointslice,pods -o wide 2>&1 \
+    | tee "${STATE_DIR}/cloud-diagnose.txt" || true
+  kubectl -n "${CLOUD_SMOKE_NS:-cloud-smoke}" get job,pods -o wide 2>&1 \
+    | tee -a "${STATE_DIR}/cloud-diagnose.txt" || true
 }
 
-echo "== smoke-ci: component=${component} ref=${ref} keep=${KEEP_CLUSTER} boot=${BOOT_CLUSTER}"
+echo "== smoke-ci: component=${component} ref=${ref} keep=${KEEP_CLUSTER} boot=${BOOT_CLUSTER} cloud=${CLOUD_ON}"
 
 if [ "${BOOT_CLUSTER}" = "1" ]; then
   echo "── make cluster-up"
   make cluster-up
   echo "── make argocd-up"
   make argocd-up
+fi
+
+# Cloud integration runs on every smoke (docs/ci-cd.md): the emulator is a
+# prerequisite of the cloud smoke below and, later, of any component that
+# consumes an emulated cloud endpoint. `--no-cloud` / SMOKE_CLOUD=0 opt out.
+if [ "${CLOUD_ON}" = "1" ]; then
+  echo "── make cloud-up (emulator provider=${CLOUD_PROVIDER:-aws})"
+  make cloud-up
+fi
+
+# `cloud` is a smoke target, not an ArgoCD Application: dispatching it must not
+# go through smoke-app/wait (there is no Application to converge). This is the
+# path a manual `workflow_dispatch component=cloud` takes.
+if [ "${component}" = "cloud" ]; then
+  [ "${CLOUD_ON}" = "1" ] || {
+    echo "ERROR: component=cloud needs the cloud emulator — drop --no-cloud / SMOKE_CLOUD=0" >&2
+    exit 2
+  }
+  echo "── component=cloud: cloud-integration smoke only (no ArgoCD Application)"
+  make smoke COMPONENT=cloud
+  echo "[OK] smoke-ci: cloud smoke passed (ref=${ref})"
+  exit 0
 fi
 
 echo "── apply smoke ApplicationSet: make smoke-app COMPONENT=${component} REF=${ref}"
@@ -134,6 +188,14 @@ done
 echo "── run smoke: make smoke COMPONENT=${component}"
 make smoke COMPONENT="${component}"
 
+# Cloud-integration smoke: proves the cluster reaches the emulated cloud
+# endpoint and can operate against it (see docs/ci-cd.md). Runs for every
+# component smoke on every PR, unless --no-cloud / SMOKE_CLOUD=0.
+if [ "${CLOUD_ON}" = "1" ]; then
+  echo "── run cloud smoke: make smoke COMPONENT=cloud"
+  make smoke COMPONENT=cloud
+fi
+
 # Phase 2 — after the component smoke bootstrapped the app (e.g. Vault seed),
 # it must converge to Healthy. This is the real Health gate, deferred until the
 # smoke had a chance to make the component healthy. Degraded is deliberately
@@ -171,4 +233,8 @@ while : ; do
   sleep "${POLL}"
 done
 
-echo "[OK] smoke-ci: ${component} smoke passed (ref=${ref})"
+if [ "${CLOUD_ON}" = "1" ]; then
+  echo "[OK] smoke-ci: ${component} smoke passed (ref=${ref}); cloud-integration smoke green"
+else
+  echo "[OK] smoke-ci: ${component} smoke passed (ref=${ref}); cloud smoke skipped (--no-cloud)"
+fi

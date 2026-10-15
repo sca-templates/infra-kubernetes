@@ -146,8 +146,10 @@ monitored. See the [roadmap](roadmap.md) for the Phase 1 gate and its smoke.
 The whole boot → apply → wait → run → diagnose → teardown cycle lives in
 `bootstrap/smoke-ci.sh`; each component adds only its own smoke command
 (`bootstrap/smoke-<component>.sh`, dispatched by `smoke-target.sh`). Wait steps
-default to a 900s timeout (`SMOKE_TIMEOUT`, overridable). On failure the
-diagnose step captures the Application/ApplicationSet state, pod describe +
+default to a 900s timeout (`SMOKE_TIMEOUT`, overridable). Layered on top, the
+framework also stands up and checks the cloud emulator (**on by default**;
+`--no-cloud` / `SMOKE_CLOUD=0` opts out) — see *Cloud integration smoke* below.
+On failure the diagnose step captures the Application/ApplicationSet state, pod describe +
 logs and EndpointSlices, and the workflow uploads `.generated/` as an artifact
 (`if: always()`), so a non-green run is self-explanatory.
 
@@ -164,6 +166,10 @@ logs and EndpointSlices, and the workflow uploads `.generated/` as an artifact
   against an already-converged cluster; the framework (boot, apply, wait,
   diagnose, teardown) is shared and only the component-specific smoke command is
   added per phase.
+- **Cloud-aware**: on top of the component smoke, every run also proves the
+  cluster reaches a local cloud emulator (see *Cloud integration smoke* below) —
+  so "does this platform talk to a cloud?" is answered on every PR, not only at
+  a later cloud phase.
 - **Two-phase convergence gate**: the framework first waits for the smoke
   `Application` to become **`Synced`** (any health), runs the component smoke,
   then waits for **`Synced/Healthy`**. Health is deliberately *not* a pre-smoke
@@ -186,6 +192,46 @@ become `Healthy` after their own smoke seeds them (`smoke-vault.sh` →
   `local`/`dev` overlays therefore disable that readiness probe (the controller
   serves no traffic; the component smoke asserts real readiness) while `qa`/`prod`
   keep it.
+
+### Cloud integration smoke (Floci — dev/CI tooling)
+
+Every smoke also proves the cluster can reach and **operate against** an
+emulated cloud, so cloud integration is exercised on each PR without a cloud
+account, IAM material or per-cloud configuration. This is **CI/dev tooling, not
+a platform component**: it has no sync-wave, no catalog row and nothing is
+rendered by ArgoCD — it exists only for the duration of a smoke run.
+
+- **Lifecycle** — `bootstrap/cloud-emulator.sh up|down|status [provider]`
+  (wrapped as `make cloud-up` / `make cloud-down` / `make cloud-status`). It
+  runs the emulator as a **Docker container on the runner/host**, attaches it to
+  the target kind cluster's own Docker network, and publishes it into the
+  cluster through a **selector-less `Service` + `EndpointSlice`** in the `cloud`
+  namespace. In-cluster pods therefore reach it at the stable DNS name
+  `http://floci.cloud.svc.cluster.local:4566` (host edge on `127.0.0.1:4566`).
+- **The check** — `bootstrap/smoke-cloud.sh` dispatches by provider to
+  `bootstrap/smoke-cloud-<provider>.sh` (`aws` today). The `aws` check throws a
+  throwaway Job at the endpoint: the pinned AWS CLI creates an S3 bucket, puts
+  and gets an object back and greps the round-tripped bytes (`AWS_SMOKE_OK`).
+  No IAM, no per-component configuration — just an endpoint plus the same dummy
+  credentials. Driven by `make smoke COMPONENT=cloud` (or
+  `workflow_dispatch` with `component=cloud`).
+- **Wiring** — `smoke-ci.sh` runs `make cloud-up` right after the cluster boots
+  and `make smoke COMPONENT=cloud` right after the component smoke, on **every**
+  smoke run (on by default). `--no-cloud` / `SMOKE_CLOUD=0` opts out. `cloud` is
+  a smoke target, not an ArgoCD Application: the `component=cloud` path skips
+  `smoke-app`/wait and runs only the cloud check. A PR that touches the cloud
+  tooling (`bootstrap/cloud-emulator.sh`, `bootstrap/smoke-cloud*.sh`) resolves
+  to the `cloud` component, so the tooling is self-validated in CI; `cloud` is
+  also selectable via `workflow_dispatch`.
+- **Pins** — the emulator and CLI images are pinned in
+  `bootstrap/versions.sh` (`FLOCI_IMAGE`, `AWS_CLI_IMAGE`), covered by the
+  pin guards ([security.md](security.md)), and overridable via `.env`.
+- **Adding a cloud** means a provider case in `cloud-emulator.sh` plus a
+  `bootstrap/smoke-cloud-<provider>.sh` — nothing else changes.
+
+The emulator is the **endpoint half** of cloud integration; standing up the real
+EKS substrate (k3s + ECR) behind the same provider seam is deliberate follow-up
+work, out of the current plan.
 
 ### Environment profile: `local` (not `qa`)
 

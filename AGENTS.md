@@ -79,10 +79,13 @@ and image pins are set inside each phase and live under
 
 **Intentional exclusions** (per the restart plan): no Consul in-cluster
 (ADR-001; native DNS + Linkerd replace it), no Unleash, no
-KafkaConnect/Debezium, no kafka-ui, no linkerd-viz in-cluster. No `latest`
-tags; this repo builds nothing. **Services are not part of this catalog** —
-each service owns its `deploy/` and is registered in `argocd/services-<env>.yaml`
-([docs/onboarding-new-service.md](docs/onboarding-new-service.md)).
+KafkaConnect/Debezium, no kafka-ui, no linkerd-viz in-cluster, no cloud
+in-cluster. No `latest` tags; this repo builds nothing. **Services are not part
+of this catalog** — each service owns its `deploy/` and is registered in
+`argocd/services-<env>.yaml`
+([docs/onboarding-new-service.md](docs/onboarding-new-service.md)). The cloud
+emulator (Floci) is **smoke/CI tooling** for the cluster smoke, not a component —
+no sync-wave, no catalog row ([docs/ci-cd.md](docs/ci-cd.md)).
 
 ## 4. Dependency order (sync-waves)
 
@@ -126,6 +129,9 @@ guards ([docs/security.md](docs/security.md)).
 | `make status` | Cluster, ArgoCD apps and pod health overview |
 | `make validate` | Static suite + live cluster checks |
 | `make validate-static` | Static suite only: markdownlint, yamllint, YAML parse, `bash -n` |
+| `make cloud-up` | Start the cloud emulator (Floci) and publish it into the cluster — dev/CI tooling, not a component |
+| `make cloud-down` | Stop the cloud emulator and unpublish it from the cluster |
+| `make cloud-status` | Report cloud-emulator reachability (host edge + in-cluster Service) |
 | `make port-forward APP=<name>` | Reach a platform UI/API locally (argocd, vault, keycloak, grafana, prometheus, …) |
 | `make clean` | Remove local state (`.env`, `.secrets/`, generated artifacts) |
 
@@ -185,6 +191,7 @@ Base URL: `https://raw.githubusercontent.com/sca-templates/sca-docs/main/<path>`
 | kind cluster OOM | Host RAM exhausted | Stop the Compose stack before bootstrapping; 1-replica local profile |
 | `ImagePullBackOff` | Bad pin or unreachable registry | Verify the pinned tag exists upstream; check node images; never float `latest` |
 | ESO wedge (local) | Old long-refresh pattern | Do not restart ESO by hand; short refresh (~5 min) prevents recurrence |
+| Cloud smoke fails / no endpoint | Emulator not up, or wrong Docker network | `make cloud-status`; `make cloud-up` (needs the cluster up); check `Service/floci` + EndpointSlice in ns `cloud` |
 
 Full runbooks live in `docs/workflow.md`.
 
