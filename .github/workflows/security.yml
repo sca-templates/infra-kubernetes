@@ -47,16 +47,25 @@ jobs:
         run: |
           set -euo pipefail
           fail=0
-          if grep -rnE 'image:[[:space:]]*[^[:space:]#]+:[[:space:]]*latest' infrastructure charts argocd; then
+          # `bootstrap` carries the smoke framework, script-inline manifests and
+          # bootstrap/versions.sh (the image-pin SSOT), so it is held to the
+          # same rules as the rendered charts.
+          if grep -rnE 'image:[[:space:]]*[^[:space:]#]+:[[:space:]]*latest' infrastructure charts argocd bootstrap; then
             echo "ERROR: 'image: <name>:latest' violates the pinned-tags policy" >&2
             fail=1
           fi
-          if grep -rInE 'tag:[[:space:]]+(latest|nightly|edge)' infrastructure charts; then
+          if grep -rInE 'tag:[[:space:]]+(latest|nightly|edge)' infrastructure charts bootstrap; then
             echo "ERROR: floating tag detected" >&2
             fail=1
           fi
           if grep -rnE 'targetRevision:[[:space:]]+(latest|edge)' argocd; then
             echo "ERROR: floating chart targetRevision detected" >&2
+            fail=1
+          fi
+          # Shell side of the same policy: a `:latest` / `:nightly` / `:edge`
+          # reference on a non-comment line (docker run, image pin defaults).
+          if grep -rnE '^[[:space:]]*[^#].*:(latest|nightly|edge)(["'\'']|[[:space:]]|$)' bootstrap; then
+            echo "ERROR: floating image tag in bootstrap (pin a version in bootstrap/versions.sh)" >&2
             fail=1
           fi
           exit ${fail}

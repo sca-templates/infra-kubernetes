@@ -17,7 +17,7 @@ the CI workflow map see [ci-cd.md](ci-cd.md).
 | osv-scanner (SCA) | security.yml (via shared template) | Open-source dependency vulnerability scan on push + PR; honours `.github/osv-scanner.toml` ignores |
 | checkov baseline | security.yml (via shared template) | `.github/checkov-baseline.json` gates **new** findings since Phase 1 — the pod on `bootstrap/local-git-server.yaml` is documented (local-only tooling); anything else fails the PR as it would without the baseline |
 | CodeQL | codeql.yml (shared template) | Static analysis on push + PR + weekly schedule |
-| Pin guards | security.yml (local job) | Fails any chart reference or image tag that is `latest` or floating |
+| Pin guards | security.yml (local job) | Fails any chart reference or image tag that is `latest` or floating. Trees: `infrastructure`/`charts`/`argocd` **and `bootstrap`** — the smoke framework carries script-inline manifests and the image-pin SSOT (`bootstrap/versions.sh`), so the guards also reject a floating tag on a non-comment shell line there |
 | Release tag signing | release.yml (shared template) | Every release tag is re-signed with the dedicated **release-bot** GPG key (private key in repo secret `RELEASE_GPG_PRIVATE_KEY`) |
 
 `security.yml` runs gitleaks, osv-scanner and checkov through the org shared

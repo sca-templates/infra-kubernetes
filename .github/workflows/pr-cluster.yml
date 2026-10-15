@@ -23,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       component:
-        description: Component to smoke (subdir of infrastructure/)
+        description: Component to smoke (subdir of infrastructure/, or `cloud` for the cloud-emulator smoke)
         type: string
         default: cert-manager
       ref:
@@ -82,6 +82,12 @@ jobs:
             done
             if [ -z "$component" ] && printf '%s\n' "$changed" | grep -qE "^envs/[^/]+/[^/]+\.ya?ml$"; then
               component="$(printf '%s\n' "$changed" | grep -oE '^envs/[^/]+/[^/]+\.ya?ml$' | head -1 | sed -E 's|^envs/[^/]+/([^/]+)\.ya?ml$|\1|')"
+            fi
+            # CI tooling: a change to the cloud-emulator tooling resolves to the
+            # `cloud` target, which needs no ArgoCD Application (see
+            # bootstrap/smoke-ci.sh), so the tooling is self-validated in CI.
+            if [ -z "$component" ] && printf '%s\n' "$changed" | grep -qE '^bootstrap/(cloud-emulator|smoke-cloud)[^/]*\.sh$'; then
+              component="cloud"
             fi
             [ -n "$component" ] || { echo "No platform component touched; skipping cluster smoke."; echo "component=" >> "${GITHUB_OUTPUT}"; exit 0; }
             echo "component=${component}" >> "${GITHUB_OUTPUT}"

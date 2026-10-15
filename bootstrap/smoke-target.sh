@@ -16,6 +16,7 @@ case "$component" in
   strimzi) exec "$(dirname "$0")/smoke-strimzi.sh" ;;
   redis-operator) exec "$(dirname "$0")/smoke-redis-operator.sh" ;;
   kong) exec "$(dirname "$0")/smoke-kong.sh" ;;
-  "") echo "usage: $0 <component> (cert-manager, vault, external-secrets, linkerd-crds, cloudnative-pg, strimzi, redis-operator, kong)" >&2; exit 2 ;;
+  cloud) exec "$(dirname "$0")/smoke-cloud.sh" ;;
+  "") echo "usage: $0 <component> (cert-manager, vault, external-secrets, linkerd-crds, cloudnative-pg, strimzi, redis-operator, kong, cloud)" >&2; exit 2 ;;
   *) echo "ERROR: no smoke command for component '$component'" >&2; exit 2 ;;
 esac

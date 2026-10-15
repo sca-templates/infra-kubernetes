@@ -93,12 +93,28 @@ validate-static: ## Static suite only: markdownlint, yamllint, YAML parse, bash 
 
 COMPONENT ?=
 REF ?= $(shell git branch --show-current)
+CLOUD_PROVIDER ?= aws
+
+##@ Cloud (emulator — dev/CI tooling, docs/ci-cd.md)
+
+.PHONY: cloud-up
+cloud-up: ## Start the cloud emulator and publish it to the cluster
+	@[ -n "$(CLOUD_PROVIDER)" ] || { echo 'Usage: make cloud-up CLOUD_PROVIDER=<aws>'; exit 1; }
+	bootstrap/cloud-emulator.sh up "$(CLOUD_PROVIDER)"
+
+.PHONY: cloud-down
+cloud-down: ## Stop the cloud emulator and unpublish it from the cluster
+	bootstrap/cloud-emulator.sh down "$(CLOUD_PROVIDER)"
+
+.PHONY: cloud-status
+cloud-status: ## Report cloud-emulator reachability (host edge + in-cluster Service)
+	bootstrap/cloud-emulator.sh status "$(CLOUD_PROVIDER)"
 
 ##@ Smoke
 
 .PHONY: smoke
 smoke: ## Smoke a deployed component: make smoke COMPONENT=cert-manager
-	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cert-manager, vault, external-secrets, linkerd-crds, cloudnative-pg, strimzi, redis-operator, kong)'; exit 1; }
+	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cert-manager, vault, external-secrets, linkerd-crds, cloudnative-pg, strimzi, redis-operator, kong, cloud)'; exit 1; }
 	bootstrap/smoke-target.sh "$(COMPONENT)"
 
 .PHONY: smoke-app
