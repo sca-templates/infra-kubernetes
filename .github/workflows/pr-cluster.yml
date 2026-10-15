@@ -2,9 +2,15 @@
 # SPDX-License-Identifier: MIT
 # =============================================================================
 # infra-kubernetes cluster smoke — validate the platform still works on an
-# ephemeral kind cluster (Phase 1). Ran by bootstrap/smoke-ci.sh, which owns the
+# ephemeral cluster (Phase 1). Ran by bootstrap/smoke-ci.sh, which owns the
 # boot/apply/wait/run/diagnose/teardown cycle so each component only adds its
 # smoke command (bootstrap/smoke-<component>.sh).
+#
+# Two substrates run under the one required `Smoke` check:
+#   - kind (selective): the touched component(s) on an ephemeral kind cluster,
+#     profile `local`.
+#   - EKS (full platform): Floci's emulated EKS (a real k3s node) booting the
+#     whole catalog via the real app-of-apps, plus the EKS/ECR integration smoke.
 #
 # Triggers:
 #   - pull_request:       selective smoke of the touched component(s) (profile
@@ -112,19 +118,26 @@ jobs:
 
           # 3. per-component smoke scripts: bootstrap/smoke-<c>*.sh → <c>
           #    (smoke-ci/smoke-target are the shared framework; smoke-cloud* → `cloud`).
+          #    smoke-eks is EKS-only (the kind substrate cannot run it), so it maps
+          #    to the framework default: the always-on EKS step exercises it.
           while IFS= read -r f; do
             [ -n "$f" ] || continue
             c="$(printf '%s' "$f" | sed -E 's|^bootstrap/smoke-||; s|\.sh$||; s|-aws$||')"
             case "$c" in
               ci|target) ;;
               cloud|cloud-*) add cloud ;;
+              eks) add cert-manager ;;
               *) add "$c" ;;
             esac
           done < <(printf '%s\n' "$changed" | grep -oE '^bootstrap/smoke-[^/]*\.sh$' || true)
 
-          # 4. cloud emulator tooling → `cloud` (self-validates in CI).
+          # 4. cloud/EKS emulator tooling → `cloud` / framework default
+          #    (self-validates in CI; eks tooling is exercised by the EKS step).
           if printf '%s\n' "$changed" | grep -qE '^bootstrap/cloud-emulator[^/]*\.sh$'; then
             add cloud
+          fi
+          if printf '%s\n' "$changed" | grep -qE '^bootstrap/eks-emulator[^/]*\.sh$'; then
+            add cert-manager
           fi
 
           # 5. shared framework/tooling → default component (cert-manager): the
@@ -145,7 +158,7 @@ jobs:
           echo "slug=${list//,/-}" >> "${GITHUB_OUTPUT}"
           echo "ref=${PR_HEAD_REF}" >> "${GITHUB_OUTPUT}"
 
-      - name: Cluster smoke
+      - name: Cluster smoke (kind, selective)
         if: steps.resolve.outputs.components != ''
         run: |
           export PATH="${HOME}/.local/bin:${PATH}"
@@ -155,14 +168,40 @@ jobs:
           SMOKE_COMPONENTS: ${{ steps.resolve.outputs.components }}
           SMOKE_REF: ${{ steps.resolve.outputs.ref }}
 
-      - name: Upload smoke diagnose artifacts
+      - name: Upload smoke diagnose artifacts (kind)
         if: always() && steps.resolve.outputs.components != ''
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: smoke-diagnose-${{ steps.resolve.outputs.slug }}
+          name: smoke-diagnose-kind-${{ steps.resolve.outputs.slug }}
+          path: .generated/
+          if-no-files-found: warn
+
+      # Same required `Smoke` check, second substrate: boot the FULL platform on
+      # Floci's emulated EKS (a real k3s node) and prove EKS integration (IAM
+      # kubeconfig) + the ECR image path. Runs after the kind smoke; a failed
+      # kind smoke skips it (fail-fast). `.generated/` is reset so the EKS
+      # artifact carries only the EKS run.
+      - name: Cluster smoke (EKS substrate, full platform)
+        if: steps.resolve.outputs.components != ''
+        run: |
+          export PATH="${HOME}/.local/bin:${PATH}"
+          rm -rf .generated
+          bootstrap/smoke-ci.sh "${SMOKE_COMPONENTS}" "${SMOKE_REF}" --substrate eks
+        env:
+          GIT_REPO_URL: https://github.com/${{ github.repository }}
+          SMOKE_COMPONENTS: ${{ steps.resolve.outputs.components }}
+          SMOKE_REF: ${{ steps.resolve.outputs.ref }}
+
+      - name: Upload smoke diagnose artifacts (EKS)
+        if: always() && steps.resolve.outputs.components != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: smoke-diagnose-eks-${{ steps.resolve.outputs.slug }}
           path: .generated/
           if-no-files-found: warn
 
       - name: Teardown smoke cluster
         if: always() && steps.resolve.outputs.components != ''
-        run: make cluster-down --ignore-errors 2>/dev/null || true
+        run: |
+          make cluster-down 2>/dev/null || true
+          make eks-down 2>/dev/null || true

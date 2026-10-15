@@ -139,7 +139,9 @@ monitored. See the [roadmap](roadmap.md) for the Phase 1 gate and its smoke.
   than one component smokes all of them in a single run (one cluster boot, one
   cloud bring-up, one teardown). Same-repo PRs only (fork PRs are skipped,
   coherent with `main-sync.yml`). The `Smoke` check is a **required**
-  branch-protection check on `main`.
+  branch-protection check on `main`. The one `Smoke` job runs **two substrates**
+  in sequence: the selective **kind** smoke (below) and, when it passes, the
+  full-platform **EKS** smoke (*EKS substrate smoke* below).
 - **`workflow_dispatch`** (manual) — one-off smoke of a component/ref
   (`component` + `ref` inputs, defaults `cert-manager`/`main`) for testing
   without opening a PR. Nothing else triggers the workflow; there is no
@@ -160,8 +162,10 @@ framework also stands up and checks the cloud emulator (**on by default**;
 The selective mapping in `pr-cluster.yml` resolves **every** changed path to a
 component and smokes the whole set: `infrastructure/<c>/…` and
 `envs/<env>/<c>.yaml` → `<c>`; `bootstrap/smoke-<c>*.sh` → `<c>` (the
-`smoke-cloud*` scripts → `cloud`); `bootstrap/cloud-emulator.sh` → `cloud`.
-Changes to the smoke's own machinery — `bootstrap/smoke-ci.sh`,
+`smoke-cloud*` scripts → `cloud`; `smoke-eks.sh` → `cert-manager`, since the
+kind substrate cannot run the EKS-only check); `bootstrap/cloud-emulator.sh` →
+`cloud`; `bootstrap/eks-emulator.sh` → `cert-manager` (exercised by the EKS
+substrate). Changes to the smoke's own machinery — `bootstrap/smoke-ci.sh`,
 `smoke-target.sh`, `render-served-apps.sh`, `sca.sh`, `versions.sh`,
 `kind-config.yaml`, `local-git-*`, `argocd/**` and the `Makefile` — resolve to
 the default component `cert-manager`, so the framework is exercised by the
@@ -255,9 +259,46 @@ rendered by ArgoCD — it exists only for the duration of a smoke run.
 - **Adding a cloud** means a provider case in `cloud-emulator.sh` plus a
   `bootstrap/smoke-cloud-<provider>.sh` — nothing else changes.
 
-The emulator is the **endpoint half** of cloud integration; standing up the real
-EKS substrate (k3s + ECR) behind the same provider seam is deliberate follow-up
-work, out of the current plan.
+The emulator is the **endpoint half** of cloud integration.
+
+### EKS substrate smoke (Floci — dev/CI tooling)
+
+On top of the endpoint check, the same `Smoke` job boots the **full platform**
+on an **emulated EKS cluster** and proves the two EKS-specific paths the kind
+substrate cannot: a real Kubernetes API server reached through an
+**IAM-authenticated kubeconfig**, and images **pulled in-cluster from the
+emulated ECR**. Still **CI/dev tooling, not a platform component**: no
+sync-wave, no catalog row, nothing rendered by ArgoCD.
+
+- **Substrate** — Floci backs `eks` with a real single-node **k3s** container (a
+  live API server) plus an OCI **ECR** registry. `bootstrap/eks-emulator.sh
+  up|down|status` (`make eks-up` / `make eks-down` / `make eks-status`) starts
+  Floci in EKS mode on a dedicated Docker network, mints an **IAM user + access
+  key** (Floci rejects the dummy `test`/`test` creds for cluster-admin; the key
+  is saved to `.secrets/eks-admin.env` and reused on re-run), `aws eks
+  create-cluster`, waits `ACTIVE`, fetches the kubeconfig (stable context
+  `floci-eks`), waits for the node `Ready`, and publishes the emulator into the
+  cluster for the endpoint smoke.
+- **The check** — `bootstrap/smoke-eks.sh` (driven by `make smoke
+  COMPONENT=eks`): asserts a `Ready` node on context `floci-eks`, pushes the
+  pinned `AWS_CLI_IMAGE` to `${account}.dkr.ecr.${region}.localhost:4566` via
+  `ecr get-login-password` + `docker login`, then runs an in-cluster `Job` that
+  pulls the image through the node's ECR registry mirror and prints
+  `EKS_ECR_PULL_OK`.
+- **Full platform** — the EKS run boots the whole catalog by applying the **real
+  app-of-apps** (`make bootstrap ENV=local` → `platform-root-local` →
+  ApplicationSet `platform-local`), then waits for **every** platform
+  Application (`<name>-local`) to converge `Synced/Healthy`, runs the touched
+  component smoke(s), the EKS check and the endpoint check. It is the most
+  complete test in the repo: the same GitOps path `dev`/`qa`/`prod` use, on an
+  EKS-shaped cluster.
+- **Wiring** — `smoke-ci.sh` selects the substrate with `--substrate kind|eks` /
+  `SMOKE_SUBSTRATE`; the kind run is unchanged (selective, `<name>-smoke`), the
+  EKS run is full-platform (`<name>-local`). The EKS step is opt-out in the
+  workflow only by editing it; it always shares the one required `Smoke` check.
+- **Pins** — Floci, the AWS CLI and the EKS/ECR coordinates (`FLOCI_EKS_*`,
+  `FLOCI_AWS_*`) are pinned in `bootstrap/versions.sh`, covered by the pin guards
+  ([security.md](security.md)), and overridable via `.env`.
 
 ### Environment profile: `local` (not `qa`)
 

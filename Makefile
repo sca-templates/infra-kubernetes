@@ -110,11 +110,25 @@ cloud-down: ## Stop the cloud emulator and unpublish it from the cluster
 cloud-status: ## Report cloud-emulator reachability (host edge + in-cluster Service)
 	bootstrap/cloud-emulator.sh status "$(CLOUD_PROVIDER)"
 
+##@ EKS substrate (emulator — dev/CI tooling, docs/ci-cd.md)
+
+.PHONY: eks-up
+eks-up: ## Start Floci in EKS mode: create the emulated EKS cluster and point kubectl at it
+	bootstrap/eks-emulator.sh up
+
+.PHONY: eks-down
+eks-down: ## Delete the emulated EKS cluster, IAM user and kubeconfig context
+	bootstrap/eks-emulator.sh down
+
+.PHONY: eks-status
+eks-status: ## Report the emulated EKS cluster status and its nodes
+	bootstrap/eks-emulator.sh status
+
 ##@ Smoke
 
 .PHONY: smoke
 smoke: ## Smoke a deployed component: make smoke COMPONENT=cert-manager
-	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cert-manager, vault, external-secrets, linkerd-crds, cloudnative-pg, strimzi, redis-operator, kong, cloud)'; exit 1; }
+	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cert-manager, vault, external-secrets, linkerd-crds, cloudnative-pg, strimzi, redis-operator, kong, cloud, eks)'; exit 1; }
 	bootstrap/smoke-target.sh "$(COMPONENT)"
 
 .PHONY: smoke-app
