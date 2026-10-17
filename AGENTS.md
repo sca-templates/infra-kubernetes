@@ -84,8 +84,10 @@ in-cluster. No `latest` tags; this repo builds nothing. **Services are not part
 of this catalog** — each service owns its `deploy/` and is registered in
 `argocd/services-<env>.yaml`
 ([docs/onboarding-new-service.md](docs/onboarding-new-service.md)). The cloud
-emulator (Floci) is **smoke/CI tooling** for the cluster smoke, not a component —
-no sync-wave, no catalog row ([docs/ci-cd.md](docs/ci-cd.md)).
+emulator (Floci) is **smoke/CI tooling** for the cluster smoke — including its
+**EKS substrate** (emulated EKS k3s + ECR), which boots the full platform on an
+EKS-shaped cluster — not a component: no sync-wave, no catalog row
+([docs/ci-cd.md](docs/ci-cd.md)).
 
 ## 4. Dependency order (sync-waves)
 
@@ -132,6 +134,9 @@ guards ([docs/security.md](docs/security.md)).
 | `make cloud-up` | Start the cloud emulator (Floci) and publish it into the cluster — dev/CI tooling, not a component |
 | `make cloud-down` | Stop the cloud emulator and unpublish it from the cluster |
 | `make cloud-status` | Report cloud-emulator reachability (host edge + in-cluster Service) |
+| `make eks-up` | Start Floci in EKS mode: create the emulated EKS cluster (k3s) and point kubectl at it — dev/CI tooling, not a component |
+| `make eks-down` | Delete the emulated EKS cluster, IAM user and kubeconfig context |
+| `make eks-status` | Report the emulated EKS cluster status and its nodes |
 | `make port-forward APP=<name>` | Reach a platform UI/API locally (argocd, vault, keycloak, grafana, prometheus, …) |
 | `make clean` | Remove local state (`.env`, `.secrets/`, generated artifacts) |
 

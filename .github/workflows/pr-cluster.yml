@@ -2,16 +2,22 @@
 # SPDX-License-Identifier: MIT
 # =============================================================================
 # infra-kubernetes cluster smoke — validate the platform still works on an
-# ephemeral kind cluster (Phase 1). Ran by bootstrap/smoke-ci.sh, which owns the
+# ephemeral cluster (Phase 1). Ran by bootstrap/smoke-ci.sh, which owns the
 # boot/apply/wait/run/diagnose/teardown cycle so each component only adds its
 # smoke command (bootstrap/smoke-<component>.sh).
 #
+# Two substrates run under the one required `Smoke` check:
+#   - kind (selective): the touched component(s) on an ephemeral kind cluster,
+#     profile `local`.
+#   - EKS (full platform): Floci's emulated EKS (a real k3s node) booting the
+#     whole catalog via the real app-of-apps, plus the EKS/ECR integration smoke.
+#
 # Triggers:
-#   - pull_request:       selective smoke of the touched component (profile
+#   - pull_request:       selective smoke of the touched component(s) (profile
 #                         `local`). Required PR check on main (branch
 #                         protection must include `Smoke`); no push
 #                         watch/monitoring runs.
-#   - workflow_dispatch:  manual one-off smoke of a component/ref for testing.
+#   - workflow_dispatch:  manual one-off smoke of component(s)/ref for testing.
 #
 # Same-repo PRs only (coherent with main-sync.yml); fork PRs are skipped.
 # =============================================================================
@@ -23,7 +29,7 @@ on:
   workflow_dispatch:
     inputs:
       component:
-        description: Component to smoke (subdir of infrastructure/, or `cloud` for the cloud-emulator smoke)
+        description: Component(s) to smoke — subdir(s) of infrastructure/, comma-separated, or `cloud` for the cloud-emulator smoke
         type: string
         default: cert-manager
       ref:
@@ -51,12 +57,23 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Cache the pinned toolchain (~/.local/bin). The key hashes versions.sh,
+      # so bumping a pin invalidates the cache; `make prereqs` stays idempotent
+      # (a partial restore is completed, a full restore is a no-op).
+      - name: Cache toolchain
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.local/bin
+          key: ${{ runner.os }}-toolchain-${{ hashFiles('bootstrap/versions.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-toolchain-
+
       - name: Install pinned toolchain
         run: |
           make prereqs >/dev/null
           echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
 
-      - name: Resolve smoke component and ref
+      - name: Resolve smoke components and ref
         id: resolve
         env:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -65,53 +82,130 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # Manual: smoke the requested component/ref for testing.
-            echo "component=${{ inputs.component }}" >> "${GITHUB_OUTPUT}"
-            echo "ref=${{ inputs.ref }}" >> "${GITHUB_OUTPUT}"
-          else
-            # Selective: map changed paths to the touched component.
-            changed="$(git diff --name-only "${PR_BASE_SHA}...${PR_HEAD_SHA}")"
-            component=""
-            for c in infrastructure/*/; do
-              [ -d "$c" ] || continue
-              c="${c%/}"; c="${c##*/}"
-              if printf '%s\n' "$changed" | grep -qE "(^|/)${c}(/|\.yaml$|\.yml$)"; then
-                component="$c"
-                break
-              fi
-            done
-            if [ -z "$component" ] && printf '%s\n' "$changed" | grep -qE "^envs/[^/]+/[^/]+\.ya?ml$"; then
-              component="$(printf '%s\n' "$changed" | grep -oE '^envs/[^/]+/[^/]+\.ya?ml$' | head -1 | sed -E 's|^envs/[^/]+/([^/]+)\.ya?ml$|\1|')"
-            fi
-            # CI tooling: a change to the cloud-emulator tooling resolves to the
-            # `cloud` target, which needs no ArgoCD Application (see
-            # bootstrap/smoke-ci.sh), so the tooling is self-validated in CI.
-            if [ -z "$component" ] && printf '%s\n' "$changed" | grep -qE '^bootstrap/(cloud-emulator|smoke-cloud)[^/]*\.sh$'; then
-              component="cloud"
-            fi
-            [ -n "$component" ] || { echo "No platform component touched; skipping cluster smoke."; echo "component=" >> "${GITHUB_OUTPUT}"; exit 0; }
-            echo "component=${component}" >> "${GITHUB_OUTPUT}"
-            echo "ref=${PR_HEAD_REF}" >> "${GITHUB_OUTPUT}"
+            # Manual: smoke the requested component(s)/ref for testing.
+            {
+              echo "components=${{ inputs.component }}"
+              echo "slug=$(printf '%s' "${{ inputs.component }}" | tr ',' '-')"
+              echo "ref=${{ inputs.ref }}"
+            } >> "${GITHUB_OUTPUT}"
+            exit 0
           fi
 
-      - name: Cluster smoke
-        if: steps.resolve.outputs.component != ''
+          # Selective: map every changed path to the touched component(s), so a
+          # PR touching more than one component smokes all of them in one run.
+          changed="$(git diff --name-only "${PR_BASE_SHA}...${PR_HEAD_SHA}")"
+          comps=()
+          add() {
+            local c="$1" existing
+            for existing in "${comps[@]}"; do
+              [ "$existing" = "$c" ] && return 0
+            done
+            comps+=("$c")
+          }
+
+          # 1. infrastructure/<c>/... → <c>
+          for c in infrastructure/*/; do
+            [ -d "$c" ] || continue
+            c="${c%/}"; c="${c##*/}"
+            if printf '%s\n' "$changed" | grep -qE "(^|/)${c}(/|\.yaml$|\.yml$)"; then
+              add "$c"
+            fi
+          done
+
+          # 2. envs/<env>/<c>.yaml → <c>
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            add "$(printf '%s' "$f" | sed -E 's|^envs/[^/]+/([^/]+)\.ya?ml$|\1|')"
+          done < <(printf '%s\n' "$changed" | grep -oE '^envs/[^/]+/[^/]+\.ya?ml$' || true)
+
+          # 3. per-component smoke scripts: bootstrap/smoke-<c>*.sh → <c>
+          #    (smoke-ci/smoke-target are the shared framework; smoke-cloud* → `cloud`).
+          #    smoke-eks is EKS-only (the kind substrate cannot run it), so it maps
+          #    to the framework default: the always-on EKS step exercises it.
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            c="$(printf '%s' "$f" | sed -E 's|^bootstrap/smoke-||; s|\.sh$||; s|-aws$||')"
+            case "$c" in
+              ci|target) ;;
+              cloud|cloud-*) add cloud ;;
+              eks) add cert-manager ;;
+              *) add "$c" ;;
+            esac
+          done < <(printf '%s\n' "$changed" | grep -oE '^bootstrap/smoke-[^/]*\.sh$' || true)
+
+          # 4. cloud/EKS emulator tooling → `cloud` / framework default
+          #    (self-validates in CI; eks tooling is exercised by the EKS step).
+          if printf '%s\n' "$changed" | grep -qE '^bootstrap/cloud-emulator[^/]*\.sh$'; then
+            add cloud
+          fi
+          if printf '%s\n' "$changed" | grep -qE '^bootstrap/eks-emulator[^/]*\.sh$'; then
+            add cert-manager
+          fi
+
+          # 5. shared framework/tooling → default component (cert-manager): the
+          #    smoke's own machinery (and the argocd manifest set / Makefile it
+          #    drives) must be exercised by the smoke, not merged untested.
+          framework_re='^(Makefile|argocd/|bootstrap/(smoke-ci|smoke-target|render-served-apps|sca|versions|kind-config|local-git-)[^/]*$)'
+          if printf '%s\n' "$changed" | grep -qE "$framework_re"; then
+            add cert-manager
+          fi
+
+          if [ "${#comps[@]}" -eq 0 ]; then
+            echo "No platform component touched; skipping cluster smoke."
+            echo "components=" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          list="$(IFS=,; echo "${comps[*]}")"
+          {
+            echo "components=${list}"
+            echo "slug=${list//,/-}"
+            echo "ref=${PR_HEAD_REF}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Cluster smoke (kind, selective)
+        if: steps.resolve.outputs.components != ''
         run: |
           export PATH="${HOME}/.local/bin:${PATH}"
-          bootstrap/smoke-ci.sh "${SMOKE_COMPONENT}" "${SMOKE_REF}"
+          bootstrap/smoke-ci.sh "${SMOKE_COMPONENTS}" "${SMOKE_REF}"
         env:
           GIT_REPO_URL: https://github.com/${{ github.repository }}
-          SMOKE_COMPONENT: ${{ steps.resolve.outputs.component }}
+          SMOKE_COMPONENTS: ${{ steps.resolve.outputs.components }}
           SMOKE_REF: ${{ steps.resolve.outputs.ref }}
 
-      - name: Upload smoke diagnose artifacts
-        if: always() && steps.resolve.outputs.component != ''
+      - name: Upload smoke diagnose artifacts (kind)
+        if: always() && steps.resolve.outputs.components != ''
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: smoke-diagnose-${{ steps.resolve.outputs.component }}
+          name: smoke-diagnose-kind-${{ steps.resolve.outputs.slug }}
+          path: .generated/
+          if-no-files-found: warn
+
+      # Same required `Smoke` check, second substrate: boot the FULL platform on
+      # Floci's emulated EKS (a real k3s node) and prove EKS integration (IAM
+      # kubeconfig) + the ECR image path. Runs after the kind smoke; a failed
+      # kind smoke skips it (fail-fast). `.generated/` is reset so the EKS
+      # artifact carries only the EKS run.
+      - name: Cluster smoke (EKS substrate, full platform)
+        if: steps.resolve.outputs.components != ''
+        run: |
+          export PATH="${HOME}/.local/bin:${PATH}"
+          rm -rf .generated
+          bootstrap/smoke-ci.sh "${SMOKE_COMPONENTS}" "${SMOKE_REF}" --substrate eks
+        env:
+          GIT_REPO_URL: https://github.com/${{ github.repository }}
+          SMOKE_COMPONENTS: ${{ steps.resolve.outputs.components }}
+          SMOKE_REF: ${{ steps.resolve.outputs.ref }}
+
+      - name: Upload smoke diagnose artifacts (EKS)
+        if: always() && steps.resolve.outputs.components != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: smoke-diagnose-eks-${{ steps.resolve.outputs.slug }}
           path: .generated/
           if-no-files-found: warn
 
       - name: Teardown smoke cluster
-        if: always() && steps.resolve.outputs.component != ''
-        run: make cluster-down --ignore-errors 2>/dev/null || true
+        if: always() && steps.resolve.outputs.components != ''
+        run: |
+          make cluster-down 2>/dev/null || true
+          make eks-down 2>/dev/null || true
