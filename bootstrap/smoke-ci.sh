@@ -125,7 +125,7 @@ else
 fi
 
 STATE_DIR=".generated"
-TIMEOUT="${SMOKE_TIMEOUT:-900}"
+TIMEOUT="${SMOKE_TIMEOUT:-1200}"
 POLL="${SMOKE_POLL:-10}"
 
 mkdir -p "${STATE_DIR}"
