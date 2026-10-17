@@ -53,7 +53,14 @@ cluster-down: ## Delete the local kind cluster (keeps nothing)
 argocd-up: ## Install or upgrade ArgoCD from argocd/install-values.yaml (no apps)
 	@[ -f argocd/install-values.yaml ] || { echo 'argocd/install-values.yaml is missing'; exit 1; }
 	kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
-	helm upgrade --install argocd argo-cd --repo https://argoproj.github.io/argo-helm --version "$(ARGOCD_CHART_VERSION)" --namespace argocd --values argocd/install-values.yaml --wait --timeout 15m
+	# Pre-pull the chart images into the kind node so the ephemeral runner does
+	# not stall on a runtime registry pull (flaky; see bootstrap/preload-chart-images.sh).
+	KIND_CLUSTER_NAME="$(KIND_CLUSTER_NAME)" bootstrap/preload-chart-images.sh argo-cd https://argoproj.github.io/argo-helm "$(ARGOCD_CHART_VERSION)" --namespace argocd --values argocd/install-values.yaml
+	helm upgrade --install argocd argo-cd --repo https://argoproj.github.io/argo-helm --version "$(ARGOCD_CHART_VERSION)" --namespace argocd --values argocd/install-values.yaml --wait --timeout 15m || { \
+		echo '[FAIL] argocd-up failed — collecting diagnostics into .generated/'; \
+		bootstrap/collect-argocd-diagnostics.sh; \
+		exit 1; \
+	}
 
 .PHONY: bootstrap
 bootstrap: argocd-up ## Install ArgoCD and apply the Applications for ENV=$(ENV)

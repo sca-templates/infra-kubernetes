@@ -145,7 +145,7 @@ jobs:
           # 5. shared framework/tooling → default component (cert-manager): the
           #    smoke's own machinery (and the argocd manifest set / Makefile it
           #    drives) must be exercised by the smoke, not merged untested.
-          framework_re='^(Makefile|argocd/|bootstrap/(smoke-ci|smoke-target|render-served-apps|sca|versions|kind-config|local-git-)[^/]*$)'
+          framework_re='^(Makefile|argocd/|bootstrap/(smoke-ci|smoke-target|render-served-apps|sca|versions|kind-config|local-git-|preload-chart-images|collect-argocd-diagnostics)[^/]*$)'
           if printf '%s\n' "$changed" | grep -qE "$framework_re"; then
             add cert-manager
           fi

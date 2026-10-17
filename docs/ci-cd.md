@@ -155,7 +155,7 @@ and keeps a single-component run working unchanged: the cluster boots once, the
 cloud emulator comes up once, each component's `<name>-smoke` Application is
 applied/waited/smoked in turn, the cloud smoke runs once, every Application is
 re-checked `Synced/Healthy` post-smoke, and teardown runs once. Wait steps
-default to a 900s timeout (`SMOKE_TIMEOUT`, overridable). Layered on top, the
+default to a 1200s timeout (`SMOKE_TIMEOUT`, overridable). Layered on top, the
 framework also stands up and checks the cloud emulator (**on by default**;
 `--no-cloud` / `SMOKE_CLOUD=0` opts out) — see *Cloud integration smoke* below.
 
@@ -167,9 +167,22 @@ kind substrate cannot run the EKS-only check); `bootstrap/cloud-emulator.sh` →
 `cloud`; `bootstrap/eks-emulator.sh` → `cert-manager` (exercised by the EKS
 substrate). Changes to the smoke's own machinery — `bootstrap/smoke-ci.sh`,
 `smoke-target.sh`, `render-served-apps.sh`, `sca.sh`, `versions.sh`,
-`kind-config.yaml`, `local-git-*`, `argocd/**` and the `Makefile` — resolve to
+`kind-config.yaml`, `local-git-*`, `preload-chart-images.sh`,
+`collect-argocd-diagnostics.sh`, `argocd/**` and the `Makefile` — resolve to
 the default component `cert-manager`, so the framework is exercised by the
 smoke instead of merging untested.
+
+`make argocd-up` pre-pulls the chart's images with the host Docker and loads
+them into the kind node (`bootstrap/preload-chart-images.sh`) before running
+Helm. A node-side pull on an ephemeral runner can stall behind registry
+throttling past a Deployment's `progressDeadlineSeconds`, surfacing as a flaky
+`argocd-up` failure that no Helm `--timeout` can fix; pre-pulling takes the
+registry off the critical path (a no-op on the EKS/k3s substrate, which pulls
+directly). This is dev/CI tooling, not a platform component. If `argocd-up`
+still fails, `bootstrap/collect-argocd-diagnostics.sh` dumps the ArgoCD install
+state (pods, describe, events) into `.generated/` — the framework's `diagnose`
+runs only *after* ArgoCD is up, so an install-time failure would otherwise carry
+no evidence.
 
 On failure the diagnose step captures the Application(s)/ApplicationSet state,
 pod describe + logs, EndpointSlices, recent cluster events, the Applications'
