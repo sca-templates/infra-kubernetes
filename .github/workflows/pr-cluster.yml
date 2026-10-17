@@ -83,9 +83,11 @@ jobs:
           set -euo pipefail
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             # Manual: smoke the requested component(s)/ref for testing.
-            echo "components=${{ inputs.component }}" >> "${GITHUB_OUTPUT}"
-            echo "slug=$(printf '%s' "${{ inputs.component }}" | tr ',' '-')" >> "${GITHUB_OUTPUT}"
-            echo "ref=${{ inputs.ref }}" >> "${GITHUB_OUTPUT}"
+            {
+              echo "components=${{ inputs.component }}"
+              echo "slug=$(printf '%s' "${{ inputs.component }}" | tr ',' '-')"
+              echo "ref=${{ inputs.ref }}"
+            } >> "${GITHUB_OUTPUT}"
             exit 0
           fi
 
@@ -154,9 +156,11 @@ jobs:
             exit 0
           fi
           list="$(IFS=,; echo "${comps[*]}")"
-          echo "components=${list}" >> "${GITHUB_OUTPUT}"
-          echo "slug=${list//,/-}" >> "${GITHUB_OUTPUT}"
-          echo "ref=${PR_HEAD_REF}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "components=${list}"
+            echo "slug=${list//,/-}"
+            echo "ref=${PR_HEAD_REF}"
+          } >> "${GITHUB_OUTPUT}"
 
       - name: Cluster smoke (kind, selective)
         if: steps.resolve.outputs.components != ''

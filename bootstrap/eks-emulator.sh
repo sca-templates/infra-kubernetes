@@ -68,6 +68,11 @@ NODE_TIMEOUT="${SMOKE_TIMEOUT:-900}"
 # The repo pins AWS_CLI_IMAGE and never installs an unpinned aws binary on the
 # host/runner. `--network host` lets the container reach Floci's host port; the
 # ad-hoc ~/.kube mount is what `update-kubeconfig` writes into.
+#
+# AWS_CLI_ENV carries optional extra `-e KEY=val` args (empty by default).
+# eks_up uses it to disable the CLI's client-side retries around a call whose
+# retry is not idempotent (see there).
+AWS_CLI_ENV=()
 aws_cli() {
   docker run --rm --network host \
     -v "${HOME}/.kube:/root/.kube" \
@@ -75,21 +80,55 @@ aws_cli() {
     -e AWS_DEFAULT_REGION="${EKS_REGION}" \
     -e AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-test}" \
     -e AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-test}" \
+    ${AWS_CLI_ENV[@]+"${AWS_CLI_ENV[@]}"} \
     "${AWS_CLI_IMAGE}" "$@"
 }
 
-wait_for_edge() {
+wait_for_api() {
+  # A published port is not a ready API: docker-proxy accepts the connection the
+  # moment the port is mapped, before Floci can answer. Poll a real call so a
+  # transient failure cannot be mistaken for a missing cluster.
   local i=0
-  while ! (exec 3<>"/dev/tcp/127.0.0.1/${FLOCI_PORT}") 2>/dev/null; do
+  while ! aws_cli eks list-clusters --query 'clusters' --output text >/dev/null 2>&1; do
     i=$((i + 1))
-    [ "$i" -lt 60 ] || { echo "ERROR: cloud emulator did not listen on :${FLOCI_PORT}" >&2; return 1; }
-    sleep 1
+    [ "$i" -lt 60 ] || { echo "ERROR: cloud emulator API not ready on ${ENDPOINT}" >&2; return 1; }
+    sleep 2
   done
 }
 
 cluster_status() {
-  aws_cli eks describe-cluster --name "${EKS_CLUSTER}" \
-    --query 'cluster.status' --output text 2>/dev/null || true
+  # ACTIVE/CREATING/... when the cluster exists, ABSENT when Floci reports it
+  # does not exist (describe 404), UNKNOWN when the call failed for any other
+  # reason (e.g. transient). The distinction is load-bearing: only a definite
+  # ABSENT may trigger create-cluster.
+  local out
+  if out="$(aws_cli eks describe-cluster --name "${EKS_CLUSTER}" \
+        --query 'cluster.status' --output text 2>&1)"; then
+    printf '%s\n' "${out}"
+  elif printf '%s' "${out}" | grep -q 'ResourceNotFoundException'; then
+    printf 'ABSENT\n'
+  else
+    printf 'UNKNOWN\n'
+  fi
+}
+
+wait_for_cluster_active() {
+  echo "── eks: waiting for cluster '${EKS_CLUSTER}' to become ACTIVE (timeout ${NODE_TIMEOUT}s)"
+  local deadline now status
+  deadline=$(( $(date +%s) + NODE_TIMEOUT ))
+  while : ; do
+    status="$(cluster_status)"
+    case "${status}" in
+      ACTIVE) echo "  cluster ACTIVE"; return 0 ;;
+      FAILED) echo "ERROR: cluster '${EKS_CLUSTER}' FAILED" >&2; return 1 ;;
+    esac
+    now="$(date +%s)"
+    [ "${now}" -lt "${deadline}" ] || {
+      echo "ERROR: cluster '${EKS_CLUSTER}' not ACTIVE within ${NODE_TIMEOUT}s (last status: ${status:-unknown})" >&2
+      return 1
+    }
+    sleep 5
+  done
 }
 
 ensure_iam_admin() {
@@ -154,7 +193,7 @@ wait_for_nodes() {
 eks_up() {
   echo "── eks: starting cloud emulator on network '${CLOUD_NETWORK}' (EKS mode)"
   CLOUD_NETWORK="${CLOUD_NETWORK}" "${SELF_DIR}/cloud-emulator.sh" start "${CLOUD_PROVIDER:-aws}"
-  wait_for_edge
+  wait_for_api
 
   ensure_iam_admin
 
@@ -163,25 +202,31 @@ eks_up() {
   if [ "${status}" = "ACTIVE" ]; then
     echo "[skip] EKS cluster '${EKS_CLUSTER}' already ACTIVE"
   else
-    echo "── eks: creating cluster '${EKS_CLUSTER}' (role ${EKS_ROLE_ARN})"
-    aws_cli eks create-cluster \
-      --name "${EKS_CLUSTER}" \
-      --role-arn "${EKS_ROLE_ARN}" \
-      --resources-vpc-config "subnetIds=${EKS_SUBNET}" >/dev/null
-    echo "── eks: waiting for cluster '${EKS_CLUSTER}' to become ACTIVE (timeout ${NODE_TIMEOUT}s)"
-    local deadline now
-    deadline=$(( $(date +%s) + NODE_TIMEOUT ))
-    while : ; do
-      now="$(date +%s)"
-      [ "${now}" -lt "${deadline}" ] || { echo "ERROR: cluster '${EKS_CLUSTER}' not ACTIVE within ${NODE_TIMEOUT}s" >&2; return 1; }
-      status="$(cluster_status)"
-      [ "${status}" = "ACTIVE" ] && break
-      case "${status}" in
-        FAILED | "" ) [ "${status}" = "FAILED" ] && { echo "ERROR: cluster '${EKS_CLUSTER}' FAILED" >&2; return 1; } ;;
-      esac
-      sleep 5
-    done
-    echo "  cluster ACTIVE"
+    if [ "${status}" = "ABSENT" ] || [ "${status}" = "UNKNOWN" ]; then
+      echo "── eks: creating cluster '${EKS_CLUSTER}' (role ${EKS_ROLE_ARN})"
+      # Floci's create-cluster is not idempotent while it provisions: the handler
+      # blocks on the k3s container and records the cluster only once it is up,
+      # so a request the AWS CLI retries past its (~5s) client-side window
+      # provisions a *second* k3s container — Floci then removes the first as
+      # stale and the cluster is left in a broken state, or the retry answers
+      # ResourceInUseException for the very cluster it just registered (the CI
+      # failure). So: one request, no client retries (AWS_MAX_ATTEMPTS=1); retry
+      # policy lives in wait_for_cluster_active below. The create verdict is not
+      # a source of truth — converge on the cluster state instead.
+      local create_err
+      AWS_CLI_ENV=(-e AWS_MAX_ATTEMPTS=1)
+      if ! create_err="$(aws_cli eks create-cluster \
+            --name "${EKS_CLUSTER}" \
+            --role-arn "${EKS_ROLE_ARN}" \
+            --resources-vpc-config "subnetIds=${EKS_SUBNET}" 2>&1)"; then
+        printf '%s\n' "${create_err}" | sed 's/^/  /' >&2
+        echo "  create-cluster returned an error; converging on the cluster state" >&2
+      fi
+      AWS_CLI_ENV=()
+    else
+      echo "  cluster '${EKS_CLUSTER}' already present (status ${status}); waiting for ACTIVE"
+    fi
+    wait_for_cluster_active
   fi
 
   echo "── eks: fetching kubeconfig (context ${EKS_CONTEXT})"
@@ -226,9 +271,20 @@ eks_down() {
 
 eks_status() {
   echo "── eks: cluster '${EKS_CLUSTER}'"
+  # The kubeconfig authenticates through `aws eks get-token`, so export the admin
+  # key here too — `status` is typically run in a fresh shell after `up`.
+  if [ -f "${EKS_ADMIN_FILE}" ]; then
+    # shellcheck disable=SC1090,SC1091
+    . "${EKS_ADMIN_FILE}"
+    export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+  fi
   local status
   status="$(cluster_status)"
-  echo "  aws eks: ${status:-absent}"
+  case "${status}" in
+    ABSENT) status="absent" ;;
+    UNKNOWN) status="unknown (describe failed)" ;;
+  esac
+  echo "  aws eks: ${status}"
   echo "  context: ${EKS_CONTEXT}"
   if kubectl --context "${EKS_CONTEXT}" get nodes >/dev/null 2>&1; then
     kubectl --context "${EKS_CONTEXT}" get nodes -o wide

@@ -276,9 +276,12 @@ sync-wave, no catalog row, nothing rendered by ArgoCD.
   Floci in EKS mode on a dedicated Docker network, mints an **IAM user + access
   key** (Floci rejects the dummy `test`/`test` creds for cluster-admin; the key
   is saved to `.secrets/eks-admin.env` and reused on re-run), `aws eks
-  create-cluster`, waits `ACTIVE`, fetches the kubeconfig (stable context
-  `floci-eks`), waits for the node `Ready`, and publishes the emulator into the
-  cluster for the endpoint smoke.
+  create-cluster` (issued once — the AWS CLI's own retries are off, because
+  Floci's create is not idempotent while it provisions k3s and a retried request
+  provisions a second k3s container; the script then converges on the cluster
+  state instead of trusting the call's verdict), waits `ACTIVE`, fetches the
+  kubeconfig (stable context `floci-eks`), waits for the node `Ready`, and
+  publishes the emulator into the cluster for the endpoint smoke.
 - **The check** — `bootstrap/smoke-eks.sh` (driven by `make smoke
   COMPONENT=eks`): asserts a `Ready` node on context `floci-eks`, pushes the
   pinned `AWS_CLI_IMAGE` to `${account}.dkr.ecr.${region}.localhost:4566` via
