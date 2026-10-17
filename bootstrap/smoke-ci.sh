@@ -218,6 +218,15 @@ if [ "${BOOT_CLUSTER}" = "1" ]; then
   if [ "${SUBSTRATE}" = "eks" ]; then
     echo "── make eks-up"
     make eks-up
+    # Ensure kubectl aws exec (aws eks get-token) can authenticate against Floci EKS
+    if [ -f ".secrets/eks-admin.env" ]; then
+      # shellcheck disable=SC1091
+      . ".secrets/eks-admin.env"
+      export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+    fi
+    export AWS_ENDPOINT_URL="http://127.0.0.1:${FLOCI_PORT:-4566}"
+    export AWS_DEFAULT_REGION="${FLOCI_AWS_REGION:-us-east-1}"
+    export AWS_EC2_METADATA_DISABLED=true
   else
     echo "── make cluster-up"
     make cluster-up

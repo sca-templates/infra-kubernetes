@@ -230,7 +230,7 @@ eks_up() {
   fi
 
   echo "── eks: fetching kubeconfig (context ${EKS_CONTEXT})"
-  aws_cli eks update-kubeconfig --name "${EKS_CLUSTER}" --kubeconfig /root/.kube/config >/dev/null
+  aws_cli eks update-kubeconfig --name "${EKS_CLUSTER}" --kubeconfig /root/.kube/config --endpoint-url "${ENDPOINT}" >/dev/null
   rename_context
   wait_for_nodes
 
