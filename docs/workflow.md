@@ -45,8 +45,8 @@ graph LR
    commits into one or more reviewed PRs as the change dictates — grouping is
    a judgment call, not a fixed rule.
 2. **CI**: static suite always; from Phase 1 a *selective* cluster smoke of the
-   touched component also runs as a required PR check (`Smoke` on `main`,
-   ephemeral `kind`, profile `local`) — see
+   touched component also runs as a required PR check (`Smoke` on `main`, on
+   Floci's emulated EKS substrate, profile `local`) — see
    [ci-cd.md](ci-cd.md).
 3. **Review**: a human reviews the diff; the reviewer is the gate for "turns
    green" (the per-component DoD in [status.md](status.md)).
@@ -134,14 +134,14 @@ graph LR
 
 | Env | Sync | Provenance of secrets | Notes |
 | --- | --- | --- | --- |
-| `local` | auto + prune | vault seeded via `bootstrap/seed-vault.sh` | kind; full platform catalog, no services |
+| `local` | auto + prune | vault seeded via `bootstrap/seed-vault.sh` | Floci emulated EKS; full platform catalog, no services |
 | `dev` | auto + prune | real Vault secrets | reduced HA |
 | `qa` | auto, **no prune** | real Vault secrets | 3 replicas, PDBs, anti-affinity |
 | `prod` | **manual** | real Vault secrets | full HA, real storage; human go/no-go in the deploy window |
 
 **promote-test**: before promoting a platform component to `dev`/`qa`/`prod`,
-validate the target env overlay on a local `kind` cluster loaded with
-`ENV=dev|qa|prod` (`make bootstrap ENV=<env>` against the same overlay).
+validate the target env overlay on the local Floci emulated EKS substrate loaded
+with `ENV=dev|qa|prod` (`make bootstrap ENV=<env>` against the same overlay).
 Promotion of a platform component is only allowed when the promote-test passes
 and the component is green in the lower environment. Services do not use
 `promote-test` — their pre-PR validation is exactly the dev → qa sync flow.
@@ -202,4 +202,4 @@ a deliberate, documented deviation (the [Deviations log](architecture.md#deviati
 | Service not updating in dev/qa | `promote` workflow did not sync the env app | Check the service repo's last `promote` run; re-run it targeting the intended commit |
 | Service `OutOfSync` in dev/qa semantics | `main` head moved past what was promoted | Inspect the service `Application` (`kubectl -n argocd get application <svc>-<env>`); ensure the `main` merge only happens after qa |
 | Service not updating in prod | Prod `version` pin not bumped (or the tag missing) | Check `argocd/services-prod.yaml` → `version` and that the tag exists in the service repo; the `chore(services)` bump PR is the go/no-go |
-| kind cluster OOM | Host RAM exhausted | Stop sibling Compose stacks before bootstrapping; use the 1-replica local profile |
+| EKS node OOM | Host RAM exhausted | Stop sibling Compose stacks before bootstrapping; use the 1-replica local profile |

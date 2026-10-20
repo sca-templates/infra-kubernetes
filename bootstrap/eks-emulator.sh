@@ -6,7 +6,7 @@
 # Kubernetes API server) and an OCI ECR registry; this script turns that into a
 # kube-context the cluster smoke can boot the *full platform* on, so the smoke
 # exercises EKS integration (IAM auth, kubeconfig, nodes) and the ECR image path
-# in addition to the kind substrate.
+# on the very substrate production runs on.
 #
 # It is NOT a platform component: no sync-wave, no catalog row, nothing rendered
 # by ArgoCD. It exists only for the duration of a smoke run.

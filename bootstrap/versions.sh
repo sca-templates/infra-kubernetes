@@ -6,15 +6,15 @@
 # Never float `latest` (docs/security.md). Keep in sync with docs/ci-cd.md.
 KUBECTL_VERSION="${KUBECTL_VERSION:-v1.36.4}"
 HELM_VERSION="${HELM_VERSION:-v4.2.4}"
-KIND_VERSION="${KIND_VERSION:-v0.32.0}"
 
 # Cloud emulator (dev/CI only — not a platform component; see docs/ci-cd.md).
 # Provider-agnostic seam: `aws` is Floci. Pinned by version, never `latest`.
 FLOCI_IMAGE="${FLOCI_IMAGE:-floci/floci:2.3.0}"
 AWS_CLI_IMAGE="${AWS_CLI_IMAGE:-amazon/aws-cli:2.38.1}"
 
-# EKS substrate of the cloud emulator (dev/CI only; `SMOKE_SUBSTRATE=eks`).
-# Floci backs EKS with a real single-node k3s container and an OCI ECR registry;
+# EKS substrate of the cloud emulator (dev/CI only; the platform's only cluster
+# substrate). Floci backs EKS with a real single-node k3s container and an OCI
+# ECR registry;
 # these are emulator coordinates (account/subnet/role are Floci's own placeholders),
 # never real AWS. The image pushed to ECR is the already-pinned AWS_CLI_IMAGE
 # (this repo builds nothing). See docs/ci-cd.md.

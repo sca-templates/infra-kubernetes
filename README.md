@@ -22,14 +22,15 @@ remaining 10 components are `planned`. The delivery plan lives in
 
 ```bash
 make prereqs
-make cluster-up
+make eks-up
 make bootstrap
 make status
 ```
 
-- `make prereqs` installs pinned, checksum-verified kubectl/helm/kind into
-  `~/.local/bin` (idempotent).
-- `make cluster-up` creates the pinned single-node `kind` cluster.
+- `make prereqs` installs pinned, checksum-verified kubectl/helm into
+  `~/.local/bin` (idempotent; docker is required for the Floci emulator).
+- `make eks-up` starts Floci in EKS mode — the emulated EKS substrate (a real
+  single-node k3s container + ECR), the only local cluster target.
 - `make bootstrap` installs ArgoCD and applies the environment root
   Application. `GIT_REPO_URL` comes from `.env` (see `.env.example`); a live
   URL is a Phase 1 requirement. In `local` the root app reconciles a fully-local
@@ -48,7 +49,7 @@ GitHub Actions runs the same suite in CI on every push and pull request
 
 | Environment | Profile | ArgoCD sync policy | Substrate |
 | --- | --- | --- | --- |
-| `local` | Full platform catalog, one replica, minimal | Auto-sync + prune | `kind` (**platform-only, no services**) |
+| `local` | Full platform catalog, one replica, minimal | Auto-sync + prune | Floci emulated EKS (**platform-only, no services**) |
 | `dev` | Reduced HA | Auto-sync + prune | Kubernetes cluster |
 | `qa` | HA, PDBs, anti-affinity | Auto-sync, **no prune** | Kubernetes cluster |
 | `prod` | Full HA, real storage | **Manual sync** | Kubernetes cluster |
@@ -99,17 +100,18 @@ intentionally excluded.
 
 | Command | Description |
 | --- | --- |
-| `make prereqs` | Install the pinned local CLI toolchain |
+| `make prereqs` | Install the pinned local CLI toolchain (kubectl, helm) |
 | `make doctor` | Read-only platform health check (toolchain, cluster, ArgoCD apps, seam) |
 | `make install-cli` | Symlink `bootstrap/sca.sh` → `~/.local/bin/sca` |
-| `make cluster-up` | Create the local `kind` cluster |
-| `make cluster-down` | Delete the local `kind` cluster |
+| `make eks-up` | Start Floci in EKS mode: create the emulated EKS cluster and point kubectl at it |
+| `make eks-status` | Report the emulated EKS cluster status and its nodes |
+| `make eks-down` | Delete the emulated EKS cluster, IAM user and kubeconfig context |
 | `make bootstrap` | Install ArgoCD and apply the environment root Application |
 | `make status` | Show nodes, ArgoCD Applications and pod health |
 | `make validate-static` | Run Markdown, YAML and shell validation without a cluster |
 | `make validate` | Run static validation plus live cluster checks |
 | `make smoke COMPONENT=<name>` | Smoke a deployed component against a live cluster |
-| `make local-git-up` | Stand up the fully-local git serve (kind only) |
+| `make local-git-up` | Stand up the fully-local git serve (local only) |
 | `make local-git-update` | Mirror local HEAD into the local git serve |
 | `make local-git-down` | Stop the local git serve |
 | `make port-forward APP=<name>` | Reach a platform UI/API locally (argocd, vault, keycloak, grafana, prometheus, …) |

@@ -28,7 +28,7 @@ redisOperator:
   # default already matches appVersion, pinned here for the same reason.
   initContainerImageTag: "v0.26.0"
   # The chart defaults to `Always`; `IfNotPresent` keeps a pinned tag from being
-  # re-pulled on every operator restart on a kind node, matching the other
+  # re-pulled on every operator restart on the local node, matching the other
   # operator charts in this repo.
   imagePullPolicy: IfNotPresent
   # Empty = watch every namespace (the chart then renders no WATCH_NAMESPACE

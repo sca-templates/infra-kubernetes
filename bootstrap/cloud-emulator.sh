@@ -11,7 +11,7 @@
 # and a matching bootstrap/smoke-cloud-<provider>.sh — nothing else.
 #
 # Usage:
-#   cloud-emulator.sh up       [provider]   # start + publish (kind substrate)
+#   cloud-emulator.sh up       [provider]   # start + publish into the cluster
 #   cloud-emulator.sh start    [provider]   # start the container only
 #   cloud-emulator.sh publish  [provider]   # publish into the current cluster
 #   cloud-emulator.sh down     [provider]
@@ -19,8 +19,7 @@
 #
 # Env: CLOUD_PROVIDER (default aws), FLOCI_IMAGE / FLOCI_PORT (from
 #      bootstrap/versions.sh and .env), CLOUD_NAMESPACE (cloud),
-#      CLOUD_NETWORK (explicit Docker network; empty = the kind node's network),
-#      KIND_CLUSTER_NAME (sca-local).
+#      CLOUD_NETWORK (explicit Docker network; default FLOCI_EKS_NETWORK).
 set -euo pipefail
 
 # Load the local `.env` seam if present (same behaviour as bootstrap/sca.sh):
@@ -45,12 +44,10 @@ CLOUD_NAMESPACE="${CLOUD_NAMESPACE:-cloud}"
 FLOCI_NAME="${FLOCI_NAME:-floci}"
 FLOCI_PORT="${FLOCI_PORT:-4566}"
 STATE_DIR=".generated"
-KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-sca-local}"
-# Explicit Docker network to attach the emulator to and publish it on. When
-# empty, the emulator reuses the target kind cluster's own node network (the
-# kind substrate). The EKS substrate (bootstrap/eks-emulator.sh) sets it to a
-# dedicated network the emulator-created k3s node also joins (see docs/ci-cd.md).
-CLOUD_NETWORK="${CLOUD_NETWORK:-}"
+# Docker network the emulator joins and is published on. The EKS substrate
+# (bootstrap/eks-emulator.sh) passes the network its k3s node joins; standalone
+# `make cloud-up` defaults to the same network coordinates.
+CLOUD_NETWORK="${CLOUD_NETWORK:-${FLOCI_EKS_NETWORK:-sca-eks}}"
 
 [ -n "$ACTION" ] || { echo "usage: $0 up|start|publish|down|status [provider]" >&2; exit 2; }
 
@@ -79,17 +76,21 @@ aws_start() {
   # Floci to spawn its k3s node onto the same network (FLOCI_SERVICES_DOCKER_
   # NETWORK) with the ECR registry mirror injected into the node's containerd
   # (FLOCI_SERVICES_EKS_ECR_REGISTRY_MIRROR), so the cluster can pull images
-  # pushed to Floci's ECR. Both are harmless outside EKS.
-  local run_args=()
-  if [ -n "${CLOUD_NETWORK}" ]; then
-    docker network inspect "${CLOUD_NETWORK}" >/dev/null 2>&1 \
-      || docker network create "${CLOUD_NETWORK}" >/dev/null
-    run_args+=(
-      --network "${CLOUD_NETWORK}"
-      -e FLOCI_SERVICES_DOCKER_NETWORK="${CLOUD_NETWORK}"
-      -e FLOCI_SERVICES_EKS_ECR_REGISTRY_MIRROR=true
-    )
-  fi
+  # pushed to Floci's ECR.
+  #
+  # FLOCI_SERVICES_EKS_DEFAULT_STORAGE_CLASS keeps k3s's bundled local-path
+  # provisioner + default StorageClass: Floci disables both by default to match
+  # real EKS (no default class without a CSI driver), which leaves every PVC on
+  # the smoke cluster Pending (vault dataStorage). All three are harmless
+  # outside EKS.
+  docker network inspect "${CLOUD_NETWORK}" >/dev/null 2>&1 \
+    || docker network create "${CLOUD_NETWORK}" >/dev/null
+  local run_args=(
+    --network "${CLOUD_NETWORK}"
+    -e FLOCI_SERVICES_DOCKER_NETWORK="${CLOUD_NETWORK}"
+    -e FLOCI_SERVICES_EKS_ECR_REGISTRY_MIRROR=true
+    -e FLOCI_SERVICES_EKS_DEFAULT_STORAGE_CLASS=true
+  )
 
   docker run -d --name "${FLOCI_NAME}" \
     -p "${FLOCI_PORT}:${FLOCI_PORT}" \
@@ -100,20 +101,9 @@ aws_start() {
 }
 
 resolve_network() {
-  # Print the Docker network the emulator is published on. Explicit CLOUD_NETWORK
-  # wins; otherwise reuse the target kind cluster's own node network so pods
-  # reach the emulator directly.
-  if [ -n "${CLOUD_NETWORK}" ]; then
-    printf '%s' "${CLOUD_NETWORK}"
-    return 0
-  fi
-  local node
-  node="$(docker ps --filter "name=${KIND_CLUSTER_NAME}-control-plane" --format '{{.Names}}' | head -1)"
-  [ -n "$node" ] || {
-    echo "ERROR: no kind control-plane node for '${KIND_CLUSTER_NAME}' — run make cluster-up first" >&2
-    return 1
-  }
-  docker inspect "$node" --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{"\n"}}{{end}}' | head -1
+  # Print the Docker network the emulator is published on: CLOUD_NETWORK when
+  # set, otherwise the EKS substrate network the k3s node joins.
+  printf '%s' "${CLOUD_NETWORK}"
 }
 
 aws_publish() {

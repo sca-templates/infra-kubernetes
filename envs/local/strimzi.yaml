@@ -1,4 +1,4 @@
-# strimzi — local profile (developer kind cluster: 1 replica, minimal
+# strimzi — local profile (developer cluster: 1 replica, minimal
 # resources). Matches the base defaults; declared for tier symmetry.
 
 replicas: 1

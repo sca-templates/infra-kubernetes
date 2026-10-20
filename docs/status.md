@@ -12,8 +12,8 @@ Milestones and Issues.
 
 **Phase 8 — Kong deployed.** Phase 0 delivered the scaffold
 (Makefile, `bootstrap/`, `argocd/` with the app-of-apps pattern, the CI
-workflows, the service template, this docs set) and brought the local `kind`
-cluster up with ArgoCD. **Phase 1** lands cert-manager on the `local` profile
+workflows, the service template, this docs set) and brought the local Floci
+emulated EKS cluster up with ArgoCD. **Phase 1** lands cert-manager on the `local` profile
 (fully-local: ArgoCD reconciles an in-cluster git serve instead of GitHub) and
 ships the cluster smoke. **Phase 2** lands Vault — the secrets SSOT — as an HA
 raft trio with TLS via a cert-manager leaf, an idempotent HA-aware seed, and a
@@ -78,7 +78,7 @@ and the proxy serves TLS from a cert-manager leaf (`kong-proxy` /
 | git-local-serve | in-cluster git daemon (`git://<node>:9418/sca-infra.git`) `Ready` |
 | Observability / smoke CI | cluster smoke `pr-cluster.yml` **shipped** (Phase 1): selective on PRs as the **required `Smoke` check** on `main` + manual `workflow_dispatch`; no `push` smoke. Multi-component PRs smoke every touched component in one run (one boot/cloud/teardown); changes to the smoke framework (`bootstrap/smoke-*`, `argocd/**`, `Makefile`) resolve to `cert-manager` so the machinery is self-validated; the pinned toolchain is cached (`actions/cache`, keyed on `versions.sh`) (see [ci-cd.md](ci-cd.md)) |
 | Cloud integration smoke | every smoke run also proves the cluster reaches the local cloud emulator (Floci): `make cloud-up` / `make smoke COMPONENT=cloud` green — bucket created and object round-tripped from an in-cluster Job; on by default, `--no-cloud` / `SMOKE_CLOUD=0` opts out. **Dev/CI tooling, not a platform component** (see [ci-cd.md](ci-cd.md)) |
-| EKS substrate smoke | the same required `Smoke` job also boots the **full platform** on Floci's emulated **EKS** (real single-node k3s + ECR) after the kind smoke: `make eks-up` → `make bootstrap ENV=local` → every `<name>-local` Application `Synced`/`Healthy` → `make smoke COMPONENT=eks` green (ECR push + in-cluster pull round-trip via the node registry mirror) → endpoint smoke. Proves EKS integration (IAM kubeconfig) + the ECR image path. **Dev/CI tooling, not a platform component** (see [ci-cd.md](ci-cd.md)) |
+| EKS substrate smoke | the required `Smoke` job boots the **full platform** on Floci's emulated **EKS** (real single-node k3s + ECR), the platform's only cluster substrate: `make eks-up` → `make bootstrap ENV=local` → Vault seeded before the health gate → every `<name>-local` Application `Synced`/`Healthy` → `make smoke COMPONENT=eks` green (ECR push + in-cluster pull round-trip via the node registry mirror) → endpoint smoke. Proves EKS integration (IAM kubeconfig) + the ECR image path. **Dev/CI tooling, not a platform component** (see [ci-cd.md](ci-cd.md)) |
 | Security CI | checkov **baseline gate** active (Phase 1): `.github/checkov-baseline.json` documents the local-git-server pod findings; new IaC findings fail the PR; re-evaluated at Phase 18 (see [security.md](security.md)) |
 | Release automation | **path-scoped** triggers active (see [versioning.md](versioning.md)): only `feat`/`fix` commits touching the platform surface open release PRs (`exclude-paths` in `.release-please-config.json`); release-please runs on `push: main` only via the shared `shared-release-flow.yml` wrapper; tag signing runs when a release is created (manual dispatch re-sign removed) |
 | Release promotion | tags are cut automatically and the release goes out as a **full release held off `latest`**; `release-publish.yml` (manual) is the only step that moves the `latest` pointer, on a human go/no-go (see [versioning.md](versioning.md)) |
@@ -106,9 +106,9 @@ and the proxy serves TLS from a cert-manager leaf (`kong-proxy` /
   namespace for the duration of a smoke run — it is never part of the platform
   catalog, and no real cloud account, IAM or per-cloud configuration is used.
   The same holds for its **EKS substrate** (`eks-emulator.sh`): the emulated EKS
-  cluster and ECR registry exist only for a smoke run, are never members of the
-  platform catalog, and the IAM key it mints is throwaway (deleted on `make
-  eks-down`).
+  cluster and ECR registry *are* the local cluster substrate for a smoke run, are
+  never members of the platform catalog, and the IAM key it mints is throwaway
+  (deleted on `make eks-down`).
 
 ## Read this doc
 

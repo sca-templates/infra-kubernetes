@@ -2,14 +2,14 @@
 # Copyright (c) 2026 sca-templates contributors
 # SPDX-License-Identifier: MIT
 # smoke-eks.sh — EKS-substrate smoke (dev/CI tooling only, docs/ci-cd.md). Runs
-# against the Floci-emulated EKS cluster (context `floci-eks`) and proves the
-# two EKS-specific paths the kind substrate cannot: the cluster is a real
+# against the Floci-emulated EKS cluster (context `floci-eks`, the only smoke
+# substrate) and proves the two EKS-specific paths: the cluster is a real
 # Kubernetes API server reached through an IAM-authenticated kubeconfig, and
 # images pushed to the emulated ECR registry are pullable in-cluster (the k3s
 # containerd registry mirror Floci injects at cluster creation).
 #
 # The emulator + cluster are a prerequisite: bootstrap/eks-emulator.sh must have
-# brought them up (bootstrap/smoke-ci.sh does this for the `eks` substrate).
+# brought them up (bootstrap/smoke-ci.sh always does).
 # Driven by `make smoke COMPONENT=eks`.
 set -euo pipefail
 

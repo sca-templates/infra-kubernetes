@@ -1,40 +1,34 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 sca-templates contributors
 # SPDX-License-Identifier: MIT
-# smoke-ci.sh — shared cluster-smoke framework for `pr-cluster.yml` (Phase 1).
+# smoke-ci.sh — cluster-smoke framework for `pr-cluster.yml` (Phase 1).
 # Encapsulates the boot → apply → wait → run → diagnose → teardown cycle the
 # cluster smoke needs, so each component only adds its own smoke command in
-# `bootstrap/smoke-<component>.sh` (dispatched via smoke-target.sh). No tooling
-# here is platform: it stands up an ephemeral cluster, applies the touched
-# component(s) (or the whole platform on the EKS substrate), waits for
-# convergence, runs the smoke, and tears the cluster down. Matches docs/ci-cd.md
-# design: selective, real chart/CR, no self-heal disabling, profile `local`.
+# `bootstrap/smoke-<component>.sh` (dispatched via smoke-target.sh).
 #
-# Two substrates (SMOKE_SUBSTRATE / --substrate):
-#   - `kind` (default): ephemeral kind cluster, the touched component(s) rendered
-#     as `<name>-smoke` via the smoke ApplicationSet. Fast, selective.
-#   - `eks`: Floci's emulated EKS (a real k3s node; bootstrap/eks-emulator.sh).
-#     Boots the *full* platform through the real app-of-apps (`make bootstrap
-#     ENV=local`, `<name>-local`), waits for every catalog Application to
-#     converge, and runs the EKS/ECR + cloud integration smokes. The most
-#     complete test: EKS integration + a real deployment of the whole catalog.
+# There is a single substrate: Floci's emulated EKS (a real k3s node;
+# bootstrap/eks-emulator.sh). The framework boots the *full* platform through
+# the real app-of-apps (`make bootstrap ENV=local`, `<name>-local`), converges
+# every catalog Application, seeds Vault, and then runs the component smokes for
+# the touched components plus the EKS/ECR and cloud integration smokes.
+#
+# Ordering matters for convergence: Applications are gated on `Synced` first
+# (any health), then Vault is seeded/unsealed — it is born sealed, so it can
+# only report Healthy after `make smoke COMPONENT=vault` ran — and only then is
+# the whole platform gated on `Synced/Healthy`.
 #
 # More than one component can be smoked in a single run: `<component>` is a
 # comma-separated list, the cluster is booted once, the cloud emulator is
-# brought up once, each component is applied/waited/smoked in turn, the cloud
-# smoke runs once, and teardown runs once.
+# brought up once, each component is smoked in turn, and teardown runs once.
 #
 # Usage:
-#   bootstrap/smoke-ci.sh <component[,component...]> <ref> [--keep] [--no-cluster] [--no-cloud] [--substrate kind|eks] [--full]
+#   bootstrap/smoke-ci.sh <component[,component...]> <ref> [--keep] [--no-cluster] [--no-cloud]
 #   <component>  component(s) to smoke (maps to bootstrap/smoke-<c>.sh); `cloud`
 #                and `eks` are smoke targets with no ArgoCD Application
-#   <ref>        git ref (branch/sha) the smoke Application tracks
+#   <ref>        git ref (branch/sha) the ArgoCD Applications track
 #   --keep       do not delete the cluster on exit (diagnosis)
-#   --no-cluster skip cluster-up/argocd-up (use an existing, bootstrapped cluster)
-#   --no-cloud   skip the cloud emulator (Floci) and its cloud-integration smoke
-#                (SMOKE_CLOUD=0 does the same; the smoke is on by default)
-#   --substrate  `kind` (default) or `eks` (SMOKE_SUBSTRATE does the same)
-#   --full       force the whole-platform path (SMOKE_FULL=1); implied by `eks`
+#   --no-cluster skip eks-up (use an existing, bootstrapped cluster)
+#   --no-cloud   skip the cloud-integration smoke (SMOKE_CLOUD=0 does the same)
 set -euo pipefail
 
 # Load the local `.env` seam if present (same behaviour as bootstrap/sca.sh):
@@ -49,13 +43,14 @@ for _sca_env in "$(dirname "$0")/../.env" ".env"; do
 done
 unset _sca_env
 
+# shellcheck source=bootstrap/versions.sh
+. "$(dirname "$0")/versions.sh"
+
 components_raw="${1:-}"
 ref="${2:-}"
 KEEP_CLUSTER=0
 BOOT_CLUSTER=1
 CLOUD_ON=1
-SUBSTRATE="${SMOKE_SUBSTRATE:-kind}"
-FULL="${SMOKE_FULL:-0}"
 if [ -n "${SMOKE_CLOUD:-}" ] && [ "${SMOKE_CLOUD}" = "0" ]; then
   CLOUD_ON=0
 fi
@@ -65,27 +60,13 @@ while [ "$#" -gt 0 ]; do
     --keep) KEEP_CLUSTER=1 ;;
     --no-cluster) BOOT_CLUSTER=0 ;;
     --no-cloud) CLOUD_ON=0 ;;
-    --full) FULL=1 ;;
-    --substrate) SUBSTRATE="${2:-}"; shift ;;
-    --substrate=*) SUBSTRATE="${1#*=}" ;;
     --*) echo "ERROR: unknown flag '$1'" >&2; exit 2 ;;
   esac
   shift
 done
 
-case "${SUBSTRATE}" in
-  kind | eks) ;;
-  *) echo "ERROR: unknown substrate '${SUBSTRATE}' (known: kind, eks)" >&2; exit 2 ;;
-esac
-# The EKS substrate is the whole platform by definition (and its cluster is the
-# cloud emulator itself, so it cannot run without it).
-if [ "${SUBSTRATE}" = "eks" ]; then
-  FULL=1
-  [ "${CLOUD_ON}" = "1" ] || { echo "ERROR: substrate=eks needs the cloud emulator — drop --no-cloud / SMOKE_CLOUD=0" >&2; exit 2; }
-fi
-
-[ -n "$components_raw" ] || { echo "ERROR: usage: $0 <component[,component...]> <ref> [--keep] [--no-cluster] [--no-cloud] [--substrate kind|eks] [--full]" >&2; exit 2; }
-[ -n "$ref" ] || { echo "ERROR: <ref> is required (head branch/sha for the smoke Application)" >&2; exit 2; }
+[ -n "$components_raw" ] || { echo "ERROR: usage: $0 <component[,component...]> <ref> [--keep] [--no-cluster] [--no-cloud]" >&2; exit 2; }
+[ -n "$ref" ] || { echo "ERROR: <ref> is required (head branch/sha for the ArgoCD Applications)" >&2; exit 2; }
 
 # Split the comma-separated list into an array (commas -> spaces, then word
 # split); component names never contain whitespace.
@@ -97,68 +78,58 @@ unset _c
 [ "${#COMPONENTS[@]}" -gt 0 ] || { echo "ERROR: no components resolved from '${components_raw}'" >&2; exit 2; }
 
 # `cloud` and `eks` are smoke targets, not ArgoCD Applications: they never go
-# through smoke-app/wait (there is no Application to converge). Everything else
-# is an Application rendered by the smoke ApplicationSet.
+# through the Application wait. Everything else is an Application rendered by
+# the platform ApplicationSet.
 APP_COMPONENTS=()
 HAS_CLOUD=0
-HAS_EKS=0
 for c in "${COMPONENTS[@]}"; do
   case "$c" in
     cloud) HAS_CLOUD=1 ;;
-    eks) HAS_EKS=1 ;;
+    eks) ;;
     *) APP_COMPONENTS+=("$c") ;;
   esac
 done
-if [ "${HAS_EKS}" = "1" ] && [ "${SUBSTRATE}" != "eks" ]; then
-  echo "ERROR: component=eks needs the EKS substrate — run with --substrate eks / SMOKE_SUBSTRATE=eks" >&2
+
+# The cloud emulator is the EKS substrate itself, so it is always running here;
+# --no-cloud / SMOKE_CLOUD=0 only skips the cloud-integration smoke. Asking for
+# `component=cloud` while skipping it is contradictory.
+if [ "${HAS_CLOUD}" = "1" ] && [ "${CLOUD_ON}" != "1" ]; then
+  echo "ERROR: component=cloud needs the cloud smoke — drop --no-cloud / SMOKE_CLOUD=0" >&2
   exit 2
 fi
 
-# Applications rendered on the kind substrate are `<name>-smoke` (the smoke
-# ApplicationSet `platform-local-smoke`); on the EKS substrate the full platform
-# is applied as `<name>-local` (the real app-of-apps, ApplicationSet
-# `platform-local`). The suffix drives every wait/diagnose.
-if [ "${SUBSTRATE}" = "eks" ]; then
-  APP_SUFFIX="local"; APPSET_NAME="platform-local"
-else
-  APP_SUFFIX="smoke"; APPSET_NAME="platform-local-smoke"
-fi
+# Platform Applications, read from the repo so a newly-landed component is
+# covered for free: infrastructure/<c> → <c>-local.
+CATALOG=()
+for d in infrastructure/*/; do
+  [ -d "$d" ] || continue
+  c="${d%/}"; c="${c##*/}"
+  CATALOG+=("$c")
+done
 
 STATE_DIR=".generated"
 TIMEOUT="${SMOKE_TIMEOUT:-1200}"
 POLL="${SMOKE_POLL:-10}"
+APP_SUFFIX="local"
+APPSET_NAME="platform-local"
 
 mkdir -p "${STATE_DIR}"
 
 cleanup() {
-  if [ "${CLOUD_ON}" = "1" ] && [ "${SUBSTRATE}" != "eks" ]; then
-    if [ "${KEEP_CLUSTER}" = "1" ]; then
-      echo "── smoke-ci: keeping cloud emulator (--keep) — remove with: make cloud-down"
-    else
-      echo "── smoke-ci: tearing down cloud emulator"
-      make cloud-down 2>/dev/null || true
-    fi
-  fi
   if [ "${KEEP_CLUSTER}" = "1" ]; then
-    echo "── smoke-ci: keeping ${SUBSTRATE} cluster (--keep)"
+    echo "── smoke-ci: keeping the EKS substrate (--keep) — remove with: make eks-down"
   elif [ "${BOOT_CLUSTER}" = "1" ]; then
-    if [ "${SUBSTRATE}" = "eks" ]; then
-      echo "── smoke-ci: tearing down EKS substrate"
-      make eks-down 2>/dev/null || true
-    else
-      echo "── smoke-ci: tearing down kind cluster"
-      make cluster-down 2>/dev/null || true
-    fi
+    echo "── smoke-ci: tearing down the EKS substrate"
+    make eks-down 2>/dev/null || true
   else
-    echo "── smoke-ci: --no-cluster, leaving existing cluster untouched"
+    echo "── smoke-ci: --no-cluster, leaving the cluster untouched"
   fi
 }
 trap cleanup EXIT
 
 diagnose() {
   local app c pod ready
-  for c in "${COMPONENTS[@]}"; do
-    case "$c" in cloud | eks) continue ;; esac
+  for c in "${APP_COMPONENTS[@]}"; do
     app="${c}-${APP_SUFFIX}"
     echo "── diagnose: Application/${app}"
     kubectl get application "${app}" -n argocd -o yaml 2>/dev/null | tee "${STATE_DIR}/${app}-diagnose.yaml" || true
@@ -212,50 +183,27 @@ diagnose() {
     | tee -a "${STATE_DIR}/eks-diagnose.txt" || true
 }
 
-echo "== smoke-ci: components=${COMPONENTS[*]} ref=${ref} substrate=${SUBSTRATE} keep=${KEEP_CLUSTER} boot=${BOOT_CLUSTER} cloud=${CLOUD_ON} full=${FULL}"
+echo "== smoke-ci: components=${COMPONENTS[*]} ref=${ref} keep=${KEEP_CLUSTER} boot=${BOOT_CLUSTER} cloud=${CLOUD_ON}"
 
 if [ "${BOOT_CLUSTER}" = "1" ]; then
-  if [ "${SUBSTRATE}" = "eks" ]; then
-    echo "── make eks-up"
-    make eks-up
-    # Ensure kubectl aws exec (aws eks get-token) can authenticate against Floci EKS
-    if [ -f ".secrets/eks-admin.env" ]; then
-      # shellcheck disable=SC1091
-      . ".secrets/eks-admin.env"
-      export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
-    fi
-    export AWS_ENDPOINT_URL="http://127.0.0.1:${FLOCI_PORT:-4566}"
-    export AWS_DEFAULT_REGION="${FLOCI_AWS_REGION:-us-east-1}"
-    export AWS_EC2_METADATA_DISABLED=true
-  else
-    echo "── make cluster-up"
-    make cluster-up
-    echo "── make argocd-up"
-    make argocd-up
+  echo "── make eks-up"
+  make eks-up
+  # Ensure kubectl aws exec (aws eks get-token) can authenticate against Floci EKS
+  if [ -f ".secrets/eks-admin.env" ]; then
+    # shellcheck disable=SC1091
+    . ".secrets/eks-admin.env"
+    export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
   fi
-fi
-
-# Cloud integration: the emulator is a prerequisite of the cloud smoke and of any
-# component that consumes an emulated cloud endpoint. On the kind substrate it
-# starts here; on the EKS substrate `make eks-up` already started and published
-# it (the emulated EKS cluster *is* the emulator), so it is not restarted.
-if [ "${CLOUD_ON}" = "1" ] && [ "${SUBSTRATE}" != "eks" ]; then
-  echo "── make cloud-up (emulator provider=${CLOUD_PROVIDER:-aws})"
-  make cloud-up
-fi
-
-# `cloud` in the list needs the emulator; fail closed if it was disabled.
-if [ "${HAS_CLOUD}" = "1" ] && [ "${CLOUD_ON}" != "1" ]; then
-  echo "ERROR: component=cloud needs the cloud emulator — drop --no-cloud / SMOKE_CLOUD=0" >&2
-  exit 2
+  export AWS_ENDPOINT_URL="http://127.0.0.1:${FLOCI_PORT:-4566}"
+  export AWS_DEFAULT_REGION="${FLOCI_AWS_REGION:-us-east-1}"
+  export AWS_EC2_METADATA_DISABLED=true
 fi
 
 # Wait for an Application to become Synced (any health). Health is deliberately
 # NOT a gate here: stateful components (e.g. Vault) are born sealed/uninitialized
 # and only become Healthy *after* their own smoke seeds them (smoke-vault.sh →
 # seed-vault.sh). Requiring Healthy first would deadlock their bootstrap, so
-# converge on `Synced` first and let the component smoke assert real readiness;
-# the post-smoke gate re-checks Healthy.
+# converge on `Synced` first and let the platform gate below assert health.
 wait_for_synced() {
   local app="$1" announced=0 deadline now output sync_health status
   echo "── wait for Application/${app} Synced (any health; timeout ${TIMEOUT}s)"
@@ -287,10 +235,10 @@ wait_for_synced() {
   done
 }
 
-# Post-smoke convergence gate: the Application must reach Synced/Healthy once
-# the component smoke bootstrapped it (e.g. Vault seed). Degraded is tolerated
-# as transient (CRD-shipping apps are born Degraded while CRDs establish,
-# argoproj/argo-cd#26346) — the gate is the deadline.
+# Platform convergence gate: every catalog Application must reach
+# Synced/Healthy. Degraded is tolerated as transient (CRD-shipping apps are born
+# Degraded while CRDs establish, argoproj/argo-cd#26346) — the gate is the
+# deadline.
 wait_for_healthy() {
   local app="$1" c="${2:-}" degraded_announced=0 deadline now output health status health_status
   echo "── wait for Application/${app} Synced/Healthy (timeout ${TIMEOUT}s)"
@@ -320,63 +268,43 @@ wait_for_healthy() {
   done
 }
 
-if [ "${SUBSTRATE}" = "eks" ]; then
-  # ── EKS substrate: botar la plataforma COMPLETA (app-of-apps real) ──────────
-  echo "── make bootstrap ENV=${ENV:-local} (full platform on EKS)"
-  ENV="${ENV:-local}" GIT_TARGET_BRANCH="${ref}" make bootstrap
+# ── boot the platform COMPLETE (real app-of-apps) ───────────────────────────
+echo "── make bootstrap ENV=${ENV:-local} (full platform on the EKS substrate)"
+ENV="${ENV:-local}" GIT_TARGET_BRANCH="${ref}" make bootstrap
 
-  # Wait for every catalog Application (infrastructure/<c> → <c>-local). The app
-  # list is read from the repo, so a newly-landed component is covered for free.
-  CATALOG=()
-  for d in infrastructure/*/; do
-    [ -d "$d" ] || continue
-    c="${d%/}"; c="${c##*/}"
-    CATALOG+=("$c")
-  done
-  echo "── waiting for ${#CATALOG[@]} platform Applications to converge: ${CATALOG[*]}"
-  for c in "${CATALOG[@]}"; do
-    wait_for_healthy "${c}-${APP_SUFFIX}" "$c"
-  done
-  echo "[OK] full platform converged on ${SUBSTRATE}"
+echo "── waiting for ${#CATALOG[@]} platform Applications to converge: ${CATALOG[*]}"
+for c in "${CATALOG[@]}"; do
+  wait_for_synced "${c}-${APP_SUFFIX}"
+done
 
-  # Component-level smokes for the touched components, on the converged platform.
-  for c in "${APP_COMPONENTS[@]}"; do
-    echo "── run smoke: make smoke COMPONENT=${c}"
-    make smoke COMPONENT="${c}"
-  done
+# Vault is born sealed: seed/unseal it before the health gate, unconditionally —
+# the platform cannot be Healthy without it regardless of which component the
+# PR touched. seed-vault.sh is idempotent.
+echo "── seed Vault (bootstrap prerequisite for the health gate): make smoke COMPONENT=vault"
+make smoke COMPONENT=vault
 
-  # EKS-specific: real Kubernetes API via IAM kubeconfig + ECR push/pull.
-  echo "── run EKS smoke: make smoke COMPONENT=eks"
-  make smoke COMPONENT=eks
-else
-  # ── kind substrate: selective smoke of the touched component(s) ─────────────
-  for c in "${APP_COMPONENTS[@]}"; do
-    echo "── apply smoke ApplicationSet: make smoke-app COMPONENT=${c} REF=${ref}"
-    make smoke-app COMPONENT="${c}" REF="${ref}"
-    wait_for_synced "${c}-${APP_SUFFIX}"
-    echo "── run smoke: make smoke COMPONENT=${c}"
-    make smoke COMPONENT="${c}"
-  done
-fi
+for c in "${CATALOG[@]}"; do
+  wait_for_healthy "${c}-${APP_SUFFIX}" "$c"
+done
+echo "[OK] full platform converged on the EKS substrate"
+
+# Component-level smokes for the touched components, on the converged platform.
+for c in "${APP_COMPONENTS[@]}"; do
+  [ "$c" = "vault" ] && continue
+  echo "── run smoke: make smoke COMPONENT=${c}"
+  make smoke COMPONENT="${c}"
+done
+
+# EKS-specific: real Kubernetes API via IAM kubeconfig + ECR push/pull.
+echo "── run EKS smoke: make smoke COMPONENT=eks"
+make smoke COMPONENT=eks
 
 # Cloud-integration smoke: proves the cluster reaches the emulated cloud
-# endpoint and can operate against it (see docs/ci-cd.md). Runs once per smoke
-# run, for every component, unless --no-cloud / SMOKE_CLOUD=0.
+# endpoint and can operate against it (see docs/ci-cd.md).
 if [ "${CLOUD_ON}" = "1" ]; then
   echo "── run cloud smoke: make smoke COMPONENT=cloud"
   make smoke COMPONENT=cloud
-fi
-
-# Re-check every Application reached Healthy now that its smoke bootstrapped it.
-# On the EKS substrate the platform was already gated Healthy above.
-if [ "${SUBSTRATE}" != "eks" ]; then
-  for c in "${APP_COMPONENTS[@]}"; do
-    wait_for_healthy "${c}-${APP_SUFFIX}" "$c"
-  done
-fi
-
-if [ "${CLOUD_ON}" = "1" ]; then
-  echo "[OK] smoke-ci: ${COMPONENTS[*]} smoke passed (ref=${ref}, substrate=${SUBSTRATE}); cloud-integration smoke green"
+  echo "[OK] smoke-ci: ${COMPONENTS[*]} smoke passed (ref=${ref}); cloud-integration smoke green"
 else
-  echo "[OK] smoke-ci: ${COMPONENTS[*]} smoke passed (ref=${ref}, substrate=${SUBSTRATE}); cloud smoke skipped (--no-cloud)"
+  echo "[OK] smoke-ci: ${COMPONENTS[*]} smoke passed (ref=${ref}); cloud smoke skipped (--no-cloud)"
 fi

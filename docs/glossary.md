@@ -15,7 +15,7 @@ live in [architecture.md](architecture.md).
 | **CR** / **CRD**   | Custom Resource / Custom Resource Definition; CRDs are installed by operators, CRs are the actual instances                                    |
 | **GitOps**         | Git is the single source of truth; the cluster converges toward it                                                                             |
 | **Operator**       | Controller + CRDs; reconciles the cluster toward a desired state (CNPG, Strimzi, redis-operator, cert-manager, ESO)                            |
-| **promote-test**   | Validating an env overlay (dev/qa/prod) on a local `kind` cluster before promotion ([workflow.md](workflow.md))                                |
+| **promote-test**   | Validating an env overlay (dev/qa/prod) on a local (Floci emulated EKS) cluster before promotion ([workflow.md](workflow.md))                 |
 | **radar**          | The alert/notification layer (PrometheusRules severity `info`) that flags prod sync windows ([observability-radar.md](observability-radar.md)) |
 | **SSA**            | Server-Side Apply, a sync strategy; deliberately **not** global in this repo (breaks Kong's flat CRDs)                                         |
 | **SSOT**           | Single source of truth — the repo (GitOps) and Vault (secrets)                                                                                 |
@@ -44,7 +44,7 @@ Phase numbers refer to the roadmap in [roadmap.md](roadmap.md).
 
 | Term      | Meaning                                                                  |
 | --------- | ------------------------------------------------------------------------ |
-| **local** | Developer machine, `kind`, 1 replica, full catalog, auto+prune           |
+| **local** | Developer machine, Floci emulated EKS, 1 replica, full catalog, auto+prune |
 | **dev**   | Shared integration, reduced HA, auto+prune                               |
 | **qa**    | Pre-production, HA (3 replicas, PDBs, anti-affinity), auto, **no prune** |
 | **prod**  | Production, full HA, real storage, **manual** sync                       |

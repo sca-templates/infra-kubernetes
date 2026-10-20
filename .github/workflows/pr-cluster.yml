@@ -1,22 +1,22 @@
 # Copyright (c) 2026 sca-templates contributors
 # SPDX-License-Identifier: MIT
 # =============================================================================
-# infra-kubernetes cluster smoke — validate the platform still works on an
-# ephemeral cluster (Phase 1). Ran by bootstrap/smoke-ci.sh, which owns the
-# boot/apply/wait/run/diagnose/teardown cycle so each component only adds its
+# infra-kubernetes cluster smoke — validate the platform still works on a real
+# Kubernetes API (Phase 1). Ran by bootstrap/smoke-ci.sh, which owns the
+# boot/converge/run/diagnose/teardown cycle so each component only adds its
 # smoke command (bootstrap/smoke-<component>.sh).
 #
-# Two substrates run under the one required `Smoke` check:
-#   - kind (selective): the touched component(s) on an ephemeral kind cluster,
-#     profile `local`.
-#   - EKS (full platform): Floci's emulated EKS (a real k3s node) booting the
-#     whole catalog via the real app-of-apps, plus the EKS/ECR integration smoke.
+# Single substrate: Floci's emulated EKS (a real k3s node + ECR). The job boots
+# the *full* platform through the real app-of-apps, seeds Vault, converges every
+# catalog Application, then runs the touched components' smokes plus the EKS/ECR
+# and cloud-integration smokes. The chart images are preloaded into the node
+# (and cached between runs) so a throttled public registry is not on the
+# critical path.
 #
 # Triggers:
-#   - pull_request:       selective smoke of the touched component(s) (profile
-#                         `local`). Required PR check on main (branch
-#                         protection must include `Smoke`); no push
-#                         watch/monitoring runs.
+#   - pull_request:       required PR check on main (branch protection must
+#                         include `Smoke`); docs-only PRs are skipped by the
+#                         component resolver below.
 #   - workflow_dispatch:  manual one-off smoke of component(s)/ref for testing.
 #
 # Same-repo PRs only (coherent with main-sync.yml); fork PRs are skipped.
@@ -29,7 +29,7 @@ on:
   workflow_dispatch:
     inputs:
       component:
-        description: Component(s) to smoke — subdir(s) of infrastructure/, comma-separated, or `cloud` for the cloud-emulator smoke
+        description: Component(s) to smoke — subdir(s) of infrastructure/, comma-separated, or `cloud`/`eks`
         type: string
         default: cert-manager
       ref:
@@ -45,11 +45,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  kind-smoke:
+  cluster-smoke:
     name: Smoke
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     # Fork PRs cannot resolve the head ref on the upstream repo (main-sync skips
-    # forks too); only run the selective smoke for same-repo PRs.
+    # forks too); only run the smoke for same-repo PRs.
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - name: Checkout
@@ -72,6 +73,27 @@ jobs:
         run: |
           make prereqs >/dev/null
           echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+
+      # Cache the chart images preloaded into the EKS node. Without it every run
+      # pulls the whole catalog from public registries (Docker Hub/ghcr/quay),
+      # which is slow and rate-limited (ECR Public answers 429 to shared IPs).
+      # The key hashes the pins, the catalog manifests and the renderer, so a
+      # version bump invalidates the tarball; a partial hit still helps.
+      - name: Restore preloaded image cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/sca/preload
+          key: >-
+            ${{ runner.os }}-preload-${{ hashFiles(
+              'bootstrap/versions.sh',
+              'argocd/apps-*.yaml',
+              'argocd/kong-*.yaml',
+              'envs/local/*.yaml',
+              'infrastructure/*/values-base.yaml',
+              'bootstrap/preload-chart-images.sh'
+            ) }}
+          restore-keys: |
+            ${{ runner.os }}-preload-
 
       - name: Resolve smoke components and ref
         id: resolve
@@ -120,8 +142,8 @@ jobs:
 
           # 3. per-component smoke scripts: bootstrap/smoke-<c>*.sh → <c>
           #    (smoke-ci/smoke-target are the shared framework; smoke-cloud* → `cloud`).
-          #    smoke-eks is EKS-only (the kind substrate cannot run it), so it maps
-          #    to the framework default: the always-on EKS step exercises it.
+          #    smoke-eks is exercised by the always-on EKS step, so map it to the
+          #    framework default.
           while IFS= read -r f; do
             [ -n "$f" ] || continue
             c="$(printf '%s' "$f" | sed -E 's|^bootstrap/smoke-||; s|\.sh$||; s|-aws$||')"
@@ -145,7 +167,7 @@ jobs:
           # 5. shared framework/tooling → default component (cert-manager): the
           #    smoke's own machinery (and the argocd manifest set / Makefile it
           #    drives) must be exercised by the smoke, not merged untested.
-          framework_re='^(Makefile|argocd/|bootstrap/(smoke-ci|smoke-target|render-served-apps|sca|versions|kind-config|local-git-|preload-chart-images|collect-argocd-diagnostics)[^/]*$)'
+          framework_re='^(Makefile|argocd/|bootstrap/(smoke-ci|smoke-target|render-served-apps|sca|versions|local-git-|preload-chart-images|collect-argocd-diagnostics)[^/]*$)'
           if printf '%s\n' "$changed" | grep -qE "$framework_re"; then
             add cert-manager
           fi
@@ -162,7 +184,7 @@ jobs:
             echo "ref=${PR_HEAD_REF}"
           } >> "${GITHUB_OUTPUT}"
 
-      - name: Cluster smoke (kind, selective)
+      - name: Cluster smoke (full platform on the EKS substrate)
         if: steps.resolve.outputs.components != ''
         run: |
           export PATH="${HOME}/.local/bin:${PATH}"
@@ -172,40 +194,18 @@ jobs:
           SMOKE_COMPONENTS: ${{ steps.resolve.outputs.components }}
           SMOKE_REF: ${{ steps.resolve.outputs.ref }}
 
-      - name: Upload smoke diagnose artifacts (kind)
+      - name: Upload smoke diagnose artifacts
         if: always() && steps.resolve.outputs.components != ''
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: smoke-diagnose-kind-${{ steps.resolve.outputs.slug }}
+          name: smoke-diagnose-${{ steps.resolve.outputs.slug }}
           path: .generated/
+          # `.generated/` is a dot-directory: without this the artifact is empty.
+          include-hidden-files: true
           if-no-files-found: warn
 
-      # Same required `Smoke` check, second substrate: boot the FULL platform on
-      # Floci's emulated EKS (a real k3s node) and prove EKS integration (IAM
-      # kubeconfig) + the ECR image path. Runs after the kind smoke; a failed
-      # kind smoke skips it (fail-fast). `.generated/` is reset so the EKS
-      # artifact carries only the EKS run.
-      - name: Cluster smoke (EKS substrate, full platform)
-        if: steps.resolve.outputs.components != ''
-        run: |
-          export PATH="${HOME}/.local/bin:${PATH}"
-          rm -rf .generated
-          bootstrap/smoke-ci.sh "${SMOKE_COMPONENTS}" "${SMOKE_REF}" --substrate eks
-        env:
-          GIT_REPO_URL: https://github.com/${{ github.repository }}
-          SMOKE_COMPONENTS: ${{ steps.resolve.outputs.components }}
-          SMOKE_REF: ${{ steps.resolve.outputs.ref }}
-
-      - name: Upload smoke diagnose artifacts (EKS)
+      # smoke-ci.sh tears the substrate down in its EXIT trap; this step covers
+      # cancellation, when the trap may not run.
+      - name: Teardown EKS substrate
         if: always() && steps.resolve.outputs.components != ''
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: smoke-diagnose-eks-${{ steps.resolve.outputs.slug }}
-          path: .generated/
-          if-no-files-found: warn
-
-      - name: Teardown smoke cluster
-        if: always() && steps.resolve.outputs.components != ''
-        run: |
-          make cluster-down 2>/dev/null || true
-          make eks-down 2>/dev/null || true
+        run: make eks-down 2>/dev/null || true

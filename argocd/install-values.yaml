@@ -8,6 +8,14 @@ dex:
 redis-ha:
   enabled: false
 
+# The chart defaults to the ecr-public.aws.com mirror, which answers 429
+# (toomanyrequests) to shared CI egress IPs. Pull the same upstream image from
+# Docker Hub instead; bootstrap/preload-chart-images.sh warms it into the node.
+redis:
+  image:
+    repository: docker.io/library/redis
+    tag: 8.2.3-alpine
+
 controller:
   replicas: 1
   resources:

@@ -29,7 +29,8 @@ them first, execute against their gates, and update `status.md` /
 
 ## 2. Environment model
 
-`local` is a **platform-only** sandbox (kind): the full catalog for iteration
+`local` is a **platform-only** sandbox (Floci's emulated EKS — a real
+single-node k3s container): the full catalog for iteration
 and CI smoke, but **no services**. Services deploy from `dev` upward: dev/qa
 promoted by syncing the ArgoCD Application of their own repo from the service
 `promote` workflow, prod by bumping the **version tag pin** in the services
@@ -37,7 +38,7 @@ registry (`chore(services)` PR = go/no-go).
 
 | Environment | Profile | Sync policy | Purpose |
 | --- | --- | --- | --- |
-| `local` | 1 replica, full platform catalog, minimal resources | auto-sync + prune | Developer machine (kind); platform-only, no services |
+| `local` | 1 replica, full platform catalog, minimal resources | auto-sync + prune | Developer machine (Floci emulated EKS); platform-only, no services |
 | `dev` | reduced HA | auto-sync + prune (platform); services synced on demand by the `promote` workflow | Shared integration; services via the `promote` workflow → `<service>-dev` app sync |
 | `qa` | HA (3 replicas, PDBs, anti-affinity) | auto-sync, **no prune** (platform); services synced by the `promote` workflow against the `qa` approval gate | Pre-production validation; services via the `promote` workflow → `<service>-qa` app sync |
 | `prod` | full HA, real storage | **manual sync** | Production; services via the `version` pin in `services-prod.yaml`, go/no-go |
@@ -122,11 +123,9 @@ guards ([docs/security.md](docs/security.md)).
 
 | Command | What it does |
 | --- | --- |
-| `make prereqs` | Install pinned kubectl/helm/kind into `~/.local/bin` (idempotent, sha256-verified) — `bootstrap/sca.sh prerrequisites` |
+| `make prereqs` | Install pinned kubectl/helm into `~/.local/bin` (idempotent, sha256-verified; docker required for the Floci emulator) — `bootstrap/sca.sh prerrequisites` |
 | `make doctor` | Read-only platform health check (toolchain, PATH, docker, cluster, ArgoCD apps, `.env` seam, git source) |
 | `make install-cli` | Symlink `bootstrap/sca.sh` → `~/.local/bin/sca` for direct `sca prereqs` / `sca doctor` / `sca version` |
-| `make cluster-up` | Create the local `kind` cluster from `bootstrap/kind-config.yaml` |
-| `make cluster-down` | Delete the local `kind` cluster (keeps nothing) |
 | `make bootstrap` | Install ArgoCD + apply the root Application for `$ENV` |
 | `make status` | Cluster, ArgoCD apps and pod health overview |
 | `make validate` | Static suite + live cluster checks |
@@ -134,7 +133,7 @@ guards ([docs/security.md](docs/security.md)).
 | `make cloud-up` | Start the cloud emulator (Floci) and publish it into the cluster — dev/CI tooling, not a component |
 | `make cloud-down` | Stop the cloud emulator and unpublish it from the cluster |
 | `make cloud-status` | Report cloud-emulator reachability (host edge + in-cluster Service) |
-| `make eks-up` | Start Floci in EKS mode: create the emulated EKS cluster (k3s) and point kubectl at it — dev/CI tooling, not a component |
+| `make eks-up` | Start Floci in EKS mode: create the emulated EKS cluster (k3s) and point kubectl at it — the only local cluster substrate (dev/CI tooling, not a component) |
 | `make eks-down` | Delete the emulated EKS cluster, IAM user and kubeconfig context |
 | `make eks-status` | Report the emulated EKS cluster status and its nodes |
 | `make port-forward APP=<name>` | Reach a platform UI/API locally (argocd, vault, keycloak, grafana, prometheus, …) |
@@ -193,7 +192,7 @@ Base URL: `https://raw.githubusercontent.com/sca-templates/sca-docs/main/<path>`
 | ArgoCD app `OutOfSync` | Drift or failed sync-wave | `kubectl get application <name> -n argocd`; check `status.conditions`; sync manually if prod |
 | ExternalSecret `SecretSyncedError` | Vault path missing or k8s-auth role wrong | Check `ClusterSecretStore vault` Ready; verify path under `secret/<service>/<env>`; re-run `bootstrap/seed-vault.sh` (local) |
 | Pods CrashLoopBackOff after a wave bump | Dependency started before its datastore/operator | Re-check wave assignment; consumers must be ≥10 above their dependency |
-| kind cluster OOM | Host RAM exhausted | Stop the Compose stack before bootstrapping; 1-replica local profile |
+| EKS node OOM | Host RAM exhausted | Stop the Compose stack before bootstrapping; 1-replica local profile |
 | `ImagePullBackOff` | Bad pin or unreachable registry | Verify the pinned tag exists upstream; check node images; never float `latest` |
 | ESO wedge (local) | Old long-refresh pattern | Do not restart ESO by hand; short refresh (~5 min) prevents recurrence |
 | Cloud smoke fails / no endpoint | Emulator not up, or wrong Docker network | `make cloud-status`; `make cloud-up` (needs the cluster up); check `Service/floci` + EndpointSlice in ns `cloud` |
