@@ -304,7 +304,14 @@ Floci's EKS backing, not ArgoCD-managed).
   provisions a second k3s container; the script then converges on the cluster
   state instead of trusting the call's verdict), waits `ACTIVE`, fetches the
   kubeconfig (stable context `floci-eks`), waits for the node `Ready`, and
-  publishes the emulator into the cluster for the endpoint smoke.
+  publishes the emulator into the cluster for the endpoint smoke. `ACTIVE` alone
+  is not trusted — Floci records the cluster row before the k3s node registers,
+  and a create cut off server-side leaves that row `ACTIVE` with no node ever
+  appearing, so the script waits a short window (`NODE_APPEAR_TIMEOUT`) for the
+  first `Node` object and **recreates the cluster once** if none shows, instead
+  of burning the full `SMOKE_TIMEOUT`. On a node failure it dumps the emulator
+  logs and the Docker container list (the k3s node included) to `.generated/`
+  so the uploaded artifacts show what the substrate did.
 - **The check** — `bootstrap/smoke-eks.sh` (driven by `make smoke
   COMPONENT=eks`): asserts a `Ready` node on context `floci-eks`, pushes the
   pinned `AWS_CLI_IMAGE` to `${account}.dkr.ecr.${region}.localhost:4566` via

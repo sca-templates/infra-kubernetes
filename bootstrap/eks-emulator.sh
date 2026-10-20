@@ -61,6 +61,12 @@ FLOCI_PORT="${FLOCI_PORT:-4566}"
 ENDPOINT="http://127.0.0.1:${FLOCI_PORT}"
 EKS_ADMIN_FILE=".secrets/eks-admin.env"
 NODE_TIMEOUT="${SMOKE_TIMEOUT:-900}"
+# A short window to see the first Node object after the cluster reports ACTIVE.
+# Floci records the cluster row before the k3s node is up, and a create whose
+# server-side connection dropped can leave that row ACTIVE with no node at all
+# (see eks_up): the node has to appear soon or the cluster is treated as broken.
+NODE_APPEAR_TIMEOUT="${NODE_APPEAR_TIMEOUT:-90}"
+DIAGNOSE_DIR="${SMOKE_DIAGNOSE_DIR:-.generated}"
 
 [ -n "$ACTION" ] || { echo "usage: $0 up|down|status" >&2; exit 2; }
 
@@ -180,6 +186,7 @@ wait_for_nodes() {
     [ "${now}" -lt "${deadline}" ] || {
       echo "ERROR: no Ready node in cluster '${EKS_CLUSTER}' within ${NODE_TIMEOUT}s" >&2
       kubectl --context "${EKS_CONTEXT}" get nodes -o wide 2>/dev/null || true
+      diagnose_node_failure
       return 1
     }
     if kubectl --context "${EKS_CONTEXT}" get nodes --no-headers 2>/dev/null | grep -q ' Ready '; then
@@ -190,6 +197,93 @@ wait_for_nodes() {
   done
 }
 
+nodes_exist() {
+  # True once the API server knows at least one Node object, whatever its state
+  # (a node that exists but is NotReady is progress; an empty list means the k3s
+  # node container never registered).
+  kubectl --context "${EKS_CONTEXT}" get nodes --no-headers 2>/dev/null | grep -q .
+}
+
+wait_for_first_node() {
+  # ACTIVE is not "the node is coming": Floci registers the cluster before the
+  # k3s container is up, and a create cut off server-side can leave the row
+  # ACTIVE with no node ever. Give the node a short window to appear so a
+  # broken-but-ACTIVE cluster is caught fast instead of burning NODE_TIMEOUT.
+  echo "── eks: waiting for the first node object (timeout ${NODE_APPEAR_TIMEOUT}s)"
+  local deadline now
+  deadline=$(( $(date +%s) + NODE_APPEAR_TIMEOUT ))
+  while : ; do
+    if nodes_exist; then
+      return 0
+    fi
+    now="$(date +%s)"
+    [ "${now}" -lt "${deadline}" ] || return 1
+    sleep 5
+  done
+}
+
+delete_cluster() {
+  echo "── eks: deleting cluster '${EKS_CLUSTER}' (before recreate)"
+  aws_cli eks delete-cluster --name "${EKS_CLUSTER}" >/dev/null 2>&1 || true
+  # Converge on ABSENT so the recreate is not answered with ResourceInUse.
+  local deadline now
+  deadline=$(( $(date +%s) + NODE_APPEAR_TIMEOUT ))
+  while : ; do
+    [ "$(cluster_status)" = "ABSENT" ] && return 0
+    now="$(date +%s)"
+    [ "${now}" -lt "${deadline}" ] || {
+      echo "  cluster still not ABSENT after ${NODE_APPEAR_TIMEOUT}s; proceeding to recreate anyway" >&2
+      return 0
+    }
+    sleep 5
+  done
+}
+
+diagnose_node_failure() {
+  # A node that never appears is a substrate fault, not a platform one: dump the
+  # emulator's logs and the Docker container list so the k3s node (and whether
+  # Floci dropped it as stale) is visible in the uploaded artifacts.
+  echo "── eks: collecting node-failure diagnostics into ${DIAGNOSE_DIR}/" >&2
+  mkdir -p "${DIAGNOSE_DIR}"
+  docker ps -a --format '{{.Names}}\t{{.Image}}\t{{.Status}}' \
+    > "${DIAGNOSE_DIR}/eks-node-failure.containers.txt" 2>&1 || true
+  docker logs "${FLOCI_NAME}" > "${DIAGNOSE_DIR}/eks-node-failure.floci.log" 2>&1 || true
+  # K3s node containers Floci spawns carry the cluster name in their name/image;
+  # dump their logs too when present.
+  docker ps -a --format '{{.Names}}' 2>/dev/null | grep -iE 'k3s|sca-eks' | while read -r c; do
+    [ -n "$c" ] || continue
+    docker logs "$c" >> "${DIAGNOSE_DIR}/eks-node-failure.k3s.log" 2>&1 || true
+  done || true
+  echo "  wrote eks-node-failure.* into ${DIAGNOSE_DIR}/" >&2
+}
+
+create_cluster() {
+  # One `create-cluster` request, no client retries: Floci's create is not
+  # idempotent while it provisions — the handler blocks on the k3s container and
+  # registers the cluster only once it is up, so an AWS-CLI retry past its (~5s)
+  # client-side window provisions a *second* k3s container (the first later
+  # dropped as stale), or the retry answers ResourceInUseException for the very
+  # cluster it just registered (the original CI failure). The create verdict is
+  # not a source of truth — converge on the cluster state instead.
+  echo "── eks: creating cluster '${EKS_CLUSTER}' (role ${EKS_ROLE_ARN})"
+  local create_err
+  AWS_CLI_ENV=(-e AWS_MAX_ATTEMPTS=1)
+  if ! create_err="$(aws_cli eks create-cluster \
+        --name "${EKS_CLUSTER}" \
+        --role-arn "${EKS_ROLE_ARN}" \
+        --resources-vpc-config "subnetIds=${EKS_SUBNET}" 2>&1)"; then
+    printf '%s\n' "${create_err}" | sed 's/^/  /' >&2
+    echo "  create-cluster returned an error; converging on the cluster state" >&2
+  fi
+  AWS_CLI_ENV=()
+}
+
+fetch_kubeconfig() {
+  echo "── eks: fetching kubeconfig (context ${EKS_CONTEXT})"
+  aws_cli eks update-kubeconfig --name "${EKS_CLUSTER}" --kubeconfig /root/.kube/config --endpoint-url "${ENDPOINT}" >/dev/null
+  rename_context
+}
+
 eks_up() {
   echo "── eks: starting cloud emulator on network '${CLOUD_NETWORK}' (EKS mode)"
   CLOUD_NETWORK="${CLOUD_NETWORK}" "${SELF_DIR}/cloud-emulator.sh" start "${CLOUD_PROVIDER:-aws}"
@@ -197,41 +291,40 @@ eks_up() {
 
   ensure_iam_admin
 
-  local status
+  local status recreate=1
   status="$(cluster_status)"
   if [ "${status}" = "ACTIVE" ]; then
     echo "[skip] EKS cluster '${EKS_CLUSTER}' already ACTIVE"
+  elif [ "${status}" = "ABSENT" ] || [ "${status}" = "UNKNOWN" ]; then
+    create_cluster
+    wait_for_cluster_active
   else
-    if [ "${status}" = "ABSENT" ] || [ "${status}" = "UNKNOWN" ]; then
-      echo "── eks: creating cluster '${EKS_CLUSTER}' (role ${EKS_ROLE_ARN})"
-      # Floci's create-cluster is not idempotent while it provisions: the handler
-      # blocks on the k3s container and records the cluster only once it is up,
-      # so a request the AWS CLI retries past its (~5s) client-side window
-      # provisions a *second* k3s container — Floci then removes the first as
-      # stale and the cluster is left in a broken state, or the retry answers
-      # ResourceInUseException for the very cluster it just registered (the CI
-      # failure). So: one request, no client retries (AWS_MAX_ATTEMPTS=1); retry
-      # policy lives in wait_for_cluster_active below. The create verdict is not
-      # a source of truth — converge on the cluster state instead.
-      local create_err
-      AWS_CLI_ENV=(-e AWS_MAX_ATTEMPTS=1)
-      if ! create_err="$(aws_cli eks create-cluster \
-            --name "${EKS_CLUSTER}" \
-            --role-arn "${EKS_ROLE_ARN}" \
-            --resources-vpc-config "subnetIds=${EKS_SUBNET}" 2>&1)"; then
-        printf '%s\n' "${create_err}" | sed 's/^/  /' >&2
-        echo "  create-cluster returned an error; converging on the cluster state" >&2
-      fi
-      AWS_CLI_ENV=()
-    else
-      echo "  cluster '${EKS_CLUSTER}' already present (status ${status}); waiting for ACTIVE"
-    fi
+    echo "  cluster '${EKS_CLUSTER}' already present (status ${status}); waiting for ACTIVE"
     wait_for_cluster_active
   fi
 
-  echo "── eks: fetching kubeconfig (context ${EKS_CONTEXT})"
-  aws_cli eks update-kubeconfig --name "${EKS_CLUSTER}" --kubeconfig /root/.kube/config --endpoint-url "${ENDPOINT}" >/dev/null
-  rename_context
+  fetch_kubeconfig
+
+  # ACTIVE does not mean the node came up: Floci records the cluster row before
+  # the k3s node registers, and a create cut off server-side (the observed CI
+  # failure — `Connection was closed before we received a valid response`) leaves
+  # that row ACTIVE with no node ever appearing, burning the full NODE_TIMEOUT.
+  # Catch it fast and recreate the cluster once before giving up.
+  while ! wait_for_first_node; do
+    if [ "${recreate}" -eq 0 ]; then
+      echo "ERROR: cluster '${EKS_CLUSTER}' reported ACTIVE but no node appeared after a recreate" >&2
+      diagnose_node_failure
+      return 1
+    fi
+    echo "  cluster ACTIVE but no node appeared within ${NODE_APPEAR_TIMEOUT}s; recreating once" >&2
+    diagnose_node_failure
+    delete_cluster
+    create_cluster
+    wait_for_cluster_active
+    fetch_kubeconfig
+    recreate=0
+  done
+
   wait_for_nodes
 
   echo "── eks: publishing cloud emulator into the EKS cluster"
