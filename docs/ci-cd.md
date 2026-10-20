@@ -309,9 +309,14 @@ Floci's EKS backing, not ArgoCD-managed).
   and a create cut off server-side leaves that row `ACTIVE` with no node ever
   appearing, so the script waits a short window (`NODE_APPEAR_TIMEOUT`) for the
   first `Node` object and **recreates the cluster once** if none shows, instead
-  of burning the full `SMOKE_TIMEOUT`. On a node failure it dumps the emulator
-  logs and the Docker container list (the k3s node included) to `.generated/`
-  so the uploaded artifacts show what the substrate did.
+   of burning the full `SMOKE_TIMEOUT`. The kubeconfig is written with
+   `aws eks update-kubeconfig --alias floci-eks`, and `${HOME}/.kube` is
+   pre-created as the invoking user (and chowned back if the container wrote it
+   as root) so the host `kubectl` can always read the context it just fetched;
+   a missing context or unreachable API fails immediately, with a stderr-visible
+   kubectl dump. On a node failure it dumps that kubectl dump, the emulator
+   logs and the Docker container list (the k3s node included) to `.generated/`
+   so the uploaded artifacts show what the substrate did.
 - **The check** — `bootstrap/smoke-eks.sh` (driven by `make smoke
   COMPONENT=eks`): asserts a `Ready` node on context `floci-eks`, pushes the
   pinned `AWS_CLI_IMAGE` to `${account}.dkr.ecr.${region}.localhost:4566` via

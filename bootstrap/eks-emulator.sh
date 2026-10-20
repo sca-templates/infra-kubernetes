@@ -80,6 +80,7 @@ DIAGNOSE_DIR="${SMOKE_DIAGNOSE_DIR:-.generated}"
 # retry is not idempotent (see there).
 AWS_CLI_ENV=()
 aws_cli() {
+  ensure_kube_dir
   docker run --rm --network host \
     -v "${HOME}/.kube:/root/.kube" \
     -e AWS_ENDPOINT_URL="${ENDPOINT}" \
@@ -88,6 +89,36 @@ aws_cli() {
     -e AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-test}" \
     ${AWS_CLI_ENV[@]+"${AWS_CLI_ENV[@]}"} \
     "${AWS_CLI_IMAGE}" "$@"
+}
+
+# A missing ${HOME}/.kube is created by dockerd (root) for the aws_cli bind
+# mount, and `update-kubeconfig` then writes a 0600 root-owned file the host
+# kubectl cannot read: every `kubectl --context floci-eks` fails with
+# "permission denied" — an error the node waits used to silence, surfacing as
+# the observed "cluster ACTIVE but no node appeared". Pre-create the dir and
+# file as the invoking user so the container's in-place rewrite keeps the user
+# as owner. Called from aws_cli itself: the very first call (wait_for_api)
+# already mounts it.
+ensure_kube_dir() {
+  mkdir -p "${HOME}/.kube" 2>/dev/null || true
+  kubeconfig_ownership
+  mkdir -p "${HOME}/.kube"
+  [ -e "${HOME}/.kube/config" ] || : > "${HOME}/.kube/config"
+}
+
+kubeconfig_ownership() {
+  # The bind mount (or a container that replaced the config inode) can leave
+  # ~/.kube root-owned: hand it back to the invoking user via a root container
+  # (root can chown arbitrary host files — no userns remap on the runners).
+  [ -d "${HOME}/.kube" ] || return 0
+  if [ -w "${HOME}/.kube" ] && { [ ! -e "${HOME}/.kube/config" ] || [ -w "${HOME}/.kube/config" ]; }; then
+    return 0
+  fi
+  echo "  fixing ownership of ${HOME}/.kube (written as root by docker)"
+  docker run --rm -v "${HOME}/.kube:/kcfg" \
+    -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+    --entrypoint sh "${AWS_CLI_IMAGE}" \
+    -c 'chown -R "$HOST_UID:$HOST_GID" /kcfg'
 }
 
 wait_for_api() {
@@ -166,15 +197,54 @@ ensure_iam_admin() {
   export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
 }
 
+diagnose_kubectl() {
+  # The node waits silence kubectl's stderr, which made a client-side failure
+  # (missing context, unreadable config) indistinguishable from a cluster with
+  # no node. Keep a stderr-visible dump in the uploaded artifacts.
+  local out="${DIAGNOSE_DIR}/eks-node-failure.kubectl.txt"
+  mkdir -p "${DIAGNOSE_DIR}"
+  {
+    echo "# whoami: $(id -un) ($(id -u):$(id -g))"
+    echo "# ls -l ${HOME}/.kube"
+    ls -la "${HOME}/.kube" 2>&1 || true
+    echo "# kubectl config current-context"
+    kubectl config current-context 2>&1 || true
+    echo "# kubectl config get-contexts"
+    kubectl config get-contexts 2>&1 || true
+    echo "# kubectl --context ${EKS_CONTEXT} get nodes -o wide"
+    kubectl --context "${EKS_CONTEXT}" get nodes -o wide 2>&1 || true
+    echo "# kubectl version --request-timeout=10s"
+    kubectl version --request-timeout=10s 2>&1 || true
+  } > "${out}" || true
+  echo "  wrote ${out}" >&2
+}
+
 rename_context() {
-  # `update-kubeconfig` names the context after the cluster ARN; give it the
-  # stable alias the smoke uses, and make it current.
+  # `update-kubeconfig --alias` already names the context; this stays as a
+  # fallback for a kubeconfig written before the alias existed. verify_kubecontext
+  # below fails loudly, so nothing here needs to be trusted.
   local current
   current="$(kubectl config current-context 2>/dev/null || true)"
   if [ -n "${current}" ] && [ "${current}" != "${EKS_CONTEXT}" ]; then
     kubectl config rename-context "${current}" "${EKS_CONTEXT}" >/dev/null 2>&1 || true
+    kubectl config use-context "${EKS_CONTEXT}" >/dev/null 2>&1 || true
   fi
-  kubectl config use-context "${EKS_CONTEXT}" >/dev/null 2>&1 || true
+}
+
+verify_kubecontext() {
+  # A context that does not exist (rename failed) or a config the invoking user
+  # cannot read used to burn the whole NODE_APPEAR_TIMEOUT twice, invisibly.
+  # Fail fast on the first one, with the real error, and prove the API answers.
+  if ! kubectl config get-contexts -o name 2>/dev/null | grep -qx "${EKS_CONTEXT}"; then
+    echo "ERROR: kubecontext '${EKS_CONTEXT}' not present after update-kubeconfig" >&2
+    diagnose_kubectl
+    return 1
+  fi
+  if ! kubectl --context "${EKS_CONTEXT}" get nodes --request-timeout=10s >/dev/null; then
+    echo "ERROR: context '${EKS_CONTEXT}' exists but its API is not reachable" >&2
+    diagnose_kubectl
+    return 1
+  fi
 }
 
 wait_for_nodes() {
@@ -245,6 +315,9 @@ diagnose_node_failure() {
   # Floci dropped it as stale) is visible in the uploaded artifacts.
   echo "── eks: collecting node-failure diagnostics into ${DIAGNOSE_DIR}/" >&2
   mkdir -p "${DIAGNOSE_DIR}"
+  # kubectl's own view first: with the node waits silencing its stderr, a
+  # client-side failure was invisible in the uploaded artifacts.
+  diagnose_kubectl
   docker ps -a --format '{{.Names}}\t{{.Image}}\t{{.Status}}' \
     > "${DIAGNOSE_DIR}/eks-node-failure.containers.txt" 2>&1 || true
   docker logs "${FLOCI_NAME}" > "${DIAGNOSE_DIR}/eks-node-failure.floci.log" 2>&1 || true
@@ -280,8 +353,14 @@ create_cluster() {
 
 fetch_kubeconfig() {
   echo "── eks: fetching kubeconfig (context ${EKS_CONTEXT})"
-  aws_cli eks update-kubeconfig --name "${EKS_CLUSTER}" --kubeconfig /root/.kube/config --endpoint-url "${ENDPOINT}" >/dev/null
+  ensure_kube_dir
+  # `--alias` names the context (and makes it current) from inside the
+  # container, so no host-side write is needed to get the stable name.
+  aws_cli eks update-kubeconfig --name "${EKS_CLUSTER}" --alias "${EKS_CONTEXT}" \
+    --kubeconfig /root/.kube/config --endpoint-url "${ENDPOINT}" >/dev/null
+  kubeconfig_ownership
   rename_context
+  verify_kubecontext
 }
 
 eks_up() {
