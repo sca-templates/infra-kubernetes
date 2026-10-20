@@ -1,0 +1,38 @@
+# Copyright (c) 2026 sca-templates contributors
+# SPDX-License-Identifier: MIT
+# =============================================================================
+# uv override for the checkov lockfile (.github/requirements.txt)
+# =============================================================================
+# beartype==0.22.9 (pulled in transitively: checkov -> spdx-tools -> beartype;
+# checkov pins spdx-tools<0.9.0,>=0.8.0 and spdx-tools declares beartype with no
+# upper bound) does `from typing import no_type_check_decorator` in
+# beartype/typing/__init__.py — a symbol CPython removed in 3.15. The shared
+# security template installs checkov with `python-version: "3.x"`, so on a
+# runner whose toolcache advertises 3.15.0 the IaC gate dies at import:
+#
+#   ImportError: cannot import name 'no_type_check_decorator' from 'typing'
+#
+# beartype==0.23.1 drops that import and imports cleanly on 3.15; spdx-tools
+# places no upper bound on beartype, so the bump violates no declared
+# constraint. Forcing it (rather than --upgrade-package) keeps the diff to the
+# single package: naming the package on the command line makes uv re-resolve the
+# whole closure to "latest" and drag ~20 unrelated packages (gitpython,
+# multidict, pydantic, ...) with it. The cutoff must admit 0.23.1 (released
+# 2026-10-11), hence --exclude-newer 2026-10-12T00:00:00Z below.
+#
+#   printf 'checkov==3.3.16\n' | uv pip compile --generate-hashes \
+#     --python-version 3.11 --exclude-newer 2026-10-12T00:00:00Z \
+#     --overrides .github/asteval-override.txt \
+#     --overrides .github/beartype-override.txt -o .github/requirements.txt -
+#
+# The lockfile is compiled --python-version 3.11 while the template installs it
+# under whatever "3.x" resolves to; this override patches the one 3.15
+# incompatibility reachable today, but the version drift itself is the root
+# cause and belongs to the shared template (pin python-version to 3.11). See
+# docs/security.md.
+#
+# Re-evaluate when the shared template pins python-version (or checkov adopts a
+# beartype floor >= 0.23.1): drop this file and the extra --overrides above.
+# =============================================================================
+
+beartype==0.23.1

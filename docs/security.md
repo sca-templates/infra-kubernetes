@@ -72,26 +72,36 @@ Always pass `--exclude-newer <ISO-8601 cutoff>`: a lockfile is a snapshot of one
 day, and without a cutoff uv also lifts every unrelated package in the closure
 to its newest release, burying the intended bump in a thousand-line diff.
 
-### The asteval override (checkov)
+### The uv overrides (checkov)
 
-`checkov==3.3.16` hard-pins `asteval==1.0.6` in every 3.3.x release (3.3.16
-through 3.3.19, the latest), and the two advisories that reach us through that
-pin are fixed in `asteval>=1.0.9`. The closure is therefore unsatisfiable as
-resolved, and the default outcome is an accepted-risk ignore. This repo forces
-the fixed version instead, so the lockfile carries the fix rather than the
-manifest carrying a waiver:
+Two `.github/*-override.txt` files constrain the checkov closure so the lockfile
+carries a fix rather than the manifest carrying a waiver. They are consumed
+together (both `--overrides` flags on every compile), and neither is a plain
+requirements file:
 
-- `.github/asteval-override.txt` — the constraint, with the reasoning inline;
-- `.github/requirements.txt` — compiled against it, so `asteval==1.0.10` is
-  hash-pinned and reviewed like every other entry;
+| Override | Why |
+| --- | --- |
+| `.github/asteval-override.txt` | `checkov==3.3.16` hard-pins `asteval==1.0.6` in every 3.3.x release (3.3.16 through 3.3.19, the latest), and two advisories reach us only through that pin (`>=1.0.9` fixes them). The closure is unsatisfiable as resolved, so the fixed version is forced. |
+| `.github/beartype-override.txt` | `beartype==0.22.9` (transitive: `checkov → spdx-tools → beartype`) does `from typing import no_type_check_decorator`, a symbol CPython removed in 3.15, so the IaC gate dies at import on a runner whose `python-version: "3.x"` resolves to 3.15. `beartype==0.23.1` drops the import; `spdx-tools` places no upper bound on beartype. |
+
+- `.github/requirements.txt` — compiled against both, so `asteval==1.0.10` and
+  `beartype==0.23.1` are hash-pinned and reviewed like every other entry;
 - `.github/workflows/security.yml` — installs the set with
   `--no-deps --require-hashes`.
 
 ```bash
 printf 'checkov==3.3.16\n' | uv pip compile --generate-hashes --python-version 3.11 \
-  --exclude-newer 2026-09-22T00:00:00Z \
-  --overrides .github/asteval-override.txt -o .github/requirements.txt -
+  --exclude-newer 2026-10-12T00:00:00Z \
+  --overrides .github/asteval-override.txt \
+  --overrides .github/beartype-override.txt -o .github/requirements.txt -
 ```
+
+Forcing a version via `--overrides` (rather than naming the package with
+`--upgrade-package`) is what keeps each bump to a single entry: `--upgrade-package`
+re-resolves the *whole* closure to "latest" and drags ~20 unrelated packages with
+it. The cutoff must be late enough to admit the forced version, or uv cannot see
+it at all — it is raised only when a forced version postdates the current cutoff
+(the beartype case moved it to `2026-10-12T00:00:00Z`).
 
 The cutoff is also what makes a fix installable, and `--upgrade-package` is
 required either way: `uv pip compile` treats the versions already in the output
@@ -115,8 +125,9 @@ moves:
 
 ```bash
 printf 'checkov==3.3.16\n' | uv pip compile --generate-hashes --python-version 3.11 \
-  --exclude-newer 2026-09-22T00:00:00Z \
+  --exclude-newer 2026-10-12T00:00:00Z \
   --overrides .github/asteval-override.txt \
+  --overrides .github/beartype-override.txt \
   --upgrade-package <pkg> -o .github/requirements.txt -
 ```
 
@@ -124,6 +135,20 @@ Read the release date of the fixed version against the cutoff in the header
 before recompiling: it decides the `--exclude-newer` value. Both mistakes are
 cheap to make and only the missing `--upgrade-package` fails silently, as a
 lockfile that diffs to nothing.
+
+### The Python-version drift (root cause, owed upstream)
+
+The lockfile is compiled `--python-version 3.11`, but the shared security
+template (`.github/workflows/security.yml` → `CI-CD-Templates`'s
+`shared-security-scan.yml`) installs it under `python-version: "3.x"`, which
+tracks whichever interpreter the runner image advertises — 3.15.0 on the runs
+that failed. The two do not have to agree, so a dependency that imports a symbol
+CPython later removed (beartype's `no_type_check_decorator` on 3.15) breaks the
+gate with no change on our side, intermittently, as the toolcache drifts. The
+beartype override patches the one such symbol reachable today; the durable fix
+is to pin `python-version` in the shared template to match the lockfile. Until
+that lands, treat any `ImportError` in the checkov job as this drift before
+suspecting the lockfile.
 
 `--no-deps` is a requirement of the override, not a shortcut. pip re-checks the
 install against the *declared metadata* of every distribution, and checkov's own
@@ -136,17 +161,18 @@ runtime component. Regenerate with `uv`, never `pip-compile`, so the override
 applies and the closure stays minimal.
 
 There is deliberately **no `pip` Dependabot watch** on `/.github`. Dependabot's
-pip updater cannot read a uv override or honour `--exclude-newer`: it treats
-`.github/asteval-override.txt` as a requirements file (the `==` is a valid
-pin) and rewrites the version this repository forces into the toolchain, then
-re-resolves the whole closure to "latest". That lands versions which violate
-checkov's own declared constraints — `networkx<2.7`, `packaging<24.0`,
-`cachetools<6.0.0`, `cyclonedx-python-lib<8.0.0`, `aiodns<4.0.0`,
-`boto3==1.35.49` — so the lockfile stops describing an installable set and the
-IaC gate fails. Bumps are applied by hand with the commands above and reviewed
-as the ~6-line diff they are. Retire the override when checkov adopts
-`asteval>=1.0.9`: drop the file, drop `--no-deps`, and delete the two
-`IgnoredVulns` entries.
+pip updater cannot read a uv override or honour `--exclude-newer`: it treats the
+`.github/*-override.txt` files as requirements (the `==` is a valid pin) and
+rewrites the versions this repository forces into the toolchain, then re-resolves
+the whole closure to "latest". That lands versions which violate checkov's own
+declared constraints — `networkx<2.7`, `packaging<24.0`, `cachetools<6.0.0`,
+`cyclonedx-python-lib<8.0.0`, `aiodns<4.0.0`, `boto3==1.35.49` — so the lockfile
+stops describing an installable set and the IaC gate fails. Bumps are applied by
+hand with the commands above and reviewed as the ~6-line diff they are. Each
+override retires on its own trigger: drop `.github/asteval-override.txt` when
+checkov adopts `asteval>=1.0.9` (then `--no-deps` and the two `IgnoredVulns`
+entries go too), and `.github/beartype-override.txt` once the shared template
+pins `python-version` or checkov adopts a `beartype` floor `>=0.23.1`.
 
 ### Ignored OSV advisories (via osv-scanner.toml)
 
