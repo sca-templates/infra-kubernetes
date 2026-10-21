@@ -1,0 +1,11 @@
+# linkerd — qa profile (HA: 3 replicas, PDBs, anti-affinity).
+# Anti-affinity is left at the chart's hard (`requiredDuringScheduling` when
+# enablePodAntiAffinity is true) — see the chart's values-ha.yaml. qa has the
+# nodes to satisfy it; the `promote-test` runs on qa and relies on a healthy,
+# multi-replica control plane.
+
+controllerReplicas: 3
+
+enablePodAntiAffinity: true
+enablePodDisruptionBudget: true
+highAvailability: true

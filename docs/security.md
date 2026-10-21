@@ -212,6 +212,13 @@ the entries are gone rather than re-justified.
   The CI release secrets (`APP_ID`, `APP_PRIVATE_KEY`,
   `RELEASE_GPG_PRIVATE_KEY`) live only as encrypted GitHub Actions secrets,
   never in the repository (storage model in [secrets.md](secrets.md)).
+  **One documented exception**: the Linkerd mesh trust anchor
+  (`infrastructure/linkerd/manifests/identity-anchor.yaml`) is a committed
+  self-signed root — the chart cannot receive its PKI otherwise and the anchor
+  has no external trust relationship. It is exempted from the `private-key`
+  gitleaks rule by a path-scoped allowlist in `.gitleaks.toml`; the issuer key
+  is cert-manager-owned and never in git. See
+  [architecture.md](architecture.md#deviations-log).
 - **No commit-time credentials**: Vault design is described in the docs but
   never filled; placeholders are `{{GIT_REPO_URL}}`-style and substituted at
   bootstrap.

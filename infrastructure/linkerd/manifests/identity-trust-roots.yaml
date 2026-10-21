@@ -1,0 +1,35 @@
+# linkerd-identity-trust-roots — the mTLS trust anchor, as the chart expects it.
+#
+# The linkerd-control-plane chart mounts this ConfigMap into the identity
+# controller and every injected proxy (as `linkerd-identity-trust-roots`, key
+# `ca-bundle.crt`) when `identity.externalCA=true`: the proxies trust only the
+# certificate here, and the identity controller must present a certificate that
+# chains to it. It holds the PUBLIC half of the trust anchor only — the matching
+# key is in the `linkerd-identity-anchor` Secret, used solely by cert-manager to
+# sign the issuer (`identity-issuer.yaml`).
+#
+# `ca-bundle.crt` may hold one or more PEM certificates (a bundle), which is why
+# it is a ConfigMap rather than a single-file Secret. Here it carries just the
+# root CA, CN=root.linkerd.cluster.local (valid to 2036-10-18).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: linkerd-identity-trust-roots
+  namespace: linkerd
+  annotations:
+    # Needed by the chart's pods; created alongside the anchor (wave 10).
+    argocd.argoproj.io/sync-wave: "10"
+data:
+  ca-bundle.crt: |
+    -----BEGIN CERTIFICATE-----
+    MIIBrzCCAVWgAwIBAgIUGyYAWpaWoSe4UHrPFdETAOyC47cwCgYIKoZIzj0EAwIw
+    JTEjMCEGA1UEAwwacm9vdC5saW5rZXJkLmNsdXN0ZXIubG9jYWwwHhcNMjYxMDIx
+    MDIwODQ2WhcNMzYxMDE4MDIwODQ2WjAlMSMwIQYDVQQDDBpyb290LmxpbmtlcmQu
+    Y2x1c3Rlci5sb2NhbDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABBwRbHQDYc5t
+    EGNXlU6i4DhTldkj35YPrxre9736+pxoVn4bCz9zHKI+L6sUFqYYickHkjDA0I3q
+    Jdl1Foq5QuGjYzBhMB0GA1UdDgQWBBTIhcibca3/mQuwBtpgP2mpfmLc7DAfBgNV
+    HSMEGDAWgBTIhcibca3/mQuwBtpgP2mpfmLc7DAPBgNVHRMBAf8EBTADAQH/MA4G
+    A1UdDwEB/wQEAwIBBjAKBggqhkjOPQQDAgNIADBFAiBaE6e3kZtYL6drTjEynHwq
+    iLFzWGidbGCzFGfVL3A0gAIhALx/Z0/3f4OTW2NubcZza8KJhM5ffNY9mtcp8sZ4
+    RmvI
+    -----END CERTIFICATE-----

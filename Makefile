@@ -50,16 +50,18 @@ argocd-up: ## Install or upgrade ArgoCD from argocd/install-values.yaml (no apps
 bootstrap: argocd-up ## Install ArgoCD and apply the Applications for ENV=$(ENV)
 	@[ -f "argocd/apps-$(ENV).yaml" ] || { echo "argocd/apps-$(ENV).yaml is missing"; exit 1; }
 	# The Makefile seeds the catalog wiring: argocd/apps-$(ENV).yaml (the platform
-	# ApplicationSet) and argocd/kong-$(ENV).yaml (the dedicated Kong Application)
-	# are applied with {{GIT_REPO_URL}}/{{GIT_TARGET_BRANCH}} resolved here, so the
-	# generated children track the ref under test (the PR head in the CI smoke,
-	# main otherwise). The root Application owns only the services registry
-	# (argocd/services-$(ENV).yaml), never these two, so there is a single owner.
+	# ApplicationSet) and the dedicated Applications argocd/kong-$(ENV).yaml and
+	# argocd/linkerd-$(ENV).yaml are applied with {{GIT_REPO_URL}}/
+	# {{GIT_TARGET_BRANCH}} resolved here, so the generated children track the ref
+	# under test (the PR head in the CI smoke, main otherwise). The root
+	# Application owns only the services registry (argocd/services-$(ENV).yaml),
+	# never these, so there is a single owner.
 	@echo '── Preloading catalog images for ENV=$(ENV)'
 	bootstrap/preload-chart-images.sh --catalog "$(ENV)"
-	@echo '── Applying platform ApplicationSet + Kong (GIT_REPO_URL=$(GIT_REPO_URL), GIT_TARGET_BRANCH=$(GIT_TARGET_BRANCH))'
+	@echo '── Applying platform ApplicationSet + Kong + Linkerd (GIT_REPO_URL=$(GIT_REPO_URL), GIT_TARGET_BRANCH=$(GIT_TARGET_BRANCH))'
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/apps-$(ENV).yaml" | kubectl apply -f -
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/kong-$(ENV).yaml" | kubectl apply -f -
+	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/linkerd-$(ENV).yaml" | kubectl apply -f -
 	@if [ -f "argocd/root-app-$(ENV).yaml" ]; then \
 		echo '── Applying root Application (services registry owner)'; \
 		sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/root-app-$(ENV).yaml" | kubectl apply -f -; \
@@ -129,7 +131,7 @@ eks-status: ## Report the emulated EKS cluster status and its nodes
 
 .PHONY: smoke
 smoke: ## Smoke a deployed component: make smoke COMPONENT=cert-manager
-	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cert-manager, vault, external-secrets, linkerd-crds, cloudnative-pg, strimzi, redis-operator, kong, cloud, eks)'; exit 1; }
+	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cert-manager, vault, external-secrets, linkerd-crds, linkerd, cloudnative-pg, strimzi, redis-operator, kong, cloud, eks)'; exit 1; }
 	bootstrap/smoke-target.sh "$(COMPONENT)"
 
 ##@ Local Git serve

@@ -1,0 +1,9 @@
+# linkerd — prod profile (full HA: 3 replicas, PDBs, anti-affinity).
+# Same shape as qa; prod is synced manually (no automated sync), so changes to
+# this overlay only reach the cluster on an explicit go/no-go sync.
+
+controllerReplicas: 3
+
+enablePodAntiAffinity: true
+enablePodDisruptionBudget: true
+highAvailability: true

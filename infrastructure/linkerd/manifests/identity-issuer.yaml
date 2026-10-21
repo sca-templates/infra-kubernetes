@@ -1,0 +1,36 @@
+# linkerd-identity-issuer — the mesh's per-workload certificate issuer.
+#
+# The `linkerd-identity` service loads this certificate and uses it to mint
+# short-lived leaf certificates for every meshed workload. It is signed by the
+# committed trust anchor (`linkerd-identity-ca` Issuer → `linkerd-identity-anchor`
+# Secret), so every leaf chains to the anchor the proxies trust.
+#
+# The Secret it produces (`linkerd-identity-issuer`) is consumed by the
+# linkerd-control-plane chart via `identity.externalCA=true` +
+# `identity.issuer.scheme=kubernetes.io/tls`: the chart references this Secret
+# rather than creating it. The standard `kubernetes.io/tls` type matches that
+# scheme's expected `tls.crt`/`tls.key` keys. cert-manager owns the private key,
+# so it is never committed.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: linkerd-identity-issuer
+  namespace: linkerd
+  annotations:
+    # After the CA Issuer (wave 10); before the chart's pods mount it (wave 30).
+    argocd.argoproj.io/sync-wave: "20"
+spec:
+  secretName: linkerd-identity-issuer
+  # Issuer (not CA) certificate: it signs the mesh's leaves but is itself signed
+  # by the anchor. `isCA: true` so the identity controller may use it to sign.
+  isCA: true
+  commonName: identity.linkerd.cluster.local
+  duration: 8760h # 1y
+  renewBefore: 720h # 30d
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: linkerd-identity-ca
+    kind: Issuer
+    group: cert-manager.io

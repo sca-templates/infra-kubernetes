@@ -1,0 +1,13 @@
+# linkerd — local profile (developer cluster: 1 replica, single-node).
+# Matches the base defaults; declared for tier symmetry.
+#
+# linkerd-control-plane es cluster-scoped: en `local` (perfil platform-only del
+# emulador EKS, un único nodo k3s) el control plane va con 1 réplica y sin
+# PDBs/anti-affinity, para que los webhooks y la identidad funcionen sin más
+# nodos que programar.
+
+controllerReplicas: 1
+
+enablePodAntiAffinity: false
+enablePodDisruptionBudget: false
+highAvailability: false
