@@ -12,7 +12,7 @@ metadata:
   namespace: linkerd
   annotations:
     # After the anchor Secret (wave 10) and before the issuer Certificate (wave 20).
-    argocd.argoproj.io/sync-wave: "10"
+    argocd.argoproj.io/sync-wave: "-4"
 spec:
   ca:
     secretName: linkerd-identity-anchor

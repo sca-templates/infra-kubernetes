@@ -31,7 +31,7 @@ metadata:
   annotations:
     # Create the signing source before the CA Issuer that references it (both in
     # the linkerd Application, wave 30).
-    argocd.argoproj.io/sync-wave: "10"
+    argocd.argoproj.io/sync-wave: "-5"
 type: kubernetes.io/tls
 stringData:
   # ECDSA P-256 root CA, CN=root.linkerd.cluster.local, valid 2026-10-21 →
