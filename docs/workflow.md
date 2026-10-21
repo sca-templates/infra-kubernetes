@@ -7,8 +7,10 @@ cluster. Companion to [architecture.md](architecture.md) (the *state*) and
 ## Mental model
 
 - The repository is the single source of truth **for the platform catalog**.
-  Each environment cluster runs an ArgoCD that reconciles a root `Application`
-  (`argocd/root-app-<env>.yaml`) from this repo; sync policies follow ADR-003.
+  `make bootstrap` seeds the catalog wiring (`apps-<env>` + `kong-<env>`) into
+  each environment cluster's ArgoCD and applies the root `Application`
+  (`argocd/root-app-<env>.yaml`, which owns the services registry); sync policies
+  follow ADR-003.
 - **Services are not part of that catalog.** Each service is the owner of its
   own `deploy/` manifest. dev/qa ArgoCD Applications track `main` of the service
   repo; the service `promote` workflow selects the branch to deploy and syncs

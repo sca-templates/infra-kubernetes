@@ -71,8 +71,8 @@ for attempt in $(seq 1 30); do
 done
 [ "$reachable" -eq 1 ] || { echo "ERROR: cannot reach ${serve_url}"; exit 1; }
 
-echo "── rendering served argocd/apps-local.yaml (placeholders → serve values)"
-GIT_REPO_URL="${serve_url}" GIT_TARGET_BRANCH="${GIT_TARGET_BRANCH}" \
+echo "── mirroring HEAD → serve (refs/heads/${GIT_TARGET_BRANCH})"
+GIT_TARGET_BRANCH="${GIT_TARGET_BRANCH}" \
   "$(dirname "$0")/render-served-apps.sh" "${serve_url}"
 
 upsert_env() {

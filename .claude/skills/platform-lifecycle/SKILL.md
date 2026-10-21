@@ -9,10 +9,11 @@ End-to-end bootstrap (local environment):
 
 1. `make prereqs` — install pinned kubectl/helm into `~/.local/bin` (idempotent; docker required for the Floci emulator).
 2. `make eks-up` — boot the Floci emulated EKS substrate (a real single-node k3s node + ECR) and point kubectl at it.
-3. `make bootstrap` — install ArgoCD, then apply the root Application for
-   `$ENV` (`argocd/root-app-${ENV}.yaml`). The root app renders the
-   `ApplicationSet` for `$ENV` and ArgoCD syncs every component in
-   sync-wave order. Watch with `make status`.
+3. `make bootstrap` — install ArgoCD, seed the catalog wiring
+   (`argocd/apps-${ENV}.yaml` ApplicationSet + `argocd/kong-${ENV}.yaml`) with
+   `{{GIT_REPO_URL}}`/`{{GIT_TARGET_BRANCH}}` resolved host-side, then apply the
+   root Application (`argocd/root-app-${ENV}.yaml`, `dev`/`qa`/`prod` only).
+   ArgoCD syncs every component in sync-wave order. Watch with `make status`.
 
 After bootstrap, changes deploy exclusively via `git push` — never
 `kubectl apply` by hand. **Docs are the source of truth from Phase 1**: read

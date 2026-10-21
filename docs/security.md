@@ -91,7 +91,7 @@ requirements file:
 
 ```bash
 printf 'checkov==3.3.16\n' | uv pip compile --generate-hashes --python-version 3.11 \
-  --exclude-newer 2026-10-12T00:00:00Z \
+  --exclude-newer 2026-10-21T00:00:00Z \
   --overrides .github/asteval-override.txt \
   --overrides .github/beartype-override.txt -o .github/requirements.txt -
 ```
@@ -99,9 +99,10 @@ printf 'checkov==3.3.16\n' | uv pip compile --generate-hashes --python-version 3
 Forcing a version via `--overrides` (rather than naming the package with
 `--upgrade-package`) is what keeps each bump to a single entry: `--upgrade-package`
 re-resolves the *whole* closure to "latest" and drags ~20 unrelated packages with
-it. The cutoff must be late enough to admit the forced version, or uv cannot see
-it at all — it is raised only when a forced version postdates the current cutoff
-(the beartype case moved it to `2026-10-12T00:00:00Z`).
+it. The cutoff must be late enough to admit every forced/fixed version, or uv
+cannot see it at all — it is raised only when one postdates the current cutoff
+(beartype 0.23.1 and later certifi 2026.10.19 moved it to
+`2026-10-21T00:00:00Z`).
 
 The cutoff is also what makes a fix installable, and `--upgrade-package` is
 required either way: `uv pip compile` treats the versions already in the output
@@ -125,7 +126,7 @@ moves:
 
 ```bash
 printf 'checkov==3.3.16\n' | uv pip compile --generate-hashes --python-version 3.11 \
-  --exclude-newer 2026-10-12T00:00:00Z \
+  --exclude-newer 2026-10-21T00:00:00Z \
   --overrides .github/asteval-override.txt \
   --overrides .github/beartype-override.txt \
   --upgrade-package <pkg> -o .github/requirements.txt -

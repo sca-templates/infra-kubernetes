@@ -48,15 +48,22 @@ argocd-up: ## Install or upgrade ArgoCD from argocd/install-values.yaml (no apps
 
 .PHONY: bootstrap
 bootstrap: argocd-up ## Install ArgoCD and apply the Applications for ENV=$(ENV)
-	@[ -f "argocd/apps-$(ENV).yaml" ] && [ -f "argocd/root-app-$(ENV).yaml" ] || { echo 'argocd/apps-$(ENV).yaml and root-app-$(ENV).yaml are missing'; exit 1; }
-	# Same preload for the platform catalog: ArgoCD renders charts whose pods
-	# start immediately after the ApplicationSet is applied.
+	@[ -f "argocd/apps-$(ENV).yaml" ] || { echo "argocd/apps-$(ENV).yaml is missing"; exit 1; }
+	# The Makefile seeds the catalog wiring: argocd/apps-$(ENV).yaml (the platform
+	# ApplicationSet) and argocd/kong-$(ENV).yaml (the dedicated Kong Application)
+	# are applied with {{GIT_REPO_URL}}/{{GIT_TARGET_BRANCH}} resolved here, so the
+	# generated children track the ref under test (the PR head in the CI smoke,
+	# main otherwise). The root Application owns only the services registry
+	# (argocd/services-$(ENV).yaml), never these two, so there is a single owner.
 	@echo '── Preloading catalog images for ENV=$(ENV)'
 	bootstrap/preload-chart-images.sh --catalog "$(ENV)"
-	@echo '── Applying ApplicationSet (GIT_REPO_URL=$(GIT_REPO_URL), GIT_TARGET_BRANCH=$(GIT_TARGET_BRANCH))'
+	@echo '── Applying platform ApplicationSet + Kong (GIT_REPO_URL=$(GIT_REPO_URL), GIT_TARGET_BRANCH=$(GIT_TARGET_BRANCH))'
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/apps-$(ENV).yaml" | kubectl apply -f -
-	@echo '── Applying root Application (GIT_REPO_URL=$(GIT_REPO_URL), GIT_TARGET_BRANCH=$(GIT_TARGET_BRANCH))'
-	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/root-app-$(ENV).yaml" | kubectl apply -f -
+	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/kong-$(ENV).yaml" | kubectl apply -f -
+	@if [ -f "argocd/root-app-$(ENV).yaml" ]; then \
+		echo '── Applying root Application (services registry owner)'; \
+		sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/root-app-$(ENV).yaml" | kubectl apply -f -; \
+	fi
 	@echo ''
 	@echo 'ArgoCD is reconciling. Watch progress with: make status'
 

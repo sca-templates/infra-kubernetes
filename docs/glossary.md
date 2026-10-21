@@ -58,5 +58,5 @@ Phase numbers refer to the roadmap in [roadmap.md](roadmap.md).
 | **`argocd/apps-<env>.yaml`**      | Per-env `ApplicationSet` generator — the platform component registry        |
 | **`argocd/services-<env>.yaml`**  | Per-env `ApplicationSet` for services (app-repo-as-source); dev/qa/prod only, never `local`. dev/qa elements track `main` (synced by the service's `promote` workflow); prod elements carry a `version` tag pin (`chore(services)` bump = the deploy go/no-go) |
 | **`promote` workflow**           | Per-service `workflow_dispatch` (wraps `shared-service-promote.yml`) that picks a branch/commit and syncs `<service>-dev` / `<service>-qa` via the ArgoCD API — replaces the retired `deploy/dev` · `deploy/qa` refs |
-| **`argocd/root-app-<env>.yaml`**  | Per-env root `Application`                                                         |
-| **`{{GIT_REPO_URL}}`**            | Placeholder in repoURL fields; substituted by `make bootstrap` from `GIT_REPO_URL` |
+| **`argocd/root-app-<env>.yaml`**  | Per-env root `Application` (owns only the services registry; `dev`/`qa`/`prod` only — `local` has none) |
+| **`{{GIT_REPO_URL}}`**            | Placeholder in `repoURL`/`targetRevision` fields of `argocd/apps-<env>.yaml`, `argocd/kong-<env>.yaml` and the root app. `make bootstrap` substitutes them host-side (the `sed` seam) when it seeds the platform `ApplicationSet`, the dedicated Kong app and the root app — the values used are the ref under test (the PR head in CI, `main` otherwise) |

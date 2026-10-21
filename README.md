@@ -31,11 +31,12 @@ make status
   `~/.local/bin` (idempotent; docker is required for the Floci emulator).
 - `make eks-up` starts Floci in EKS mode — the emulated EKS substrate (a real
   single-node k3s container + ECR), the only local cluster target.
-- `make bootstrap` installs ArgoCD and applies the environment root
-  Application. `GIT_REPO_URL` comes from `.env` (see `.env.example`); a live
-  URL is a Phase 1 requirement. In `local` the root app reconciles a fully-local
-  in-cluster git serve (`make local-git-up`) instead of GitHub — see
-  [docs/ci-cd.md](docs/ci-cd.md) — and is `Synced` + `Healthy` by design.
+- `make bootstrap` installs ArgoCD, seeds the platform catalog wiring
+  (`argocd/apps-<env>.yaml` + `argocd/kong-<env>.yaml`) and applies the
+  environment root Application (services registry). `GIT_REPO_URL` comes from
+  `.env` (see `.env.example`); a live URL is a Phase 1 requirement. In `local`
+  the component Applications can reconcile a fully-local in-cluster git serve
+  (`make local-git-up`) instead of GitHub — see [docs/ci-cd.md](docs/ci-cd.md).
 - From then on, changes land via git push → ArgoCD reconcile.
 
 Before opening a pull request, run the validation suite
@@ -106,7 +107,7 @@ intentionally excluded.
 | `make eks-up` | Start Floci in EKS mode: create the emulated EKS cluster and point kubectl at it |
 | `make eks-status` | Report the emulated EKS cluster status and its nodes |
 | `make eks-down` | Delete the emulated EKS cluster, IAM user and kubeconfig context |
-| `make bootstrap` | Install ArgoCD and apply the environment root Application |
+| `make bootstrap` | Install ArgoCD, seed the catalog wiring and apply the root Application |
 | `make status` | Show nodes, ArgoCD Applications and pod health |
 | `make validate-static` | Run Markdown, YAML and shell validation without a cluster |
 | `make validate` | Run static validation plus live cluster checks |

@@ -17,11 +17,12 @@
 # constraint. Forcing it (rather than --upgrade-package) keeps the diff to the
 # single package: naming the package on the command line makes uv re-resolve the
 # whole closure to "latest" and drag ~20 unrelated packages (gitpython,
-# multidict, pydantic, ...) with it. The cutoff must admit 0.23.1 (released
-# 2026-10-11), hence --exclude-newer 2026-10-12T00:00:00Z below.
+# multidict, pydantic, ...) with it. The cutoff must admit every forced/fixed
+# version: 0.23.1 (released 2026-10-11) and certifi 2026.10.19 (released
+# 2026-10-20), so --exclude-newer 2026-10-21T00:00:00Z below.
 #
 #   printf 'checkov==3.3.16\n' | uv pip compile --generate-hashes \
-#     --python-version 3.11 --exclude-newer 2026-10-12T00:00:00Z \
+#     --python-version 3.11 --exclude-newer 2026-10-21T00:00:00Z \
 #     --overrides .github/asteval-override.txt \
 #     --overrides .github/beartype-override.txt -o .github/requirements.txt -
 #

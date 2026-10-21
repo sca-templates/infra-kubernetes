@@ -14,12 +14,16 @@ phase lands. For how changes *flow* through the platform, see
 
 `infra-kubernetes` is the single source of truth **for the platform catalog**.
 ArgoCD (in each environment cluster) reconciles this repository via an
-app-of-apps pattern per environment: one root `Application`
-(`argocd/root-app-<env>.yaml`) renders two `ApplicationSet`s that each generate
-one `Application`:
+app-of-apps pattern per environment driven by `make bootstrap` (the `sed` seam
+resolves the `{{GIT_REPO_URL}}`/`{{GIT_TARGET_BRANCH}}` placeholders host-side):
 
-- `argocd/apps-<env>.yaml` — the **platform catalog**: upstream charts/CRs for
-  the components below (from a list generator).
+- `argocd/apps-<env>.yaml` — the **platform catalog** `ApplicationSet`: upstream
+  charts/CRs for the components below (from a list generator). Seeded by `make
+  bootstrap` with the ref under test (the PR head in CI, `main` otherwise).
+- `argocd/kong-<env>.yaml` — the **dedicated Kong `Application`** (flat-schema
+  CRDs, no SSA), seeded the same way.
+- `argocd/root-app-<env>.yaml` — the root `Application` (present for
+  `dev`/`qa`/`prod`; `local` has none) that owns the **services registry**.
 - `argocd/services-<env>.yaml` — the **services registry** (app-repo-as-source):
   each service owns its `deploy/` in its own repository; dev/qa ArgoCD track
   `main` of the service repo and are synced by the service's `promote`
@@ -38,8 +42,9 @@ Nothing is deployed by hand after `make bootstrap`.
 ```mermaid
 graph TD
     subgraph Git["infra-kubernetes"]
-        A["root-app-<env>.yaml"] --> B["ApplicationSet apps-<env>.yaml"]
-        A --> S["ApplicationSet services-<env>.yaml"]
+        MK["make bootstrap (sed seam)"] --> B["ApplicationSet apps-<env>.yaml"]
+        MK --> K["Application kong-<env>.yaml"]
+        A["root-app-<env>.yaml (dev/qa/prod)"] --> S["ApplicationSet services-<env>.yaml"]
     end
     subgraph ArgoCD["ArgoCD (per environment)"]
         B --> C[Security & Identity]
@@ -311,9 +316,8 @@ as each component lands; the log always explains *why*, never just *what*.
 
 | Component | Deviation | Reason |
 | --- | --- | --- |
-| Root app (local) | Live `automated.enabled=false` (applied during Phase 0.0 while `GIT_REPO_URL` was an unpublished GitHub placeholder) is dropped once the local git serve provides content; the files keep auto + prune | Closed by the Phase 1 follow-up: the serve now renders a valid `apps-local.yaml` (row below), so the seamless file-state auto-sync applies and the override is removed |
-| git-local-serve (local tooling) | Serves a **rendered** `argocd/apps-local.yaml`: `bootstrap/render-served-apps.sh` substitutes `{{GIT_REPO_URL}}`/`{{GIT_TARGET_BRANCH}}` and commits the copy onto the serve branch only — the repo templates keep the placeholders for the `make bootstrap` seam and the published-repo path | ArgoCD renders the root app's ApplicationSet straight from the served file; an unsubstituted `{{GIT_TARGET_BRANCH}}` is invalid YAML (unquoted) and broke `platform-root-local` (`ComparisonError`). Dev-only stand-in, not part of the platform catalog |
-| git-local-serve (local tooling) | In-cluster git server does **not** use the `alpine/git` image (it ships no `git daemon`); it boots `alpine:3.21` and installs `git-daemon`, plus `safe.directory` for the root-owned bare repo | `alpine/git` lacks the `git daemon` subcommand; the bare mirror on the node is owned by another user, which trips git's "dubious ownership" guard. Local tooling only — not part of the platform catalog |
+| Makefile owns the catalog wiring; the root app owns the services registry | `make bootstrap` seeds `argocd/apps-<env>.yaml` (platform `ApplicationSet`) and `argocd/kong-<env>.yaml` (dedicated Kong `Application`) directly, with `{{GIT_REPO_URL}}`/`{{GIT_TARGET_BRANCH}}` resolved host-side (the PR head in CI). The root `Application` (`argocd/root-app-<env>.yaml`, present for `dev`/`qa`/`prod`; absent for `local`, which runs no services) owns **only** `argocd/services-<env>.yaml` — it never includes `apps-<env>`/`kong-<env>` | A single owner per object: the root app renders the catalog `ApplicationSet`/Kong app from its tracked source, but the CI smoke needs the generated children to track the **PR head**, which only a host-side seed can inject (and the runner cannot reach the EKS node's pod network to serve resolved content). Scoping the root app to the services registry removes the two-owner fight (the earlier `kong-local did not become Synced` came from the root app rendering the raw repo, where the unquoted `{{GIT_TARGET_BRANCH}}` parsed as a flow mapping) and keeps the Makefile the single seeder of the ref-under-test wiring |
+| local git serve (dev tooling) | `make local-git-up` stands up an in-cluster git daemon serving this repo's HEAD **verbatim** (`bootstrap/render-served-apps.sh` mirrors `HEAD` onto the serve branch — no placeholder substitution); local ArgoCD reconciles the served tree instead of GitHub. The CI cluster smoke does **not** use it — `make bootstrap` seeds the wiring host-side | The serving/reconciliation path is exercised on a developer machine; nothing on the serve needs substitution now that `make bootstrap` owns the wiring, so the serve mirrors the repo as-is. The CI runner cannot reach the EKS node's pod network (the emulator publishes only its own port), so the smoke seeds host-side rather than serving resolved content |
 | Kong | DB-less (`database: off`), `ingressController.installCRDs: false`, managed as a dedicated `Application`, no SSA | Kong ships flat-schema CRDs; structured-merge diff breaks under `ServerSideApply=true`, and `--include-crds` re-emits CRDs twice |
 | postgres-app | Local raw `Application`, not in the `ApplicationSet` generator list | Only `local` runs the datastore; it must be applied without the env generator |
 | Linkerd | Control plane deployed by script, not ArgoCD | Helm chart signature requirements; control plane needs cert-manager + linkerd-crds first |

@@ -323,21 +323,25 @@ Floci's EKS backing, not ArgoCD-managed).
   `ecr get-login-password` + `docker login`, then runs an in-cluster `Job` that
   pulls the image through the node's ECR registry mirror and prints
   `EKS_ECR_PULL_OK`.
-- **Full platform** — the EKS run boots the whole catalog by applying the **real
-  app-of-apps** (`make bootstrap ENV=local` → `platform-root-local` →
-  ApplicationSet `platform-local`), gates every platform Application
-  (`<name>-local`) on `Synced`, seeds Vault (it is born sealed, so it can only
-  report `Healthy` once `seed-vault.sh` ran), then gates the whole catalog on
-  `Synced/Healthy`, runs the touched component smoke(s), the EKS check and the
-  endpoint check. It is the most complete test in the repo: the same GitOps path
-  `dev`/`qa`/`prod` use, on an EKS-shaped cluster.
+- **Full platform** — the EKS run boots the whole catalog by seeding the
+  app-of-apps wiring host-side (`make bootstrap ENV=local`, which resolves the
+  ArgoCD manifests' `repoURL`/`targetRevision` to the PR head via the `sed` seam),
+  after which ArgoCD reconciles the **real app-of-apps** (ApplicationSet
+  `platform-local` → the dedicated `kong-local`), gates every platform
+  Application (`<name>-local`, Kong included), seeds Vault (it is born sealed, so
+  it can only report `Healthy` once `seed-vault.sh` ran), then gates the whole
+  catalog on `Synced/Healthy`, runs the touched component smoke(s), the EKS check
+  and the endpoint check. It is the most complete test in the repo: the same
+  GitOps path `dev`/`qa`/`prod` use, on an EKS-shaped cluster.
 - **Wiring** — `smoke-ci.sh` has a single path: `make eks-up` boots the EKS
-  substrate, `make bootstrap ENV=local` applies the full app-of-apps
-  (`platform-root-local` → ApplicationSet `platform-local`), the catalog is
-  gated `Synced` → Vault seeded → `Synced/Healthy`, and the touched component
-  smoke(s), the EKS check and the endpoint check run against it.
-  `--no-cluster` reuses an existing bootstrapped cluster; the run always shares
-  the one required `Smoke` check.
+  substrate, `make bootstrap ENV=local` seeds the platform `ApplicationSet` and
+  the dedicated `kong-local` from the PR head and applies the catalog, the
+  catalog is gated `Synced` → Vault seeded → `Synced/Healthy`, and the touched
+  component smoke(s), the EKS check and the endpoint check run against it. The
+  runner seeds the wiring host-side because it cannot reach the EKS node's pod
+  network (the emulator publishes only its own port), so no git serve is
+  involved. `--no-cluster` reuses an existing bootstrapped
+  cluster; the run always shares the one required `Smoke` check.
 - **Pins** — Floci, the AWS CLI and the EKS/ECR coordinates (`FLOCI_EKS_*`,
   `FLOCI_AWS_*`) are pinned in `bootstrap/versions.sh`, covered by the pin guards
   ([security.md](security.md)), and overridable via `.env`.

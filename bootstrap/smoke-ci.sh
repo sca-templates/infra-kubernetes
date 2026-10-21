@@ -269,6 +269,12 @@ wait_for_healthy() {
 }
 
 # ── boot the platform COMPLETE (real app-of-apps) ───────────────────────────
+# `make bootstrap` is the single owner of the catalog wiring: it seeds the
+# platform ApplicationSet (argocd/apps-<env>.yaml) and the dedicated Kong
+# Application (argocd/kong-<env>.yaml) with GIT_TARGET_BRANCH resolved to the PR
+# head, so the children track the ref under test. No git serve is involved: the
+# host seeds the objects directly (the runner cannot reach the EKS node's pod
+# network). `local` runs no services, so there is no root Application to apply.
 echo "── make bootstrap ENV=${ENV:-local} (full platform on the EKS substrate)"
 ENV="${ENV:-local}" GIT_TARGET_BRANCH="${ref}" make bootstrap
 

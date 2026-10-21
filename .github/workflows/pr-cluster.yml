@@ -190,6 +190,9 @@ jobs:
           export PATH="${HOME}/.local/bin:${PATH}"
           bootstrap/smoke-ci.sh "${SMOKE_COMPONENTS}" "${SMOKE_REF}"
         env:
+          # make bootstrap seeds the platform ApplicationSet and the dedicated
+          # Kong Application from these values (the Makefile owns the catalog
+          # wiring; the root Application owns only the services registry).
           GIT_REPO_URL: https://github.com/${{ github.repository }}
           SMOKE_COMPONENTS: ${{ steps.resolve.outputs.components }}
           SMOKE_REF: ${{ steps.resolve.outputs.ref }}

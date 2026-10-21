@@ -11,10 +11,11 @@ repo.
 - Single source of truth for the **platform components**: environments, secret
   projections. Services do **not** live here — each service owns its `deploy/`
   in its own repo (app-repo-as-source, [docs/onboarding-new-service.md](docs/onboarding-new-service.md)).
-- ArgoCD app-of-apps: one root Application per environment renders **two**
-  ApplicationSets — `apps-<env>.yaml` (platform catalog) and
-  `services-<env>.yaml` (services registry; present for `dev`/`qa`/`prod`
-  only, never `local`).
+- ArgoCD app-of-apps: `make bootstrap` seeds the platform catalog
+  (`apps-<env>.yaml` ApplicationSet + the dedicated `kong-<env>.yaml`
+  Application) with `{{GIT_REPO_URL}}`/`{{GIT_TARGET_BRANCH}}` resolved
+  host-side; the root Application (`root-app-<env>.yaml`, `dev`/`qa`/`prod`
+  only) owns the services registry (`services-<env>.yaml`, never `local`).
 - A **clean restart** of the previous `infra-kubernetes` (which churned in
   `fix` commits): a human-reviewed gate per logical change, rollback over
   forward-fix.
@@ -126,7 +127,7 @@ guards ([docs/security.md](docs/security.md)).
 | `make prereqs` | Install pinned kubectl/helm into `~/.local/bin` (idempotent, sha256-verified; docker required for the Floci emulator) — `bootstrap/sca.sh prerrequisites` |
 | `make doctor` | Read-only platform health check (toolchain, PATH, docker, cluster, ArgoCD apps, `.env` seam, git source) |
 | `make install-cli` | Symlink `bootstrap/sca.sh` → `~/.local/bin/sca` for direct `sca prereqs` / `sca doctor` / `sca version` |
-| `make bootstrap` | Install ArgoCD + apply the root Application for `$ENV` |
+| `make bootstrap` | Install ArgoCD + seed the catalog wiring (`apps-`/`kong-`) and the root Application (services registry) for `$ENV` |
 | `make status` | Cluster, ArgoCD apps and pod health overview |
 | `make validate` | Static suite + live cluster checks |
 | `make validate-static` | Static suite only: markdownlint, yamllint, YAML parse, `bash -n` |
