@@ -8,7 +8,6 @@ SHELL := /bin/bash
 -include .env
 
 ENV ?= local
-KIND_CLUSTER_NAME ?= sca-local
 ARGOCD_CHART_VERSION ?= 9.5.22
 GIT_REPO_URL ?= https://github.com/sca-templates/infra-kubernetes
 GIT_TARGET_BRANCH ?= main
@@ -18,7 +17,7 @@ export KUBECONFIG
 ##@ Setup
 
 .PHONY: prereqs
-prereqs: ## Install the pinned CLI toolchain (kubectl, helm, kind) — idempotent
+prereqs: ## Install the pinned CLI toolchain (kubectl, helm) — idempotent
 	bootstrap/sca.sh prereqs
 
 .PHONY: doctor
@@ -34,34 +33,37 @@ install-cli: ## Symlink bootstrap/sca.sh into ~/.local/bin/sca for direct use
 
 ##@ Cluster
 
-.PHONY: cluster-up
-cluster-up: ## Create the local kind cluster from bootstrap/kind-config.yaml
-	@[ -f bootstrap/kind-config.yaml ] || { echo 'bootstrap/kind-config.yaml is missing'; exit 1; }
-	@if kind get clusters 2>/dev/null | grep -qx "$(KIND_CLUSTER_NAME)"; then \
-		echo "[skip] kind cluster '$(KIND_CLUSTER_NAME)' already exists"; \
-	else \
-		kind create cluster --name "$(KIND_CLUSTER_NAME)" --config bootstrap/kind-config.yaml --wait 180s; \
-	fi
-
-.PHONY: cluster-down
-cluster-down: ## Delete the local kind cluster (keeps nothing)
-	# kind 0.32 has no --ignore-not-found, so swallow the "cluster not found"
-	# exit to keep the target idempotent.
-	@kind delete cluster --name "$(KIND_CLUSTER_NAME)" 2>/dev/null || true
-
 .PHONY: argocd-up
 argocd-up: ## Install or upgrade ArgoCD from argocd/install-values.yaml (no apps)
 	@[ -f argocd/install-values.yaml ] || { echo 'argocd/install-values.yaml is missing'; exit 1; }
 	kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
-	helm upgrade --install argocd argo-cd --repo https://argoproj.github.io/argo-helm --version "$(ARGOCD_CHART_VERSION)" --namespace argocd --values argocd/install-values.yaml --wait --timeout 10m
+	# Warm the cluster node with the chart images so a throttled public registry
+	# is not on the critical path (see bootstrap/preload-chart-images.sh).
+	bootstrap/preload-chart-images.sh argo-cd https://argoproj.github.io/argo-helm "$(ARGOCD_CHART_VERSION)" --namespace argocd --values argocd/install-values.yaml
+	helm upgrade --install argocd argo-cd --repo https://argoproj.github.io/argo-helm --version "$(ARGOCD_CHART_VERSION)" --namespace argocd --values argocd/install-values.yaml --wait --timeout 15m || { \
+		echo '[FAIL] argocd-up failed — collecting diagnostics into .generated/'; \
+		bootstrap/collect-argocd-diagnostics.sh; \
+		exit 1; \
+	}
 
 .PHONY: bootstrap
 bootstrap: argocd-up ## Install ArgoCD and apply the Applications for ENV=$(ENV)
-	@[ -f "argocd/apps-$(ENV).yaml" ] && [ -f "argocd/root-app-$(ENV).yaml" ] || { echo 'argocd/apps-$(ENV).yaml and root-app-$(ENV).yaml are missing'; exit 1; }
-	@echo '── Applying ApplicationSet (GIT_REPO_URL=$(GIT_REPO_URL), GIT_TARGET_BRANCH=$(GIT_TARGET_BRANCH))'
+	@[ -f "argocd/apps-$(ENV).yaml" ] || { echo "argocd/apps-$(ENV).yaml is missing"; exit 1; }
+	# The Makefile seeds the catalog wiring: argocd/apps-$(ENV).yaml (the platform
+	# ApplicationSet) and argocd/kong-$(ENV).yaml (the dedicated Kong Application)
+	# are applied with {{GIT_REPO_URL}}/{{GIT_TARGET_BRANCH}} resolved here, so the
+	# generated children track the ref under test (the PR head in the CI smoke,
+	# main otherwise). The root Application owns only the services registry
+	# (argocd/services-$(ENV).yaml), never these two, so there is a single owner.
+	@echo '── Preloading catalog images for ENV=$(ENV)'
+	bootstrap/preload-chart-images.sh --catalog "$(ENV)"
+	@echo '── Applying platform ApplicationSet + Kong (GIT_REPO_URL=$(GIT_REPO_URL), GIT_TARGET_BRANCH=$(GIT_TARGET_BRANCH))'
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/apps-$(ENV).yaml" | kubectl apply -f -
-	@echo '── Applying root Application (GIT_REPO_URL=$(GIT_REPO_URL), GIT_TARGET_BRANCH=$(GIT_TARGET_BRANCH))'
-	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/root-app-$(ENV).yaml" | kubectl apply -f -
+	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/kong-$(ENV).yaml" | kubectl apply -f -
+	@if [ -f "argocd/root-app-$(ENV).yaml" ]; then \
+		echo '── Applying root Application (services registry owner)'; \
+		sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/root-app-$(ENV).yaml" | kubectl apply -f -; \
+	fi
 	@echo ''
 	@echo 'ArgoCD is reconciling. Watch progress with: make status'
 
@@ -70,7 +72,7 @@ bootstrap: argocd-up ## Install ArgoCD and apply the Applications for ENV=$(ENV)
 .PHONY: validate
 validate: validate-static ## Static suite + live cluster checks
 	@echo '=== Live cluster checks ==='
-	@kubectl cluster-info >/dev/null 2>&1 || { echo 'No cluster reachable — run make cluster-up && make bootstrap first'; exit 1; }
+	@kubectl cluster-info >/dev/null 2>&1 || { echo 'No cluster reachable — run make eks-up && make bootstrap first'; exit 1; }
 	kubectl get applications -n argocd
 	kubectl get pods -A
 
@@ -81,7 +83,7 @@ validate-static: ## Static suite only: markdownlint, yamllint, YAML parse, bash 
 	@echo '=== YAML parse ==='
 	@find . -path ./.git -prune -o -type f \( -name '*.yaml' -o -name '*.yml' \) -print | sort | while read -r f; do \
 		case "$$f" in */templates/*) continue ;; esac; \
-		npx --yes js-yaml "$$f" >/dev/null && echo "[OK] $$f"; \
+		npx --yes js-yaml@4.1.0 "$$f" >/dev/null && echo "[OK] $$f" || { echo "[FAIL] $$f"; exit 1; }; \
 	done
 	@if command -v yamllint >/dev/null 2>&1; then \
 		echo '=== yamllint ==='; yamllint -c .yamllint.yaml .; \
@@ -92,7 +94,6 @@ validate-static: ## Static suite only: markdownlint, yamllint, YAML parse, bash 
 	@for f in bootstrap/*.sh; do bash -n "$$f" && echo "[OK] $$f"; done
 
 COMPONENT ?=
-REF ?= $(shell git branch --show-current)
 CLOUD_PROVIDER ?= aws
 
 ##@ Cloud (emulator — dev/CI tooling, docs/ci-cd.md)
@@ -110,70 +111,26 @@ cloud-down: ## Stop the cloud emulator and unpublish it from the cluster
 cloud-status: ## Report cloud-emulator reachability (host edge + in-cluster Service)
 	bootstrap/cloud-emulator.sh status "$(CLOUD_PROVIDER)"
 
+##@ EKS substrate (emulator — dev/CI tooling, docs/ci-cd.md)
+
+.PHONY: eks-up
+eks-up: ## Start Floci in EKS mode: create the emulated EKS cluster and point kubectl at it
+	bootstrap/eks-emulator.sh up
+
+.PHONY: eks-down
+eks-down: ## Delete the emulated EKS cluster, IAM user and kubeconfig context
+	bootstrap/eks-emulator.sh down
+
+.PHONY: eks-status
+eks-status: ## Report the emulated EKS cluster status and its nodes
+	bootstrap/eks-emulator.sh status
+
 ##@ Smoke
 
 .PHONY: smoke
 smoke: ## Smoke a deployed component: make smoke COMPONENT=cert-manager
-	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cert-manager, vault, external-secrets, linkerd-crds, cloudnative-pg, strimzi, redis-operator, kong, cloud)'; exit 1; }
+	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cert-manager, vault, external-secrets, linkerd-crds, cloudnative-pg, strimzi, redis-operator, kong, cloud, eks)'; exit 1; }
 	bootstrap/smoke-target.sh "$(COMPONENT)"
-
-.PHONY: smoke-app
-smoke-app: ## Apply the touched component as "<name>-smoke" for REF (fresh ArgoCD only)
-	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke-app COMPONENT=<component> REF=<branch|sha>'; exit 1; }
-	@mkdir -p .generated
-	@echo '⚠ smoke-app targets a FRESH ArgoCD (CI/kind). Alongside an existing platform install the same Helm release collides.'
-	@if [ "$(COMPONENT)" = "kong" ]; then
-		[ -f argocd/kong-local.yaml ] || { echo 'argocd/kong-local.yaml is missing'; exit 1; }
-		grep -q 'name: kong-local' argocd/kong-local.yaml || { echo 'ERROR: Application kong-local not found in argocd/kong-local.yaml'; exit 1; }
-		sed -e 's|name: kong-local|name: kong-smoke|' \
-		    -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" \
-		    -e "s|{{GIT_TARGET_BRANCH}}|$(REF)|g" \
-		    argocd/kong-local.yaml > .generated/kong-smoke.yaml
-		# Kong is a DEDICATED Application, so it is not part of the platform
-		# ApplicationSet — but its proxy Certificate is rendered only when the
-		# cert-manager CRDs are served (charts/kong templates/certificate.yaml
-		# gates on `.Capabilities.APIVersions.Has "cert-manager.io/v1"`). A fresh
-		# smoke ArgoCD has no platform, so also apply the platform ApplicationSet
-		# (cert-manager + sca-ca) and wait for it before the kong app renders.
-		[ -f argocd/apps-local.yaml ] || { echo 'argocd/apps-local.yaml is missing'; exit 1; }
-		sed -e 's|name: platform-local|name: platform-local-smoke|' \
-		    -e "s|name: '{{.name}}-local'|name: '{{.name}}-smoke'|" \
-		    -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" \
-		    -e "s|{{GIT_TARGET_BRANCH}}|$(REF)|g" \
-		    argocd/apps-local.yaml > .generated/apps-local-smoke.yaml
-		echo '── Applying platform ApplicationSet (cert-manager dependency for kong)'
-		kubectl apply -f .generated/apps-local-smoke.yaml
-		echo '── Waiting for cert-manager-smoke Synced/Healthy before kong renders'
-		deadline=$$(( $$(date +%s) + 600 ))
-		while true; do
-			state="$$(kubectl -n argocd get application cert-manager-smoke -o jsonpath='{.status.sync.status}/{.status.health.status}' 2>/dev/null || true)"
-			if [ "$$state" = "Synced/Healthy" ]; then echo '  cert-manager-smoke Synced/Healthy'; break; fi
-			if [ "$$(date +%s)" -ge "$$deadline" ]; then echo 'ERROR: cert-manager-smoke did not converge within 600s; the kong Certificate would not render' >&2; exit 1; fi
-			sleep 5
-		done
-		out=.generated/kong-smoke.yaml
-	else
-		[ -f argocd/apps-local.yaml ] || { echo 'argocd/apps-local.yaml is missing'; exit 1; }
-		count_refs="$$(grep -c '{{GIT_TARGET_BRANCH}}' argocd/apps-local.yaml)"
-		[ "$$count_refs" = "2" ] || { echo "ERROR: expected 2 '{{GIT_TARGET_BRANCH}}' refs in apps-local.yaml, got $$count_refs"; exit 1; }
-		grep -q 'name: platform-local' argocd/apps-local.yaml || { echo 'ERROR: appset platform-local not found'; exit 1; }
-		grep -q "name: '{{.name}}-local'" argocd/apps-local.yaml || { echo 'ERROR: app name template not found'; exit 1; }
-		sed -e 's|name: platform-local|name: platform-local-smoke|' \
-		    -e "s|name: '{{.name}}-local'|name: '{{.name}}-smoke'|" \
-		    -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" \
-		    -e "s|{{GIT_TARGET_BRANCH}}|$(REF)|g" \
-		    argocd/apps-local.yaml > .generated/apps-local-smoke.yaml
-		out=.generated/apps-local-smoke.yaml
-	fi
-	@echo "── Applying smoke manifest ($$out, REF=$(REF))"
-	kubectl apply -f "$$out"
-	@echo 'ArgoCD is reconciling $(COMPONENT)-smoke. Watch progress with: make status'
-
-.PHONY: smoke-clean
-smoke-clean: ## Remove the smoke ApplicationSet/Application after a local smoke run
-	kubectl delete applicationset platform-local-smoke --namespace argocd --ignore-not-found 2>/dev/null || true
-	kubectl delete application kong-smoke --namespace argocd --ignore-not-found 2>/dev/null || true
-	@echo 'Done.'
 
 ##@ Local Git serve
 
@@ -193,7 +150,7 @@ local-git-down: ## Stop the local git serve (keeps the bare mirror)
 
 .PHONY: status
 status: ## Cluster, ArgoCD apps and pod health overview
-	@kubectl cluster-info >/dev/null 2>&1 || { echo 'No cluster reachable — run make cluster-up first'; exit 1; }
+	@kubectl cluster-info >/dev/null 2>&1 || { echo 'No cluster reachable — run make eks-up first'; exit 1; }
 	@echo '=== Nodes ==='
 	kubectl get nodes -o wide
 	@echo ''

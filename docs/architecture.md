@@ -14,12 +14,16 @@ phase lands. For how changes *flow* through the platform, see
 
 `infra-kubernetes` is the single source of truth **for the platform catalog**.
 ArgoCD (in each environment cluster) reconciles this repository via an
-app-of-apps pattern per environment: one root `Application`
-(`argocd/root-app-<env>.yaml`) renders two `ApplicationSet`s that each generate
-one `Application`:
+app-of-apps pattern per environment driven by `make bootstrap` (the `sed` seam
+resolves the `{{GIT_REPO_URL}}`/`{{GIT_TARGET_BRANCH}}` placeholders host-side):
 
-- `argocd/apps-<env>.yaml` — the **platform catalog**: upstream charts/CRs for
-  the components below (from a list generator).
+- `argocd/apps-<env>.yaml` — the **platform catalog** `ApplicationSet`: upstream
+  charts/CRs for the components below (from a list generator). Seeded by `make
+  bootstrap` with the ref under test (the PR head in CI, `main` otherwise).
+- `argocd/kong-<env>.yaml` — the **dedicated Kong `Application`** (flat-schema
+  CRDs, no SSA), seeded the same way.
+- `argocd/root-app-<env>.yaml` — the root `Application` (present for
+  `dev`/`qa`/`prod`; `local` has none) that owns the **services registry**.
 - `argocd/services-<env>.yaml` — the **services registry** (app-repo-as-source):
   each service owns its `deploy/` in its own repository; dev/qa ArgoCD track
   `main` of the service repo and are synced by the service's `promote`
@@ -38,8 +42,9 @@ Nothing is deployed by hand after `make bootstrap`.
 ```mermaid
 graph TD
     subgraph Git["infra-kubernetes"]
-        A["root-app-<env>.yaml"] --> B["ApplicationSet apps-<env>.yaml"]
-        A --> S["ApplicationSet services-<env>.yaml"]
+        MK["make bootstrap (sed seam)"] --> B["ApplicationSet apps-<env>.yaml"]
+        MK --> K["Application kong-<env>.yaml"]
+        A["root-app-<env>.yaml (dev/qa/prod)"] --> S["ApplicationSet services-<env>.yaml"]
     end
     subgraph ArgoCD["ArgoCD (per environment)"]
         B --> C[Security & Identity]
@@ -145,8 +150,10 @@ Notes:
   observability stack, MinIO and Velero. See [Environment model](#environment-model).
 - **Not a component:** the local cloud emulator (Floci, `bootstrap/cloud-emulator.sh`)
   used by the cluster smoke is dev/CI tooling — no sync-wave, no catalog row, a
-  scratch `cloud` namespace that exists only during a smoke run. See
-  [ci-cd.md](ci-cd.md).
+  scratch `cloud` namespace that exists only during a smoke run. Floci also backs
+  the **EKS substrate** (`bootstrap/eks-emulator.sh`) that *is* the local cluster
+  (a real single-node k3s container + ECR): the cluster and its throwaway IAM key
+  exist only for a smoke run. See [ci-cd.md](ci-cd.md).
 
 ## Sync-wave map
 
@@ -271,7 +278,7 @@ Full inventory and runbooks: [secrets.md](secrets.md).
 
 | Environment | Profile | Sync policy | Purpose |
 | --- | --- | --- | --- |
-| `local` | 1 replica, full platform catalog, minimal resources | auto-sync + prune | Developer machine (kind); **platform-only, no services** |
+| `local` | 1 replica, full platform catalog, minimal resources | auto-sync + prune | Developer machine (Floci emulated EKS); **platform-only, no services** |
 | `dev` | reduced HA | auto-sync + prune (platform); services synced on demand by the `promote` workflow | Shared integration; services via the `promote` workflow → `<service>-dev` app sync |
 | `qa` | HA (3 replicas, PDBs, anti-affinity) | auto-sync, **no prune** (platform); services synced by the `promote` workflow against the `qa` approval gate | Pre-production validation; services via the `promote` workflow → `<service>-qa` app sync |
 | `prod` | full HA, real storage | **manual sync** | Production |
@@ -309,9 +316,8 @@ as each component lands; the log always explains *why*, never just *what*.
 
 | Component | Deviation | Reason |
 | --- | --- | --- |
-| Root app (local) | Live `automated.enabled=false` (applied during Phase 0.0 while `GIT_REPO_URL` was an unpublished GitHub placeholder) is dropped once the local git serve provides content; the files keep auto + prune | Closed by the Phase 1 follow-up: the serve now renders a valid `apps-local.yaml` (row below), so the seamless file-state auto-sync applies and the override is removed |
-| git-local-serve (local tooling) | Serves a **rendered** `argocd/apps-local.yaml`: `bootstrap/render-served-apps.sh` substitutes `{{GIT_REPO_URL}}`/`{{GIT_TARGET_BRANCH}}` and commits the copy onto the serve branch only — the repo templates keep the placeholders for the `make bootstrap` seam and the published-repo path | ArgoCD renders the root app's ApplicationSet straight from the served file; an unsubstituted `{{GIT_TARGET_BRANCH}}` is invalid YAML (unquoted) and broke `platform-root-local` (`ComparisonError`). Dev-only stand-in, not part of the platform catalog |
-| git-local-serve (local tooling) | In-cluster git server does **not** use the `alpine/git` image (it ships no `git daemon`); it boots `alpine:3.21` and installs `git-daemon`, plus `safe.directory` for the root-owned bare repo | `alpine/git` lacks the `git daemon` subcommand; the bare mirror on the node is owned by another user, which trips git's "dubious ownership" guard. Local tooling only — not part of the platform catalog |
+| Makefile owns the catalog wiring; the root app owns the services registry | `make bootstrap` seeds `argocd/apps-<env>.yaml` (platform `ApplicationSet`) and `argocd/kong-<env>.yaml` (dedicated Kong `Application`) directly, with `{{GIT_REPO_URL}}`/`{{GIT_TARGET_BRANCH}}` resolved host-side (the PR head in CI). The root `Application` (`argocd/root-app-<env>.yaml`, present for `dev`/`qa`/`prod`; absent for `local`, which runs no services) owns **only** `argocd/services-<env>.yaml` — it never includes `apps-<env>`/`kong-<env>` | A single owner per object: the root app renders the catalog `ApplicationSet`/Kong app from its tracked source, but the CI smoke needs the generated children to track the **PR head**, which only a host-side seed can inject (and the runner cannot reach the EKS node's pod network to serve resolved content). Scoping the root app to the services registry removes the two-owner fight (the earlier `kong-local did not become Synced` came from the root app rendering the raw repo, where the unquoted `{{GIT_TARGET_BRANCH}}` parsed as a flow mapping) and keeps the Makefile the single seeder of the ref-under-test wiring |
+| local git serve (dev tooling) | `make local-git-up` stands up an in-cluster git daemon serving this repo's HEAD **verbatim** (`bootstrap/render-served-apps.sh` mirrors `HEAD` onto the serve branch — no placeholder substitution); local ArgoCD reconciles the served tree instead of GitHub. The CI cluster smoke does **not** use it — `make bootstrap` seeds the wiring host-side | The serving/reconciliation path is exercised on a developer machine; nothing on the serve needs substitution now that `make bootstrap` owns the wiring, so the serve mirrors the repo as-is. The CI runner cannot reach the EKS node's pod network (the emulator publishes only its own port), so the smoke seeds host-side rather than serving resolved content |
 | Kong | DB-less (`database: off`), `ingressController.installCRDs: false`, managed as a dedicated `Application`, no SSA | Kong ships flat-schema CRDs; structured-merge diff breaks under `ServerSideApply=true`, and `--include-crds` re-emits CRDs twice |
 | postgres-app | Local raw `Application`, not in the `ApplicationSet` generator list | Only `local` runs the datastore; it must be applied without the env generator |
 | Linkerd | Control plane deployed by script, not ArgoCD | Helm chart signature requirements; control plane needs cert-manager + linkerd-crds first |
@@ -326,7 +332,8 @@ as each component lands; the log always explains *why*, never just *what*.
 | redis-operator | `chartRepo` is pinned to `https://ot-container-kit.github.io/helm-charts` instead of the documented `https://charts.ot-container-kit.io` | The old host stopped resolving upstream: it answers `NXDOMAIN` authoritatively for `io` (verified against public DNS on 2026-09-27), which wedged the app in `ComparisonError: failed to fetch chart`. The maintainers publish the same charts from the GitHub Pages repo of `ot-container-kit/helm-charts` — same publisher, same chart versions, `redis-operator` 0.26.1 with an identical digest — so the pin stays official and version-pinned, and ArgoCD reaches it as any other `https://` chart repo. Recorded in `docs/roadmap/redis-operator.md` |
 | Releases | The tag is cut automatically when the release PR merges and the release goes out as a **full release held off `latest`**, with the pointer left on the previous release; only the manual `Release promote` workflow moves `latest` forward — so the automation never promotes a release on its own | `make_latest` is the lever: GitHub defaults it to `true` for newly published releases and release-please never sends it, so publishing a full release would claim the pointer on its own. Declining it is not enough on its own either — `make_latest=false` stores no pointer and `GET /releases/latest` falls back to the newest published release — so the local `finalize` job publishes off `latest` *and* re-designates the previous release, which keeps the pointer tied to adoption instead of to merge order, the same rule the Services row follows. A draft would keep it off too, but the shared flow's tag force-push publishes it. See [versioning.md](versioning.md) |
 | Services | A service is **app-repo-as-source**: its Kubernetes manifests live in the service's own repo (`deploy/`); dev/qa ArgoCD track `main` and are synced to the selected commit by the service's `promote` workflow (ArgoCD API, scoped token), while prod tracks the **version tag pinned** in `services-prod.yaml` (`version`, bumped by a reviewed `chore(services)` PR that also carries the go/no-go). `local` intentionally does **not** run services (`services-<env>.yaml` exists only for `dev`/`qa`/`prod`) | Services iterate daily (multiple deploys a day per service) and a PR-per-deployment in `infra-kubernetes` would turn TBD into a bottleneck. Keeping services self-owned while the catalog components stay centralized (the two `ApplicationSet`s in the root app) preserves git as the deployment gate: dev/qa are ArgoCD app syncs run from the service repo, prod is a one-line version bump (`chore(services)`, so it never opens an infra release PR) plus a human `Sync` (ADR-003). Each service release cuts an immutable semver tag that is marked `latest` only once prod adopted it (the Releases row above), which is what makes prod rollback a revert of the pin. This is a documented deviation from the single-repo-catalog model, constrained to the services registry |
-| Cloud emulator (dev/CI tooling) | The cluster smoke stands up a local cloud emulator (Floci) as a **Docker container on the runner**, published into the cluster with a selector-less `Service` + `EndpointSlice` in a scratch `cloud` namespace — **not** as an ArgoCD Application, with no sync-wave and no catalog entry | Proving cloud integration needs an endpoint, not a cloud account: running the emulator next to the kind node (same Docker network) and publishing it via an endpoint-backed Service keeps a stable in-cluster DNS name without IAM, per-cloud configuration or a managed service. It is tooling for the smoke ([ci-cd.md](ci-cd.md)), so it deliberately stays out of the platform catalog; the real EKS substrate behind the same provider seam is follow-up work |
+| Cloud emulator (dev/CI tooling) | The cluster smoke stands up a local cloud emulator (Floci) as a **Docker container on the runner**, published into the EKS-substrate cluster with a selector-less `Service` + `EndpointSlice` in a scratch `cloud` namespace — **not** as an ArgoCD Application, with no sync-wave and no catalog entry | Proving cloud integration needs an endpoint, not a cloud account: the emulator is the EKS substrate itself, so it is published via an endpoint-backed Service to give the platform a stable in-cluster DNS name without IAM, per-cloud configuration or a managed service. It is tooling for the smoke ([ci-cd.md](ci-cd.md)), so it deliberately stays out of the platform catalog |
+| EKS substrate (dev/CI tooling) | The `Smoke` job runs on Floci's emulated **EKS** — the platform's only cluster substrate (a real single-node k3s container + OCI ECR registry): `bootstrap/eks-emulator.sh` mints a throwaway IAM user/key, creates the cluster, writes a `floci-eks` kube-context, and the smoke boots the **full platform** on it via the real `make bootstrap` app-of-apps — **not** as an ArgoCD Application, with no sync-wave and no catalog entry | It proves the two EKS-specific paths a plain local cluster does not — an IAM-authenticated kubeconfig to a live API server, and an image pulled in-cluster from the emulated ECR via the node's registry mirror — while running the whole catalog through the same GitOps path `dev`/`qa`/`prod` use. The cluster and IAM key are throwaway (deleted on `make eks-down`), so it stays out of the platform catalog like the endpoint emulator |
 
 ## Change flow (summary)
 

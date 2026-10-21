@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 sca-templates contributors
 # SPDX-License-Identifier: MIT
-# render-served-apps.sh — push rendered ArgoCD manifests into the local git serve
-# so the app-of-apps root Application can render them straight from the served
-# content. The repo keeps the {{GIT_REPO_URL}} / {{GIT_TARGET_BRANCH}} placeholders
-# (the `make bootstrap` seam and the published-repo path); this helper substitutes
-# them ONLY in the served copy, committing it onto the serve branch so the served
-# files are valid YAML. It renders every file the root Application's
-# `directory.include` glob reads: the platform ApplicationSet (apps-local.yaml)
-# and each dedicated Application (kong-local.yaml).
+# render-served-apps.sh — push this repo's HEAD into the local git serve.
+# The serve carries the repo **verbatim**: `make bootstrap` seeds the ArgoCD
+# wiring (argocd/apps-<env>.yaml, argocd/kong-<env>.yaml) on the cluster directly
+# with {{GIT_REPO_URL}}/{{GIT_TARGET_BRANCH}} resolved host-side, so nothing on
+# the serve needs substitution — ArgoCD reconciles the served content as-is, and
+# the generated component Applications read the same tree from the serve.
 # Local tooling only — not part of the ArgoCD platform catalog.
 # Called by `make local-git-up` / `make local-git-update`.
 # Usage: render-served-apps.sh <destination>
@@ -20,42 +18,11 @@ dest="${1:-}"
 
 # Seam values: explicit env first, then the .env seam file (for direct invocations).
 branch="${GIT_TARGET_BRANCH:-}"
-repo_url="${GIT_REPO_URL:-}"
-if [ -z "${branch}" ] || [ -z "${repo_url}" ]; then
+if [ -z "${branch}" ]; then
   # shellcheck disable=SC1091
   . ./.env 2>/dev/null || true
 fi
 branch="${branch:-${GIT_TARGET_BRANCH:-main}}"
-repo_url="${repo_url:-${GIT_REPO_URL:-}}"
-[ -n "${repo_url}" ] || { echo 'ERROR: GIT_REPO_URL is empty — run make local-git-up first' >&2; exit 1; }
 
-# Keep in sync with the root Application's `directory.include` glob
-# (argocd/root-app-local.yaml).
-sources=(
-  argocd/apps-local.yaml
-  argocd/kong-local.yaml
-)
-
-tmp="$(mktemp -d)"
-work="${tmp}/checkout"
-cleanup() {
-  git worktree remove --force "${work}" >/dev/null 2>&1 || true
-  rm -rf "${tmp}"
-}
-trap cleanup EXIT
-
-git worktree add --detach "${work}" HEAD >/dev/null
-
-for src in "${sources[@]}"; do
-  [ -f "${src}" ] || { echo "ERROR: ${src} is missing" >&2; exit 1; }
-  sed -e "s|{{GIT_REPO_URL}}|${repo_url}|g" \
-      -e "s|{{GIT_TARGET_BRANCH}}|${branch}|g" \
-      "${src}" > "${work}/${src}"
-  git -C "${work}" add "${src}"
-done
-
-git -C "${work}" -c user.name='sca local serve' -c user.email='local@serve.invalid' \
-    commit -m 'chore(local): render served ArgoCD manifests for git serve' --quiet
-
-echo "── pushing rendered ${sources[*]} → ${dest} (refs/heads/${branch})"
-git -C "${work}" push --force "${dest}" "HEAD:refs/heads/${branch}"
+echo "── pushing HEAD → ${dest} (refs/heads/${branch})"
+git push --force "${dest}" "HEAD:refs/heads/${branch}"

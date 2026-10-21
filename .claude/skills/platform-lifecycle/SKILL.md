@@ -1,18 +1,19 @@
 ---
 name: platform-lifecycle
-description: Bootstrap, validate and troubleshoot the sca Kubernetes platform (kind + ArgoCD app-of-apps). Use when the user asks to run prereqs/cluster-up/bootstrap/status/validate, add a component to the platform, inspect ArgoCD sync health, or fix OutOfSync apps, ExternalSecret failures or CrashLoopBackOff after a sync-wave change.
+description: Bootstrap, validate and troubleshoot the sca Kubernetes platform (Floci emulated EKS + ArgoCD app-of-apps). Use when the user asks to run prereqs/eks-up/bootstrap/status/validate, add a component to the platform, inspect ArgoCD sync health, or fix OutOfSync apps, ExternalSecret failures or CrashLoopBackOff after a sync-wave change.
 ---
 
 # Platform lifecycle
 
 End-to-end bootstrap (local environment):
 
-1. `make prereqs` — install pinned kubectl/helm/kind into `~/.local/bin` (idempotent).
-2. `make cluster-up` — create the `kind` cluster from `bootstrap/kind-config.yaml`.
-3. `make bootstrap` — install ArgoCD, then apply the root Application for
-   `$ENV` (`argocd/root-app-${ENV}.yaml`). The root app renders the
-   `ApplicationSet` for `$ENV` and ArgoCD syncs every component in
-   sync-wave order. Watch with `make status`.
+1. `make prereqs` — install pinned kubectl/helm into `~/.local/bin` (idempotent; docker required for the Floci emulator).
+2. `make eks-up` — boot the Floci emulated EKS substrate (a real single-node k3s node + ECR) and point kubectl at it.
+3. `make bootstrap` — install ArgoCD, seed the catalog wiring
+   (`argocd/apps-${ENV}.yaml` ApplicationSet + `argocd/kong-${ENV}.yaml`) with
+   `{{GIT_REPO_URL}}`/`{{GIT_TARGET_BRANCH}}` resolved host-side, then apply the
+   root Application (`argocd/root-app-${ENV}.yaml`, `dev`/`qa`/`prod` only).
+   ArgoCD syncs every component in sync-wave order. Watch with `make status`.
 
 After bootstrap, changes deploy exclusively via `git push` — never
 `kubectl apply` by hand. **Docs are the source of truth from Phase 1**: read
@@ -44,8 +45,8 @@ The docs define the target state — read them first:
    `docs/architecture.md`).
 6. If it needs secrets: seed the Vault path `secret/<service>/<env>` in
    `bootstrap/seed-vault.sh` and add an `ExternalSecret` in the component dir.
-7. Validate: `make validate-static`, then on a fresh kind cluster
-   `make cluster-up && make bootstrap` and confirm the new Application is
+7. Validate: `make validate-static`, then on a fresh cluster
+   `make eks-up && make bootstrap` and confirm the new Application is
    Synced/Healthy.
 8. Update the docs in the **same commit**: append the roadmap Work Log row in
    `docs/roadmap.md`, flip the component's Status column to `deployed` in
@@ -73,7 +74,7 @@ Mirrors `AGENTS.md` §9 and `docs/workflow.md`:
   `secret/<service>/<env>`, re-run `bootstrap/seed-vault.sh` (local).
 - `CrashLoopBackOff` after a wave bump: dependency ordering — consumers must
   be ≥10 above their datastore/operator.
-- kind OOM: stop the Docker Compose stack first; the `local` profile is
+- EKS node OOM: stop the Docker Compose stack first; the `local` profile is
   1-replica minimal by design.
 - `ImagePullBackOff`: bad pin or unreachable registry — verify the tag exists
   upstream; never float `latest`.

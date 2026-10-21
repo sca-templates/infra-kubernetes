@@ -84,7 +84,7 @@ Official: [Authenticating](https://kubernetes.io/docs/reference/access-authn-aut
 
 ## Working locally
 
-The local substrate is a single-node `kind` cluster
-(`make cluster-up`); the pinned CLI toolchain lives in `~/.local/bin`
+The local substrate is Floci's emulated EKS — a real single-node k3s
+container (`make eks-up`); the pinned CLI toolchain lives in `~/.local/bin`
 (`make prereqs`). Everything reachable from a laptop via `make port-forward`. See
 [../README.md](../README.md).

@@ -1,7 +1,7 @@
-# kong — local profile (developer kind cluster: 1 replica, minimal resources).
-# The proxy is exposed as NodePort: bootstrap/kind-config.yaml maps the kind node
-# ports 30080 → host 80 (HTTP) and 30443 → host 443 (HTTPS), so `curl
-# http://localhost/` and `curl -k https://localhost/` reach the gateway edge.
+# kong — local profile (developer cluster: 1 replica, minimal resources).
+# The proxy is exposed as NodePort 30080/30443 on the node; on the Floci EKS
+# node, `make port-forward APP=kong-admin` (or a node port-forward) reaches the
+# gateway edge from the host.
 
 replicaCount: 1
 

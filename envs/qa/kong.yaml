@@ -1,5 +1,5 @@
 # kong — qa profile (2 replicas, PodDisruptionBudget, soft anti-affinity).
-# `preferred` anti-affinity keeps the overlay loadable on a single-node kind for
+# `preferred` anti-affinity keeps the overlay loadable on a single-node local cluster for
 # promote-test while still spreading replicas in real HA. The chart ships a
 # PodDisruptionBudget value that requires replicaCount > 1 (it fails the render
 # otherwise), so the budget first becomes expressible here.

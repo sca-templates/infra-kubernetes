@@ -1,4 +1,4 @@
-# redis-operator — local profile (developer kind cluster: 1 replica, minimal
+# redis-operator — local profile (developer cluster: 1 replica, minimal
 # resources). Matches the base defaults; declared for tier symmetry.
 
 replicas: 1

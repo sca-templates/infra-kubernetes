@@ -56,8 +56,8 @@ Rollout notes:
   pattern service charts follow (`charts/service-template` uses
   `ingress.className: kong`). The admin Service the Ingress names is never
   reached (the plugin terminates the request first).
-- Footprint: `local` 1 replica / NodePort 30080/30443 (kind maps them to host
-  80/443); `dev` 1 replica / LoadBalancer; `qa`/`prod` 2 replicas /
+- Footprint: `local` 1 replica / NodePort 30080/30443 (on the local node the
+  ports are reached from the host via a port-forward); `dev` 1 replica / LoadBalancer; `qa`/`prod` 2 replicas /
   LoadBalancer with a PodDisruptionBudget (`maxUnavailable: 1`) and soft
   anti-affinity. The gateway is stateless, so prod differs from qa only by its
   manual sync tier.

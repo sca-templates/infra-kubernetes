@@ -12,8 +12,8 @@ Milestones and Issues.
 
 **Phase 8 — Kong deployed.** Phase 0 delivered the scaffold
 (Makefile, `bootstrap/`, `argocd/` with the app-of-apps pattern, the CI
-workflows, the service template, this docs set) and brought the local `kind`
-cluster up with ArgoCD. **Phase 1** lands cert-manager on the `local` profile
+workflows, the service template, this docs set) and brought the local Floci
+emulated EKS cluster up with ArgoCD. **Phase 1** lands cert-manager on the `local` profile
 (fully-local: ArgoCD reconciles an in-cluster git serve instead of GitHub) and
 ships the cluster smoke. **Phase 2** lands Vault — the secrets SSOT — as an HA
 raft trio with TLS via a cert-manager leaf, an idempotent HA-aware seed, and a
@@ -65,7 +65,7 @@ and the proxy serves TLS from a cert-manager leaf (`kong-proxy` /
 | --- | --- |
 | Repository | `infra-kubernetes` (local, fully-local git serve; published to GitHub before promotion) |
 | Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6), redis-operator (Phase 7), Kong (Phase 8) |
-| `platform-root-local` | present, `Synced` + `Healthy` against the local git serve (`main`); Phase 0.0 `automated.enabled=false` override dropped |
+| `platform-root-local` | not used — `local` runs no services, so there is no root Application; `make bootstrap ENV=local` seeds the catalog wiring (`apps-local` + `kong-local`) host-side |
 | `platform-local` ApplicationSet | present, seven elements (`cert-manager` wave -20, `external-secrets` + `linkerd-crds` + `cloudnative-pg` + `strimzi` + `redis-operator` wave -10, `vault` wave 0) |
 | cert-manager app | `cert-manager-local` `Synced` + `Healthy`; `sca-ca` ClusterIssuer `Ready`; leaf Certificate smoke green |
 | vault app | `vault-local` `Synced` + `Healthy`; HA raft trio, TLS via `vault-tls` leaf; `make smoke COMPONENT=vault` → initialized=true sealed=false; seed idempotent and HA-aware |
@@ -76,8 +76,9 @@ and the proxy serves TLS from a cert-manager leaf (`kong-proxy` /
 | redis-operator app | `redis-operator-local` `Synced` + `Healthy` in namespace `data`; operator Deployment `redis-operator` Ready (chart 0.26.1 / operator 0.26.0); watches all namespaces (no `WATCH_NAMESPACE` env); 4 `redis.redis.opstreelabs.in` CRDs present + `Established`; `make smoke COMPONENT=redis-operator` → throwaway `Redis` CR honored (StatefulSet ready + `PING` → `PONG`) |
 | kong app | `kong-local` `Synced` + `Healthy` in namespace `kong` (dedicated Application, **no SSA**); chart 3.4.1, gateway Deployment `kong` Ready (containers `ingress-controller` KIC 3.5.5 + `proxy` kong 3.9.4), DB-less (`KONG_DATABASE=off`); IngressClass `kong`; `configuration.konghq.com` CRDs `Established`; `Certificate/kong-proxy` Ready (leaf off `sca-ca`); declarative `Ingress kong-demo` + `KongPlugin demo-termination`; `make smoke COMPONENT=kong` → `GET https://kong.local/demo` → 200 |
 | git-local-serve | in-cluster git daemon (`git://<node>:9418/sca-infra.git`) `Ready` |
-| Observability / smoke CI | cluster smoke `pr-cluster.yml` **shipped** (Phase 1): selective on PRs as the **required `Smoke` check** on `main` + manual `workflow_dispatch`; no `push` smoke (see [ci-cd.md](ci-cd.md)) |
+| Observability / smoke CI | cluster smoke `pr-cluster.yml` **shipped** (Phase 1): selective on PRs as the **required `Smoke` check** on `main` + manual `workflow_dispatch`; no `push` smoke. Multi-component PRs smoke every touched component in one run (one boot/cloud/teardown); changes to the smoke framework (`bootstrap/smoke-*`, `argocd/**`, `Makefile`) resolve to `cert-manager` so the machinery is self-validated; the pinned toolchain is cached (`actions/cache`, keyed on `versions.sh`) (see [ci-cd.md](ci-cd.md)) |
 | Cloud integration smoke | every smoke run also proves the cluster reaches the local cloud emulator (Floci): `make cloud-up` / `make smoke COMPONENT=cloud` green — bucket created and object round-tripped from an in-cluster Job; on by default, `--no-cloud` / `SMOKE_CLOUD=0` opts out. **Dev/CI tooling, not a platform component** (see [ci-cd.md](ci-cd.md)) |
+| EKS substrate smoke | the required `Smoke` job boots the **full platform** on Floci's emulated **EKS** (real single-node k3s + ECR), the platform's only cluster substrate: `make eks-up` → `make bootstrap ENV=local` → Vault seeded before the health gate → every `<name>-local` Application `Synced`/`Healthy` → `make smoke COMPONENT=eks` green (ECR push + in-cluster pull round-trip via the node registry mirror) → endpoint smoke. Proves EKS integration (IAM kubeconfig) + the ECR image path. **Dev/CI tooling, not a platform component** (see [ci-cd.md](ci-cd.md)) |
 | Security CI | checkov **baseline gate** active (Phase 1): `.github/checkov-baseline.json` documents the local-git-server pod findings; new IaC findings fail the PR; re-evaluated at Phase 18 (see [security.md](security.md)) |
 | Release automation | **path-scoped** triggers active (see [versioning.md](versioning.md)): only `feat`/`fix` commits touching the platform surface open release PRs (`exclude-paths` in `.release-please-config.json`); release-please runs on `push: main` only via the shared `shared-release-flow.yml` wrapper; tag signing runs when a release is created (manual dispatch re-sign removed) |
 | Release promotion | tags are cut automatically and the release goes out as a **full release held off `latest`**; `release-publish.yml` (manual) is the only step that moves the `latest` pointer, on a human go/no-go (see [versioning.md](versioning.md)) |
@@ -87,7 +88,7 @@ and the proxy serves TLS from a cert-manager leaf (`kong-proxy` /
 
 | # | Limitation | Current behavior | To close |
 | --- | --- | --- | --- |
-| 1 | **Fully-local git serve (not GitHub)** | Local ArgoCD reconciles the in-cluster git serve (`git://<node>:9418`), not the GitHub repo; the serve carries the platform Applications with the `{{GIT_REPO_URL}}`/`{{GIT_TARGET_BRANCH}}` placeholders **rendered** (`bootstrap/render-served-apps.sh` writes `argocd/apps-local.yaml` for the `ApplicationSet` and `argocd/kong-local.yaml` for the dedicated Kong app), while the repo templates keep the placeholders for the `make bootstrap` seam | Publish the repo and swap `GIT_REPO_URL` back to GitHub to exercise the real source-of-truth path; dev / qa / prod must render their `apps-<env>.yaml` (`ApplicationSet` **and** the dedicated `kong-<env>` app) the same way when those clusters bootstrap |
+| 1 | **Fully-local git serve (dev, not GitHub)** | Local **dev** ArgoCD can reconcile an in-cluster git serve (`git://<node>:9418`) instead of GitHub: `make local-git-up` mirrors this repo's HEAD verbatim onto the serve (`bootstrap/render-served-apps.sh`), while `make bootstrap` seeds the ArgoCD wiring (`argocd/apps-local.yaml`, `argocd/kong-local.yaml`) host-side with the placeholders resolved. The CI cluster smoke does **not** use the serve — it seeds the wiring host-side via `make bootstrap` | Publish the repo and swap `GIT_REPO_URL` back to GitHub to exercise the real source-of-truth path; the git serve stays dev-only tooling |
 | 2 | **dev / qa / prod clusters pending** | Not provisioned (terraform/ansible outside this repo) | Provision per env; promote via `promote-test` (see [workflow.md](workflow.md)) |
 | 3 | **OpenSSF Best Practices badge — silver blocked** | All silver criteria are met except `contributors_unassociated` and `bus_factor` (≥2): the project has a single maintainer (`CODEOWNERS` = `@Santiago1010`) | Achieved once a second **unassociated** contributor joins and is reflected in `CODEOWNERS` + `.github/GOVERNANCE.md`; passing badge is already achievable (see [.github/GOVERNANCE.md](../.github/GOVERNANCE.md), [docs/ci-cd.md](ci-cd.md)) |
 | 4 | **OpenSSF Best Practices badge — gold blocked** | Beyond the silver gaps, gold requires `two_person_review` (≥50% of changes reviewed by someone other than the author), which is unrealisable while there is a single maintainer; all other gold criteria are Met or N/A (see [.github/SECURITY.md](../.github/SECURITY.md) security review, SPDX + copyright headers per source file) | Unblocked together with silver once a second, **unassociated** reviewer/maintainer exists; `two_person_review` then requires an explicit second reviewer on gold PRs |
@@ -104,6 +105,10 @@ and the proxy serves TLS from a cert-manager leaf (`kong-proxy` /
   ([ci-cd.md](ci-cd.md)): it runs on the runner and is published to a scratch
   namespace for the duration of a smoke run — it is never part of the platform
   catalog, and no real cloud account, IAM or per-cloud configuration is used.
+  The same holds for its **EKS substrate** (`eks-emulator.sh`): the emulated EKS
+  cluster and ECR registry *are* the local cluster substrate for a smoke run, are
+  never members of the platform catalog, and the IAM key it mints is throwaway
+  (deleted on `make eks-down`).
 
 ## Read this doc
 
