@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.0](https://github.com/sca-templates/infra-kubernetes/compare/v0.11.0...v1.0.0) (2026-10-21)
+
+
+### ⚠ BREAKING CHANGES
+
+* **ci:** `make cluster-up` and `make cluster-down` are removed; use `make eks-up` and `make eks-down`. KIND_CLUSTER_NAME is no longer used.
+
+### Features
+
+* **ci:** add emulated EKS smoke substrate ([#91](https://github.com/sca-templates/infra-kubernetes/issues/91)) ([fb512b4](https://github.com/sca-templates/infra-kubernetes/commit/fb512b4177bff30901628c15fd0c71337426f813))
+
 ## [0.11.0](https://github.com/sca-templates/infra-kubernetes/compare/v0.10.2...v0.11.0) (2026-10-14)
 
 
