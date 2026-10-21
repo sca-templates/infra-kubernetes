@@ -39,7 +39,7 @@ ingressController:
     tag: "3.5.5"
 
 # The proxy Service is the platform edge. Base/default is LoadBalancer (real
-# clusters); the local overlay switches to NodePort (kind maps the node ports to
+# clusters); the local overlay switches to NodePort (the local node exposes the
 # localhost).
 proxy:
   type: LoadBalancer

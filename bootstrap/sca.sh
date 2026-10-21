@@ -4,7 +4,7 @@
 # sca.sh — the sca platform CLI. POSIX-first local tooling for anyone on Linux
 # (any distro), macOS and WSL2; Windows-native is out of scope (use WSL2).
 #
-#   sca prereqs   install the pinned CLI toolchain (kubectl, helm, kind) into
+#   sca prereqs   install the pinned CLI toolchain (kubectl, helm) into
 #                 ~/.local/bin — idempotent, sha256-verified, no sudo
 #   sca doctor    read-only health: toolchain, PATH, docker, git, cluster,
 #                 ArgoCD apps, the .env seam and the tracked git source
@@ -18,7 +18,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/versions.sh"
 
 INSTALL_DIR="${INSTALL_DIR:-${HOME}/.local/bin}"
-KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-sca-local}"
 
 ok()   { printf '[OK]   %s\n' "$*"; }
 skip() { printf '[skip] %s\n' "$*"; }
@@ -46,7 +45,6 @@ installed_version() {
   case "$1" in
     kubectl) kubectl version --client 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1 ;;
     helm)    helm version --short 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1 ;;
-    kind)    kind version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1 ;;
   esac
 }
 
@@ -89,11 +87,6 @@ install_one() {
         rm -f "${INSTALL_DIR}/.helm.tgz"
         return 1
       fi ;;
-    kind)
-      download_verified \
-        "https://github.com/kubernetes-sigs/kind/releases/download/${ver}/kind-${OS}-${ARCH}" \
-        "https://github.com/kubernetes-sigs/kind/releases/download/${ver}/kind-${OS}-${ARCH}.sha256sum" \
-        "${INSTALL_DIR}/kind" || return 1 ;;
   esac
   ok "${tool} ${ver} installed"
 }
@@ -102,13 +95,13 @@ check_external() {
   if command -v git >/dev/null 2>&1; then ok "git present: $(git --version)"
   else warn "git missing"; dlog "      hint: Linux: apt install git · macOS: brew install git"; fi
   if command -v docker >/dev/null 2>&1; then ok "docker present"
-  else warn "docker missing — required for kind."; dlog "      hint: Linux: install via docker.com (or apt docker.io) · macOS: Docker Desktop"; fi
+  else warn "docker missing — required for the EKS substrate (Floci)."; dlog "      hint: Linux: install via docker.com (or apt docker.io) · macOS: Docker Desktop"; fi
 }
 
 cmd_prereqs() {
   detect_os_arch
   [ "${WSL_DISTRO_NAME:-}" ] && dlog "note: WSL2 detected — this is Linux; the platform runs inside the distro."
-  ok "OS=${OS} ARCH=${ARCH} (pinned: kubectl ${KUBECTL_VERSION} · helm ${HELM_VERSION} · kind ${KIND_VERSION})"
+  ok "OS=${OS} ARCH=${ARCH} (pinned: kubectl ${KUBECTL_VERSION} · helm ${HELM_VERSION})"
   if [ "${OS}" = "darwin" ]; then
     warn "darwin install path is verified by upstream URL pattern only (not tested on hardware yet)"
   fi
@@ -118,13 +111,11 @@ cmd_prereqs() {
 
   install_one kubectl "${KUBECTL_VERSION}"
   install_one helm "${HELM_VERSION}"
-  install_one kind "${KIND_VERSION}"
 
   dlog ""
   dlog "── Toolchain ──"
   kubectl version --client
   helm version --short
-  kind version
 
   check_external
 
@@ -134,7 +125,7 @@ cmd_prereqs() {
   esac
 
   dlog ""
-  dlog "Prerequisites ready. Next: make cluster-up"
+  dlog "Prerequisites ready. Next: make eks-up && make bootstrap (Floci EKS is the only substrate)"
 }
 
 load_env_seam() {
@@ -184,14 +175,14 @@ cmd_doctor() {
   ok "doctor ${OS}/${ARCH}"
 
   dlog ""
-  dlog "── Toolchain (pins: kubectl ${KUBECTL_VERSION} · helm ${HELM_VERSION} · kind ${KIND_VERSION}) ──"
-  for tool in kubectl helm kind; do
+  dlog "── Toolchain (pins: kubectl ${KUBECTL_VERSION} · helm ${HELM_VERSION}) ──"
+  for tool in kubectl helm; do
     local v
     v="$(installed_version "$tool")"
     if [ -n "$v" ]; then
-      if [ "$v" = "$(case "$tool" in kubectl) echo "$KUBECTL_VERSION";; helm) echo "$HELM_VERSION";; kind) echo "$KIND_VERSION";; esac)" ]; then
+      if [ "$v" = "$(case "$tool" in kubectl) echo "$KUBECTL_VERSION";; helm) echo "$HELM_VERSION";; esac)" ]; then
         ok "${tool} ${v}"
-      else warn "${tool} ${v} (pinned $(case "$tool" in kubectl) echo "$KUBECTL_VERSION";; helm) echo "$HELM_VERSION";; kind) echo "$KIND_VERSION";; esac)) — run: make prereqs"; fi
+      else warn "${tool} ${v} (pinned $(case "$tool" in kubectl) echo "$KUBECTL_VERSION";; helm) echo "$HELM_VERSION";; esac)) — run: make prereqs"; fi
     else
       warn "${tool} not installed — run: make prereqs"
     fi
@@ -200,7 +191,12 @@ cmd_doctor() {
   dlog ""
   dlog "── Environment ──"
   if command -v docker >/dev/null 2>&1; then
-    if docker info >/dev/null 2>&1; then ok "docker reachable"
+    if docker info >/dev/null 2>&1; then
+      ok "docker reachable"
+      local floci_name="${FLOCI_NAME:-floci}" floci_state
+      floci_state="$(docker ps --filter "name=^${floci_name}$" --format '{{.Status}}' 2>/dev/null || true)"
+      if [ -n "${floci_state}" ]; then ok "cloud emulator (${floci_name}) running: ${floci_state}"
+      else dlog "      cloud emulator (${floci_name}) not running — make eks-up"; fi
     else warn "docker not running (daemon isn't reachable)"; fi
   else warn "docker not installed"; fi
   case ":${PATH}:" in
@@ -209,7 +205,7 @@ cmd_doctor() {
   esac
   if [ -f ".env" ]; then ok ".env seam present"
   else warn ".env missing — make uses GitHub/main defaults"; fi
-  dlog "      seam: GIT_REPO_URL=${GIT_REPO_URL_EF} · GIT_TARGET_BRANCH=${GIT_TARGET_BRANCH_EF} · KIND_CLUSTER_NAME=${KIND_CLUSTER_NAME}"
+  dlog "      seam: GIT_REPO_URL=${GIT_REPO_URL_EF} · GIT_TARGET_BRANCH=${GIT_TARGET_BRANCH_EF}"
 
   dlog ""
   dlog "── Git source ──"
@@ -225,7 +221,7 @@ cmd_doctor() {
       dlog "      (ArgoCD not installed yet — run: make bootstrap)"
     fi
   else
-    fail "no cluster reachable — run: make cluster-up && make bootstrap"
+    fail "no cluster reachable — run: make eks-up && make bootstrap"
   fi
 
   dlog ""
@@ -234,13 +230,13 @@ cmd_doctor() {
 }
 
 cmd_version() {
-  printf 'kubectl %s\nhelm %s\nkind %s\n' "${KUBECTL_VERSION}" "${HELM_VERSION}" "${KIND_VERSION}"
+  printf 'kubectl %s\nhelm %s\n' "${KUBECTL_VERSION}" "${HELM_VERSION}"
 }
 
 cmd_help() {
   dlog "sca — infra-kubernetes platform CLI (POSIX)"
   dlog ""
-  dlog "  sca prereqs   install pinned kubectl/helm/kind into ~/.local/bin (idempotent, no sudo)"
+  dlog "  sca prereqs   install pinned kubectl/helm into ~/.local/bin (idempotent, no sudo)"
   dlog "  sca doctor    read-only health: toolchain, PATH, docker, git, cluster, ArgoCD apps, seam"
   dlog "  sca version   print pinned toolchain versions"
   dlog "  sca help      this help"

@@ -1,5 +1,5 @@
 # cloudnative-pg — qa profile (2 replicas, soft anti-affinity). `preferred`
-# anti-affinity keeps the overlay loadable on a single-node kind for
+# anti-affinity keeps the overlay loadable on a single-node local cluster for
 # promote-test while still spreading replicas in real HA. The chart ships no
 # PodDisruptionBudget value, so the tier expresses scale + spread only.
 

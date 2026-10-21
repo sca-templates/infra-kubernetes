@@ -1,4 +1,4 @@
-# vault — local profile (developer kind cluster). Declared HA raft trio so the
+# vault — local profile (developer cluster). Declared HA raft trio so the
 # local/smoke cluster exercises the same quorum + leader redirect path as
 # qa/prod. `server.ha.replicas` overrides the base default (3) — local keeps 3.
 

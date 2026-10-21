@@ -19,7 +19,7 @@ No natural phases → issues directly under the project.
   - [x] docs: Work Log row + catalog Status → deployed
         - Commits: `docs(redis-operator): mark deployed`
   - [x] local tooling unblocked for the clean-cluster reset (same PR, not phase
-        scope: found while resetting the kind cluster to validate the smoke)
+        scope: found while resetting the local cluster to validate the smoke)
         - Commits: `fix(makefile): drop the unsupported kind delete flag from cluster-down`, `fix(local-git): create the git-serve namespace and retry the reachability probe`
   Issue done when: operator pod `Running` + CRD present.
 

@@ -1,5 +1,5 @@
 # strimzi — qa profile (2 replicas, PDB, soft anti-affinity). `preferred`
-# anti-affinity keeps the overlay loadable on a single-node kind for
+# anti-affinity keeps the overlay loadable on a single-node local cluster for
 # promote-test while still spreading replicas in real HA. Unlike CloudNativePG,
 # this chart does ship a PodDisruptionBudget value, so the tier expresses
 # scale + spread + disruption budget. Leader election (base) keeps the two

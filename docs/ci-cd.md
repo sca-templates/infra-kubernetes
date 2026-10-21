@@ -3,8 +3,8 @@
 What GitHub Actions do — and deliberately do **not** — do for this
 repository. Phase 0 ships the static workflows plus the release automation
 (no cluster smoke); **Phase 1 ships the cluster-smoke workflow
-(`pr-cluster.yml`)**, rebuilt from scratch, run on an ephemeral `kind` cluster
-and gating PRs as the **required `Smoke` check** on `main`. See [security.md](security.md) for the security controls these
+(`pr-cluster.yml`)**, rebuilt from scratch, run on Floci's emulated EKS
+substrate and gating PRs as the **required `Smoke` check** on `main`. See [security.md](security.md) for the security controls these
 workflows carry, [versioning.md](versioning.md) for how releases, tags and the
 CHANGELOG are produced, and [workflow.md](workflow.md) for how a merge becomes
 a deployment.
@@ -63,7 +63,7 @@ wrappers around it; `make install-cli` symlinks it as `~/.local/bin/sca`.
 
 | Command | What it does |
 | --- | --- |
-| `sca prereqs` | Install pinned kubectl/helm/kind into `~/.local/bin` — idempotent, sha256-verified, no sudo. Detects OS/arch (linux/darwin, amd64/arm64) and picks the matching upstream URLs; external deps (git, docker) are reported with install hints but never installed |
+| `sca prereqs` | Install pinned kubectl/helm into `~/.local/bin` — idempotent, sha256-verified, no sudo. Detects OS/arch (linux/darwin, amd64/arm64) and picks the matching upstream URLs; external deps (git, docker — the latter required for the Floci emulator) are reported with install hints but never installed |
 | `sca doctor` | Read-only health: toolchain versions vs pins, PATH, docker, git, git source reachability, cluster, ArgoCD app sync/health, and the `.env` seam. Never mutates — run it first when something is off |
 | `sca version` | Print the pinned toolchain versions |
 
@@ -128,16 +128,21 @@ checks.
 `pr-cluster.yml` is **absent** from Phase 0 because the previous attempt's
 cluster-smoke CI had become a stack of hacks (trimmed manifests, self-heal
 disabled) and burned a week in `fix` churn. It lands at **Phase 1** with
-cert-manager, so each subsequent component is validated incrementally in a
-live `kind` cluster as it ships, and the deployed baseline is continuously
+cert-manager, so each subsequent component is validated incrementally on a
+live Floci emulated EKS substrate as it ships, and the deployed baseline is continuously
 monitored. See the [roadmap](roadmap.md) for the Phase 1 gate and its smoke.
 
 **Triggers:**
 
-- **`pull_request`** — selective smoke of the touched component (profile
-  `local`), so a change is validated before it merges. Same-repo PRs only
-  (fork PRs are skipped, coherent with `main-sync.yml`). The `Smoke` check is a
-  **required** branch-protection check on `main`.
+- **`pull_request`** — selective smoke of the touched component(s) (profile
+  `local`), so a change is validated before it merges. A PR that touches more
+  than one component smokes all of them in a single run (one cluster boot, one
+  cloud bring-up, one teardown). Same-repo PRs only (fork PRs are skipped,
+  coherent with `main-sync.yml`). The `Smoke` check is a **required**
+  branch-protection check on `main`. There is a **single substrate**: the one
+  `Smoke` job boots the whole platform catalog on the Floci emulated **EKS**
+  substrate (*EKS substrate smoke* below) and requires every Application to
+  converge `Synced`/`Healthy`, with Vault seeded before the health gate.
 - **`workflow_dispatch`** (manual) — one-off smoke of a component/ref
   (`component` + `ref` inputs, defaults `cert-manager`/`main`) for testing
   without opening a PR. Nothing else triggers the workflow; there is no
@@ -145,19 +150,64 @@ monitored. See the [roadmap](roadmap.md) for the Phase 1 gate and its smoke.
 
 The whole boot → apply → wait → run → diagnose → teardown cycle lives in
 `bootstrap/smoke-ci.sh`; each component adds only its own smoke command
-(`bootstrap/smoke-<component>.sh`, dispatched by `smoke-target.sh`). Wait steps
-default to a 900s timeout (`SMOKE_TIMEOUT`, overridable). Layered on top, the
+(`bootstrap/smoke-<component>.sh`, dispatched by `smoke-target.sh`).
+`smoke-ci.sh` takes a **comma-separated** component list (`cert-manager,vault`)
+and keeps a single-component run working unchanged: the cluster boots once, the
+cloud emulator comes up once, each component's `<name>-smoke` Application is
+applied/waited/smoked in turn, the cloud smoke runs once, every Application is
+re-checked `Synced/Healthy` post-smoke, and teardown runs once. Wait steps
+default to a 1200s timeout (`SMOKE_TIMEOUT`, overridable). Layered on top, the
 framework also stands up and checks the cloud emulator (**on by default**;
 `--no-cloud` / `SMOKE_CLOUD=0` opts out) — see *Cloud integration smoke* below.
-On failure the diagnose step captures the Application/ApplicationSet state, pod describe +
-logs and EndpointSlices, and the workflow uploads `.generated/` as an artifact
-(`if: always()`), so a non-green run is self-explanatory.
+
+The selective mapping in `pr-cluster.yml` resolves **every** changed path to a
+component and smokes the whole set: `infrastructure/<c>/…` and
+`envs/<env>/<c>.yaml` → `<c>`; `bootstrap/smoke-<c>*.sh` → `<c>` (the
+`smoke-cloud*` scripts → `cloud`; `smoke-eks.sh` → `cert-manager`, exercised by
+the always-on EKS step); `bootstrap/cloud-emulator.sh` →
+`cloud`; `bootstrap/eks-emulator.sh` → `cert-manager` (exercised by the EKS
+substrate). Changes to the smoke's own machinery — `bootstrap/smoke-ci.sh`,
+`smoke-target.sh`, `render-served-apps.sh`, `sca.sh`, `versions.sh`,
+`local-git-*`, `preload-chart-images.sh`,
+`collect-argocd-diagnostics.sh`, `argocd/**` and the `Makefile` — resolve to
+the default component `cert-manager`, so the framework is exercised by the
+smoke instead of merging untested.
+
+`make argocd-up` and `make bootstrap` pre-pull the chart images with the host
+Docker and load them into the EKS node (`bootstrap/preload-chart-images.sh`)
+before Helm runs — a **catalog-wide** preload (`--catalog <env>` resolves the
+images for every chart in the env's ApplicationSet plus the dedicated Kong app).
+A node-side pull on an ephemeral runner can stall behind registry throttling past
+a Deployment's `progressDeadlineSeconds`, surfacing as a flaky `argocd-up`
+failure that no Helm `--timeout` can fix; pre-pulling takes the registry off the
+critical path. The pulled images are cached between runs as a docker-image
+tarball under `~/.cache/sca/preload` (`PRELOAD_CACHE_DIR`), which the workflow
+restores/saves with `actions/cache` (keyed on the pins, the catalog manifests and
+the renderer), so a throttled public registry is never on the critical path. This
+is dev/CI tooling, not a platform component. If `argocd-up`
+still fails, `bootstrap/collect-argocd-diagnostics.sh` dumps the ArgoCD install
+state (pods, describe, events) into `.generated/` — the framework's `diagnose`
+runs only *after* ArgoCD is up, so an install-time failure would otherwise carry
+no evidence.
+
+On failure the diagnose step captures the Application(s)/ApplicationSet state,
+pod describe + logs, EndpointSlices, recent cluster events, the Applications'
+managed/syncResult resources and node conditions/pressure, and the workflow
+uploads `.generated/` as an artifact (`if: always()`), so a non-green run is
+self-explanatory. The pinned toolchain (`~/.local/bin`) is also cached with
+`actions/cache`, keyed on `bootstrap/versions.sh`, so a pin bump invalidates it
+and `make prereqs` stays idempotent (a full cache hit is a no-op).
 
 ### Design properties
 
-- **Selective**: boots an ephemeral `kind` cluster and smokes *only* the
-  component the PR touches (plus any already-shipped dependency it needs), not
-  the whole platform. A docs-only PR skips the cluster entirely.
+- **Full platform, single substrate**: boots the whole platform catalog on the
+  Floci emulated EKS substrate and smokes *only* the
+  component(s) the PR touches (plus any already-shipped dependency they need),
+  while every Application in the catalog must converge `Synced`/`Healthy`. A PR
+  touching several components smokes all of them
+  in one run. Changes to the smoke framework itself resolve to `cert-manager`,
+  so the machinery is never merged untested. A docs-only PR skips the cluster
+  entirely.
 - **No trim hacks**: the smoke runs the real chart/CR, not a reduced copy.
 - **No self-heal disabling**: ArgoCD auto-reconcile stays on during the smoke;
   the component is applied via its ArgoCD `Application`, letting ArgoCD converge
@@ -204,7 +254,7 @@ rendered by ArgoCD — it exists only for the duration of a smoke run.
 - **Lifecycle** — `bootstrap/cloud-emulator.sh up|down|status [provider]`
   (wrapped as `make cloud-up` / `make cloud-down` / `make cloud-status`). It
   runs the emulator as a **Docker container on the runner/host**, attaches it to
-  the target kind cluster's own Docker network, and publishes it into the
+  the EKS substrate's own Docker network, and publishes it into the
   cluster through a **selector-less `Service` + `EndpointSlice`** in the `cloud`
   namespace. In-cluster pods therefore reach it at the stable DNS name
   `http://floci.cloud.svc.cluster.local:4566` (host edge on `127.0.0.1:4566`).
@@ -218,8 +268,9 @@ rendered by ArgoCD — it exists only for the duration of a smoke run.
 - **Wiring** — `smoke-ci.sh` runs `make cloud-up` right after the cluster boots
   and `make smoke COMPONENT=cloud` right after the component smoke, on **every**
   smoke run (on by default). `--no-cloud` / `SMOKE_CLOUD=0` opts out. `cloud` is
-  a smoke target, not an ArgoCD Application: the `component=cloud` path skips
-  `smoke-app`/wait and runs only the cloud check. A PR that touches the cloud
+  a smoke target, not an ArgoCD Application: a `cloud` entry in the component
+  list skips `smoke-app`/wait (it has nothing to converge) and only runs the
+  cloud check. A PR that touches the cloud
   tooling (`bootstrap/cloud-emulator.sh`, `bootstrap/smoke-cloud*.sh`) resolves
   to the `cloud` component, so the tooling is self-validated in CI; `cloud` is
   also selectable via `workflow_dispatch`.
@@ -229,9 +280,71 @@ rendered by ArgoCD — it exists only for the duration of a smoke run.
 - **Adding a cloud** means a provider case in `cloud-emulator.sh` plus a
   `bootstrap/smoke-cloud-<provider>.sh` — nothing else changes.
 
-The emulator is the **endpoint half** of cloud integration; standing up the real
-EKS substrate (k3s + ECR) behind the same provider seam is deliberate follow-up
-work, out of the current plan.
+The emulator is the **endpoint half** of cloud integration.
+
+### EKS substrate smoke (Floci — dev/CI tooling)
+
+The single `Smoke` job boots the **full platform**
+on an **emulated EKS cluster** — the platform's only cluster substrate — and
+proves the two EKS-specific paths a plain local cluster cannot: a real Kubernetes
+API server reached through an
+**IAM-authenticated kubeconfig**, and images **pulled in-cluster from the
+emulated ECR**. Still **CI/dev tooling, not a platform component**: no
+sync-wave, no catalog row, nothing rendered by ArgoCD (the k3s node and ECR are
+Floci's EKS backing, not ArgoCD-managed).
+
+- **Substrate** — Floci backs `eks` with a real single-node **k3s** container (a
+  live API server) plus an OCI **ECR** registry. `bootstrap/eks-emulator.sh
+  up|down|status` (`make eks-up` / `make eks-down` / `make eks-status`) starts
+  Floci in EKS mode on a dedicated Docker network, mints an **IAM user + access
+  key** (Floci rejects the dummy `test`/`test` creds for cluster-admin; the key
+  is saved to `.secrets/eks-admin.env` and reused on re-run), `aws eks
+  create-cluster` (issued once — the AWS CLI's own retries are off, because
+  Floci's create is not idempotent while it provisions k3s and a retried request
+  provisions a second k3s container; the script then converges on the cluster
+  state instead of trusting the call's verdict), waits `ACTIVE`, fetches the
+  kubeconfig (stable context `floci-eks`), waits for the node `Ready`, and
+  publishes the emulator into the cluster for the endpoint smoke. `ACTIVE` alone
+  is not trusted — Floci records the cluster row before the k3s node registers,
+  and a create cut off server-side leaves that row `ACTIVE` with no node ever
+  appearing, so the script waits a short window (`NODE_APPEAR_TIMEOUT`) for the
+  first `Node` object and **recreates the cluster once** if none shows, instead
+   of burning the full `SMOKE_TIMEOUT`. The kubeconfig is written with
+   `aws eks update-kubeconfig --alias floci-eks`, and `${HOME}/.kube` is
+   pre-created as the invoking user (and chowned back if the container wrote it
+   as root) so the host `kubectl` can always read the context it just fetched;
+   a missing context or unreachable API fails immediately, with a stderr-visible
+   kubectl dump. On a node failure it dumps that kubectl dump, the emulator
+   logs and the Docker container list (the k3s node included) to `.generated/`
+   so the uploaded artifacts show what the substrate did.
+- **The check** — `bootstrap/smoke-eks.sh` (driven by `make smoke
+  COMPONENT=eks`): asserts a `Ready` node on context `floci-eks`, pushes the
+  pinned `AWS_CLI_IMAGE` to `${account}.dkr.ecr.${region}.localhost:4566` via
+  `ecr get-login-password` + `docker login`, then runs an in-cluster `Job` that
+  pulls the image through the node's ECR registry mirror and prints
+  `EKS_ECR_PULL_OK`.
+- **Full platform** — the EKS run boots the whole catalog by seeding the
+  app-of-apps wiring host-side (`make bootstrap ENV=local`, which resolves the
+  ArgoCD manifests' `repoURL`/`targetRevision` to the PR head via the `sed` seam),
+  after which ArgoCD reconciles the **real app-of-apps** (ApplicationSet
+  `platform-local` → the dedicated `kong-local`), gates every platform
+  Application (`<name>-local`, Kong included), seeds Vault (it is born sealed, so
+  it can only report `Healthy` once `seed-vault.sh` ran), then gates the whole
+  catalog on `Synced/Healthy`, runs the touched component smoke(s), the EKS check
+  and the endpoint check. It is the most complete test in the repo: the same
+  GitOps path `dev`/`qa`/`prod` use, on an EKS-shaped cluster.
+- **Wiring** — `smoke-ci.sh` has a single path: `make eks-up` boots the EKS
+  substrate, `make bootstrap ENV=local` seeds the platform `ApplicationSet` and
+  the dedicated `kong-local` from the PR head and applies the catalog, the
+  catalog is gated `Synced` → Vault seeded → `Synced/Healthy`, and the touched
+  component smoke(s), the EKS check and the endpoint check run against it. The
+  runner seeds the wiring host-side because it cannot reach the EKS node's pod
+  network (the emulator publishes only its own port), so no git serve is
+  involved. `--no-cluster` reuses an existing bootstrapped
+  cluster; the run always shares the one required `Smoke` check.
+- **Pins** — Floci, the AWS CLI and the EKS/ECR coordinates (`FLOCI_EKS_*`,
+  `FLOCI_AWS_*`) are pinned in `bootstrap/versions.sh`, covered by the pin guards
+  ([security.md](security.md)), and overridable via `.env`.
 
 ### Environment profile: `local` (not `qa`)
 
@@ -240,19 +353,19 @@ The smoke runs the **`local`** profile (1 replica, auto-sync + prune), never
 
 | Criterion | `local` (1 replica, auto+prune) | `qa` (3 replicas, PDB, anti-affinity, no-prune) |
 | --- | --- | --- |
-| Fits a CI runner (2 vCPU / 7 GB kind) | Yes | No — HA (3 replicas + anti-affinity) overflows it / OOM |
+| Fits a CI runner (2 vCPU / 7 GB node) | Yes | No — HA (3 replicas + anti-affinity) overflows it / OOM |
 | Converges within the wait timeout (up to 15 min) | Yes | Slower; risks false-fail timeouts |
-| Actually exercises HA / anti-affinity | — | **No**: a 1-node kind cannot; validating "HA" there is false confidence |
+| Actually exercises HA / anti-affinity | — | **No**: a 1-node cluster cannot; validating "HA" there is false confidence |
 | Reproducible between PRs | Prune → clean, identical state each run | `no-prune` → residual state accumulates |
 | What it proves | "applies and works (local)" | "resists HA" — that is `promote-test`'s job, on real envs |
 
-- **Security**: the smoke is an **ephemeral, isolated** `kind` cluster that is
+- **Security**: the smoke is an **ephemeral, isolated** cluster that is
   torn down after every run; it never touches `qa`/`prod`. The real security
   boundary is the runner's minimal scope (`permissions: contents: read`, no
   injected real kubeconfigs/secrets) — not the replica count.
 - **Promotion stays separate**: the jump to real HA (`dev`/`qa`/`prod`) is
   gated by `promote-test` ([workflow.md](workflow.md)), which loads the target
-  env overlay on a local `kind` cluster. The smoke validates correctness;
+  env overlay on the local Floci emulated EKS substrate. The smoke validates correctness;
   `promote-test` validates the env overlay against a real protectable surface.
 - **Merge gate**: the `Smoke` check is a **required branch-protection check on
   `main`** (branch protection must include `Smoke` in the required status
@@ -332,7 +445,7 @@ Everything CI runs statically can be reproduced locally:
 
 ```bash
 make validate-static     # markdownlint, yamllint, YAML parse, bash -n
-make validate            # static + live cluster checks (needs cluster-up)
+make validate            # static + live cluster checks (needs eks-up)
 ```
 
 yamllint runs locally only if installed; CI always runs it.

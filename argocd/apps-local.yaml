@@ -79,10 +79,10 @@ spec:
               - '$values/infrastructure/{{.name}}/values-base.yaml'
               - '$values/envs/local/{{.name}}.yaml'
         - repoURL: "{{GIT_REPO_URL}}"
-          targetRevision: {{GIT_TARGET_BRANCH}}
+          targetRevision: "{{GIT_TARGET_BRANCH}}"
           ref: values
         - repoURL: "{{GIT_REPO_URL}}"
-          targetRevision: {{GIT_TARGET_BRANCH}}
+          targetRevision: "{{GIT_TARGET_BRANCH}}"
           path: infrastructure/{{.path}}
           directory:
             recurse: true

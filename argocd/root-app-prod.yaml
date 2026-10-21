@@ -11,10 +11,10 @@ spec:
   project: default
   source:
     repoURL: "{{GIT_REPO_URL}}"
-    targetRevision: {{GIT_TARGET_BRANCH}}
+    targetRevision: "{{GIT_TARGET_BRANCH}}"
     path: argocd
     directory:
-      include: "{apps-prod,services-prod,kong-prod}.yaml"
+      include: "services-prod.yaml"
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
