@@ -93,11 +93,23 @@ storage and RF/minISR `1/1`, `qa`/`prod` run three with 10/20 GiB, RF/minISR
 projected credentials, Kafka, KafkaUser and brokers, then creates a topic and
 produces/consumes one record over SASL_SSL/SCRAM.
 
+**Phase 12** lands the Redis cache: a `RedisReplication` in `data` at wave 40 across all four
+environments — 1 replica in local/dev, 3 in qa/prod with embedded Sentinel 3 (quorum 2,
+master group `mymaster`). Images are pinned to `quay.io/opstree/redis:v7.4.11`,
+`quay.io/opstree/redis-sentinel:v7.4.11` and `quay.io/opstree/redis-exporter:v1.44.0`.
+The password is projected by ESO from `secret/redis/<env>` into `redis-password` and
+consumed through `kubernetesConfig.redisSecret`; persistence is AOF on a PVC, the
+exporter is enabled now (PodMonitor in Phase 14), and qa/prod add PDB + preferred
+anti-affinity. Like postgres-app and Kafka, the CRs ship through a **dedicated
+`Application` per environment** (`argocd/redis-<env>.yaml`, `directory.include:
+"*-<env>.yaml"`); `make smoke COMPONENT=redis` waits for the ExternalSecret and
+StatefulSets, then exercises PING/SET/GET, AOF and (when present) Sentinel quorum.
+
 | Fact | Value |
 | --- | --- |
 | Repository | `infra-kubernetes` (local, fully-local git serve; published to GitHub before promotion) |
 | Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6), redis-operator (Phase 7), Kong (Phase 8), Linkerd control plane (Phase 9), postgres-app/keycloak-db (Phase 10), Kafka (Phase 11), Redis (Phase 12) |
-| `platform-root-local` | not used — `local` runs no services, so there is no root Application; `make bootstrap ENV=local` seeds the catalog wiring (`apps-local` + `kong-local` + `linkerd-local` + `postgres-app-local` + `kafka-local`) host-side |
+| `platform-root-local` | not used — `local` runs no services, so there is no root Application; `make bootstrap ENV=local` seeds the catalog wiring (`apps-local` + `kong-local` + `linkerd-local` + `postgres-app-local` + `kafka-local` + `redis-local`) host-side |
 | `platform-local` ApplicationSet | present, seven elements (`cert-manager` wave -20, `external-secrets` + `linkerd-crds` + `cloudnative-pg` + `strimzi` + `redis-operator` wave -10, `vault` wave 0) |
 | cert-manager app | `cert-manager-local` `Synced` + `Healthy`; `sca-ca` ClusterIssuer `Ready`; leaf Certificate smoke green |
 | vault app | `vault-local` `Synced` + `Healthy`; HA raft trio, TLS via `vault-tls` leaf; `make smoke COMPONENT=vault` → initialized=true sealed=false; seed idempotent and HA-aware |
