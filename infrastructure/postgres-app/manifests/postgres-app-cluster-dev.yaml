@@ -25,7 +25,6 @@ spec:
       # Runs as the superuser in the application database after initdb.
       postInitApplicationSQL:
         - CREATE EXTENSION IF NOT EXISTS vector;
-        - CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
   postgresql:
     parameters:
       # Logical decoding is the CDC foundation for downstream consumers.

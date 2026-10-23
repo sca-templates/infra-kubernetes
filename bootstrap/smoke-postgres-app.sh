@@ -1,72 +1,100 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 sca-templates contributors
 # SPDX-License-Identifier: MIT
-# smoke-postgres-app.sh — verify the CNPG application database is ready and
-# usable: the ExternalSecret projected the Vault credentials, the
-# `Cluster postgres-app` reports Ready, its pod is Ready, and a query through
-# the projected application user works. The app database must also carry the
-# platform extensions (pgvector + pg_stat_statements) and logical WAL.
+# smoke-postgres-app.sh — verify the CNPG databases are ready and usable: both
+# ExternalSecrets projected the Vault credentials, the `Cluster` resources
+# report Ready, their pods are Ready, and a query through each projected
+# application user works. `postgres-app` must also carry the platform
+# extensions (pgvector + pg_stat_statements) and logical WAL.
 #
-# Phase 10 also ships `keycloak-db`; its checks are added in the same phase's
-# database commit. Selective smoke for the postgres-app component; driven by
+# Selective smoke for the postgres-app component; driven by
 # `make smoke COMPONENT=postgres-app` (see docs/ci-cd.md).
 set -euo pipefail
 
 NAMESPACE="${POSTGRES_NAMESPACE:-data}"
-CLUSTER="${POSTGRES_CLUSTER:-postgres-app}"
-SECRET="${POSTGRES_CREDENTIALS_SECRET:-postgres-app-credentials}"
 TIMEOUT="${SMOKE_TIMEOUT:-600s}"
 
-echo "── smoke(postgres-app): ExternalSecret ${NAMESPACE}/${SECRET%-credentials} SecretSynced"
-es_name="${SECRET%-credentials}"
-reason=""
-for attempt in {1..120}; do
-  reason="$(kubectl -n "$NAMESPACE" get externalsecret "$es_name" \
-    -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || true)"
-  [ "$reason" = "SecretSynced" ] && break
-  [ "$attempt" -eq 120 ] && {
-    echo "FAIL: ExternalSecret ${NAMESPACE}/${es_name} never reached SecretSynced (last: ${reason:-<none>})" >&2
-    kubectl -n "$NAMESPACE" get externalsecret "$es_name" -o yaml >&2 2>/dev/null || true
+PRIMARY=""
+USERNAME=""
+PASSWORD=""
+DATABASE=""
+
+wait_externalsecret() {
+  local name="$1" reason=""
+  echo "── smoke(postgres-app): ExternalSecret ${NAMESPACE}/${name} SecretSynced"
+  for attempt in {1..120}; do
+    reason="$(kubectl -n "$NAMESPACE" get externalsecret "$name" \
+      -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || true)"
+    [ "$reason" = "SecretSynced" ] && return 0
+    [ "$attempt" -eq 120 ] && {
+      echo "FAIL: ExternalSecret ${NAMESPACE}/${name} never reached SecretSynced (last: ${reason:-<none>})" >&2
+      kubectl -n "$NAMESPACE" get externalsecret "$name" -o yaml >&2 2>/dev/null || true
+      exit 1
+    }
+    sleep 5
+  done
+}
+
+db_query() {
+  kubectl -n "$NAMESPACE" exec "$PRIMARY" -- env PGPASSWORD="$PASSWORD" \
+    psql -h 127.0.0.1 -U "$USERNAME" -d "$DATABASE" -tAc "$1"
+}
+
+verify_cluster() {
+  local cluster="$1" secret="$2" database="$3" expected_identity="$4"
+  local expected_extensions="${5:-}" check_wal="${6:-0}"
+  local primary identity wal_level extensions
+
+  wait_externalsecret "$secret"
+
+  echo "── smoke(postgres-app): Cluster ${NAMESPACE}/${cluster} Ready"
+  kubectl -n "$NAMESPACE" wait --for=condition=Ready "cluster/${cluster}" --timeout="$TIMEOUT" >/dev/null
+
+  echo "── smoke(postgres-app): ${cluster} pods Ready"
+  kubectl -n "$NAMESPACE" wait --for=condition=Ready pod \
+    -l "cnpg.io/cluster=${cluster}" --timeout="$TIMEOUT" >/dev/null
+
+  primary="$(
+    kubectl -n "$NAMESPACE" get pod \
+      -l "cnpg.io/cluster=${cluster},cnpg.io/instanceRole=primary" \
+      -o jsonpath='{.items[0].metadata.name}'
+  )"
+  [ -n "$primary" ] || { echo "FAIL: no primary pod for ${cluster}" >&2; exit 1; }
+
+  PRIMARY="$primary"
+  USERNAME="$(kubectl -n "$NAMESPACE" get secret "$secret" -o jsonpath='{.data.username}' | base64 -d)"
+  PASSWORD="$(kubectl -n "$NAMESPACE" get secret "$secret" -o jsonpath='{.data.password}' | base64 -d)"
+  DATABASE="$database"
+  [ -n "$USERNAME" ] && [ -n "$PASSWORD" ] || { echo "FAIL: projected credentials are empty" >&2; exit 1; }
+
+  echo "── smoke(postgres-app): ${cluster} application connection"
+  identity="$(db_query "select current_user || '@' || current_database()")"
+  [ "$identity" = "$expected_identity" ] || {
+    echo "FAIL: unexpected identity '${identity}', expected '${expected_identity}'" >&2
     exit 1
   }
-  sleep 5
-done
-echo "  ExternalSecret ${es_name} → SecretSynced"
 
-echo "── smoke(postgres-app): Cluster ${NAMESPACE}/${CLUSTER} Ready"
-kubectl -n "$NAMESPACE" wait --for=condition=Ready "cluster/${CLUSTER}" --timeout="$TIMEOUT" >/dev/null
+  if [ -n "$expected_extensions" ]; then
+    echo "── smoke(postgres-app): ${cluster} extensions ${expected_extensions}"
+    extensions="$(db_query "select string_agg(extname, ',' order by extname) from pg_extension where extname in ('vector','pg_stat_statements')")"
+    [ "$extensions" = "$expected_extensions" ] || {
+      echo "FAIL: expected ${expected_extensions}; got '${extensions}'" >&2
+      exit 1
+    }
+  fi
 
-echo "── smoke(postgres-app): ${CLUSTER} pods Ready"
-kubectl -n "$NAMESPACE" wait --for=condition=Ready pod \
-  -l "cnpg.io/cluster=${CLUSTER}" --timeout="$TIMEOUT" >/dev/null
+  if [ "$check_wal" = "1" ]; then
+    wal_level="$(db_query 'show wal_level')"
+    [ "$wal_level" = "logical" ] || {
+      echo "FAIL: wal_level='${wal_level}', expected logical" >&2
+      exit 1
+    }
+  fi
 
-primary="$(
-  kubectl -n "$NAMESPACE" get pod \
-    -l "cnpg.io/cluster=${CLUSTER},cnpg.io/instanceRole=primary" \
-    -o jsonpath='{.items[0].metadata.name}'
-)"
-[ -n "$primary" ] || { echo "FAIL: no primary pod for ${CLUSTER}" >&2; exit 1; }
-
-username="$(kubectl -n "$NAMESPACE" get secret "$SECRET" -o jsonpath='{.data.username}' | base64 -d)"
-password="$(kubectl -n "$NAMESPACE" get secret "$SECRET" -o jsonpath='{.data.password}' | base64 -d)"
-[ -n "$username" ] && [ -n "$password" ] || { echo "FAIL: projected credentials are empty" >&2; exit 1; }
-
-psql() {
-  kubectl -n "$NAMESPACE" exec "$primary" -- env PGPASSWORD="$password" \
-    psql -h 127.0.0.1 -U "$username" -d app -tAc "$1"
+  echo "  ${cluster}: ${identity}${expected_extensions:+, extensions=${extensions}}${check_wal:+${wal_level:+, wal_level=${wal_level}}}"
 }
 
-echo "── smoke(postgres-app): application connection + logical WAL"
-identity="$(psql "select current_user || '@' || current_database()")"
-[ "$identity" = "app@app" ] || { echo "FAIL: unexpected identity '${identity}'" >&2; exit 1; }
-wal_level="$(psql 'show wal_level')"
-[ "$wal_level" = "logical" ] || { echo "FAIL: wal_level='${wal_level}', expected logical" >&2; exit 1; }
+verify_cluster postgres-app postgres-app-credentials app "app@app" "pg_stat_statements,vector" 1
+verify_cluster keycloak-db keycloak-db-credentials keycloak "keycloak@keycloak"
 
-echo "── smoke(postgres-app): extensions vector + pg_stat_statements"
-extensions="$(psql "select string_agg(extname, ',' order by extname) from pg_extension where extname in ('vector','pg_stat_statements')")"
-[ "$extensions" = "pg_stat_statements,vector" ] || {
-  echo "FAIL: expected pg_stat_statements,vector; got '${extensions}'" >&2
-  exit 1
-}
-
-echo "[OK] smoke(postgres-app): ${CLUSTER} Ready, ${identity}, wal_level=${wal_level}, extensions=${extensions}"
+echo "[OK] smoke(postgres-app): postgres-app + keycloak-db Ready"

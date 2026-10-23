@@ -6,7 +6,7 @@
 # after CloudNativePG (-10) and after the Vault/ESO chain that projects the
 # bootstrap credentials.
 #
-# The manifests live in one file per environment under
+# The manifests live in per-environment files under
 # `infrastructure/postgres-app/manifests/`; `directory.include` selects only the
 # files for this environment (the directory is shared by all four).
 apiVersion: argoproj.io/v1alpha1

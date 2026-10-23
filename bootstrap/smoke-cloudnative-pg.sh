@@ -5,8 +5,8 @@
 # its CRDs are present and Established (the project gate: "operator pod
 # Running, CNPG CRD groups present"). Readiness = Deployment available (the
 # webhooks depend on the operator pod) + every `postgresql.cnpg.io` CRD
-# Established. No `Cluster` CR exists yet: the datastores (postgres-app,
-# keycloak-db) arrive as raw CRs at Phase 10. Selective smoke for the
+# Established. The datastores (postgres-app, keycloak-db) are raw Cluster CRs
+# verified separately by smoke-postgres-app.sh. Selective smoke for the
 # cloudnative-pg component; driven by `make smoke COMPONENT=cloudnative-pg`
 # (see docs/ci-cd.md).
 set -euo pipefail
