@@ -215,8 +215,7 @@ echo "── Seeding local platform values"
 vault_exec kv put secret/keycloak/admin username=admin password="$(openssl rand -hex 24)" >/dev/null
 vault_exec kv put "secret/postgres-app/${ENV}" username=app password="$(openssl rand -hex 24)" >/dev/null
 vault_exec kv put "secret/keycloak-db/${ENV}" username=keycloak password="$(openssl rand -hex 24)" >/dev/null
-vault_exec kv put secret/kafka/scram-admin username=admin password="$(openssl rand -hex 24)" >/dev/null
-vault_exec kv put secret/kafka/connect username=connect password="$(openssl rand -hex 24)" >/dev/null
+vault_exec kv put "secret/kafka/${ENV}" username=scram-admin password="$(openssl rand -hex 24)" >/dev/null
 vault_exec kv put secret/redis/password password="$(openssl rand -hex 24)" >/dev/null
 vault_exec kv put secret/grafana/admin username=admin password="$(openssl rand -hex 24)" >/dev/null
 vault_exec kv put secret/unleash/admin username=admin password="$(openssl rand -hex 24)" >/dev/null
