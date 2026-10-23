@@ -1,0 +1,57 @@
+# linkerd-identity-anchor — the mesh's mTLS trust anchor (root CA) as a cert-manager
+# signing source.
+#
+# Linkerd's identity model is a two-tier PKI: a long-lived trust anchor (root CA)
+# signs a shorter-lived **issuer** certificate; the `linkerd-identity` service
+# uses the issuer to mint per-workload leaf certificates. Every proxy trusts only
+# the anchor, so rotating the issuer never invalidates the mesh.
+#
+# The linkerd-control-plane Helm chart does NOT generate this PKI (only the
+# `linkerd install` CLI does). In the in-cluster-resources mode the chart runs
+# with (`identity.externalCA=true`, `identity.issuer.scheme=kubernetes.io/tls`)
+# it expects two pre-existing resources:
+#
+#   - ConfigMap `linkerd-identity-trust-roots` (key `ca-bundle.crt`) — the anchor,
+#     from `identity-trust-roots.yaml` in this directory.
+#   - Secret    `linkerd-identity-issuer`               — the issuer, issued by the
+#     Certificate in `identity-issuer.yaml`.
+#
+# cert-manager needs the anchor's key to sign the issuer, so the anchor lives here
+# as a TLS Secret consumed by the CA Issuer in `identity-ca-issuer.yaml`. It is
+# `stringData` so the PEM stays a readable block scalar (no 800-char base64 line).
+# The anchor is a self-signed root that only the mesh itself trusts — there is no
+# external trust relationship — so the key is committed (compromising it would let
+# an attacker forge mesh identities, but it is worthless outside the cluster).
+# Rotating it is a deliberate, reviewed change.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: linkerd-identity-anchor
+  namespace: linkerd
+  annotations:
+    # Create the signing source before the CA Issuer that references it (both in
+    # the linkerd Application, wave 30).
+    argocd.argoproj.io/sync-wave: "-5"
+type: kubernetes.io/tls
+stringData:
+  # ECDSA P-256 root CA, CN=root.linkerd.cluster.local, valid 2026-10-21 →
+  # 2036-10-18 (10 years). Public certificate + its private key.
+  tls.crt: |
+    -----BEGIN CERTIFICATE-----
+    MIIBrzCCAVWgAwIBAgIUGyYAWpaWoSe4UHrPFdETAOyC47cwCgYIKoZIzj0EAwIw
+    JTEjMCEGA1UEAwwacm9vdC5saW5rZXJkLmNsdXN0ZXIubG9jYWwwHhcNMjYxMDIx
+    MDIwODQ2WhcNMzYxMDE4MDIwODQ2WjAlMSMwIQYDVQQDDBpyb290LmxpbmtlcmQu
+    Y2x1c3Rlci5sb2NhbDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABBwRbHQDYc5t
+    EGNXlU6i4DhTldkj35YPrxre9736+pxoVn4bCz9zHKI+L6sUFqYYickHkjDA0I3q
+    Jdl1Foq5QuGjYzBhMB0GA1UdDgQWBBTIhcibca3/mQuwBtpgP2mpfmLc7DAfBgNV
+    HSMEGDAWgBTIhcibca3/mQuwBtpgP2mpfmLc7DAPBgNVHRMBAf8EBTADAQH/MA4G
+    A1UdDwEB/wQEAwIBBjAKBggqhkjOPQQDAgNIADBFAiBaE6e3kZtYL6drTjEynHwq
+    iLFzWGidbGCzFGfVL3A0gAIhALx/Z0/3f4OTW2NubcZza8KJhM5ffNY9mtcp8sZ4
+    RmvI
+    -----END CERTIFICATE-----
+  tls.key: |
+    -----BEGIN EC PRIVATE KEY-----
+    MHcCAQEEIM6NghfFo/ELCn+yQI+dKpOgqUROyPIYDql7aeED1EtGoAoGCCqGSM49
+    AwEHoUQDQgAEHBFsdANhzm0QY1eVTqLgOFOV2SPflg+vGt73vfr6nGhWfhsLP3Mc
+    oj4vqxQWphiJyQeSMMDQjeol2XUWirlC4Q==
+    -----END EC PRIVATE KEY-----

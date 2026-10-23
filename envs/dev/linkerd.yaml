@@ -1,0 +1,9 @@
+# linkerd — dev profile (reduced HA: 1 replica per component).
+# Shared integration stays light; the identity PKI and webhooks still run, so
+# dev is a valid mesh for services that opt into injection.
+
+controllerReplicas: 1
+
+enablePodAntiAffinity: false
+enablePodDisruptionBudget: false
+highAvailability: false

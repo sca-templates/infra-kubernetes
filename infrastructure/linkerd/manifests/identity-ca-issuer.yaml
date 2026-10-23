@@ -1,0 +1,18 @@
+# linkerd-identity-ca — CA Issuer backed by the committed trust anchor.
+#
+# cert-manager uses this Issuer to sign the Linkerd identity issuer certificate
+# (`identity-issuer.yaml`) with the same root CA that the mesh trusts. The anchor
+# cert + key live in the `linkerd-identity-anchor` Secret (see
+# `identity-anchor.yaml`); this Issuer is `type: CA` and points at it, so no
+# self-signed leaf leak — every issuer certificate chains to the anchor.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: linkerd-identity-ca
+  namespace: linkerd
+  annotations:
+    # After the anchor Secret (wave 10) and before the issuer Certificate (wave 20).
+    argocd.argoproj.io/sync-wave: "-4"
+spec:
+  ca:
+    secretName: linkerd-identity-anchor

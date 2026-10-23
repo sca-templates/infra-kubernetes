@@ -1,0 +1,22 @@
+# linkerd — local profile (developer cluster: 1 replica, single-node).
+# Matches the base defaults; declared for tier symmetry.
+#
+# linkerd-control-plane es cluster-scoped: en `local` (perfil platform-only del
+# emulador EKS, un único nodo k3s) el control plane va con 1 réplica y sin
+# PDBs/anti-affinity, para que los webhooks y la identidad funcionen sin más
+# nodos que programar.
+
+controllerReplicas: 1
+
+enablePodAntiAffinity: false
+enablePodDisruptionBudget: false
+highAvailability: false
+
+# The emulated EKS node's clock can advance past the identity leaf lifetime
+# (chart default 24h), leaving new proxies with `Expired` certificates on a
+# cluster left running for days. A 7-day leaf (local only; dev/qa/prod keep the
+# 24h default) keeps a developer cluster usable between restarts. The mesh
+# smoke's preflight fails loudly if leaves are still near expiry.
+identity:
+  issuer:
+    issuanceLifetime: 168h0m0s

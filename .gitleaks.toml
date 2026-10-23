@@ -1,0 +1,27 @@
+# gitleaks configuration.
+#
+# Extends the default ruleset (gitleaks `detect`/`protect` auto-discover this
+# file in the scan root) and allowlists exactly one committed secret: the
+# Linkerd mesh **trust anchor** at
+# `infrastructure/linkerd/manifests/identity-anchor.yaml`.
+#
+# That is a deliberate, reviewed exception. Linkerd's identity PKI cannot be
+# provided to the Helm chart without either committing certificates (ArgoCD
+# cannot `--set-file`) or projecting them from an extra in-cluster component the
+# catalog does not have. The anchor is a self-signed root that only the mesh
+# itself trusts — no external trust relationship — so its key grants no access
+# outside this cluster (worst case, an attacker could forge mesh identities,
+# already inside the trust boundary). The **issuer's** private key is owned by
+# cert-manager and never enters git. See the deviations log in
+# docs/architecture.md#deviations-log.
+#
+# Everything else stays under the default ruleset: the allowlist is path-scoped
+# to this one file, so any other key/token anywhere in the repo still fails.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "private-key"
+[[rules.allowlists]]
+description = "Linkerd mesh trust anchor (self-signed mesh root; no external trust)"
+paths = ['''infrastructure/linkerd/manifests/identity-anchor\.yaml$''', '''identity-anchor\.yaml$''']

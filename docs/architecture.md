@@ -109,7 +109,7 @@ their own repositories — see
 | strimzi | `strimzi` | strimzi/strimzi-kafka-operator | -10 | 6 | deployed (Phase 6) |
 | redis-operator | `data` | ot-container-kit/redis-operator | -10 | 7 | deployed (Phase 7) |
 | kong | `kong` | kong/kong (DB-less) | 20 | 8 | deployed (Phase 8) |
-| linkerd control plane | `linkerd` | linkerd/linkerd2 (script) | 30 | 9 | planned (Phase 9) |
+| linkerd control plane | `linkerd` | linkerd/linkerd-control-plane | 30 | 9 | deployed (Phase 9) |
 | postgres-app (+ keycloak-db) | `data` | CNPG `Cluster` CR (raw) | 40 | 10 | planned (Phase 10) |
 | kafka (CR) | `data` | `Kafka` + `KafkaNodePool` CRs | 40 | 11 | planned (Phase 11) |
 | redis (CR) | `data` | `Redis` CR | 40 | 12 | planned (Phase 12) |
@@ -144,8 +144,11 @@ Notes:
   (`ingressClassName: kong`) plus the `Kong*` CRs the bundled Ingress
   Controller programs into Kong; the proxy serves TLS from a cert-manager leaf
   (`sca-ca`). See [Deviations log](#deviations-log).
-- The Linkerd control plane is **not** an ArgoCD app: it is deployed by a
-  script (Phase 9) after cert-manager and linkerd-crds are up.
+- The Linkerd control plane **is** an ArgoCD app — a dedicated `Application`
+  (`argocd/linkerd-<env>.yaml`, wave 30), not the `linkerd install` script. helm
+  chart `linkerd/linkerd-control-plane` after cert-manager and linkerd-crds are
+  up; its identity PKI is provided in-cluster (cert-manager owns the issuer).
+  See [Deviations log](#deviations-log).
 - `local` is the only environment running the full catalog including the
   observability stack, MinIO and Velero. See [Environment model](#environment-model).
 - **Not a component:** the local cloud emulator (Floci, `bootstrap/cloud-emulator.sh`)
@@ -320,7 +323,8 @@ as each component lands; the log always explains *why*, never just *what*.
 | local git serve (dev tooling) | `make local-git-up` stands up an in-cluster git daemon serving this repo's HEAD **verbatim** (`bootstrap/render-served-apps.sh` mirrors `HEAD` onto the serve branch — no placeholder substitution); local ArgoCD reconciles the served tree instead of GitHub. The CI cluster smoke does **not** use it — `make bootstrap` seeds the wiring host-side | The serving/reconciliation path is exercised on a developer machine; nothing on the serve needs substitution now that `make bootstrap` owns the wiring, so the serve mirrors the repo as-is. The CI runner cannot reach the EKS node's pod network (the emulator publishes only its own port), so the smoke seeds host-side rather than serving resolved content |
 | Kong | DB-less (`database: off`), `ingressController.installCRDs: false`, managed as a dedicated `Application`, no SSA | Kong ships flat-schema CRDs; structured-merge diff breaks under `ServerSideApply=true`, and `--include-crds` re-emits CRDs twice |
 | postgres-app | Local raw `Application`, not in the `ApplicationSet` generator list | Only `local` runs the datastore; it must be applied without the env generator |
-| Linkerd | Control plane deployed by script, not ArgoCD | Helm chart signature requirements; control plane needs cert-manager + linkerd-crds first |
+| Linkerd | Control plane deployed as a **dedicated ArgoCD `Application`** (`argocd/linkerd-<env>.yaml`), **not** by the `linkerd install` script, and with **no `linkerd-viz`** | The script model cannot be validated by the cluster smoke, which discovers the catalog from `infrastructure/*/` and requires every entry to be an ArgoCD `Application` `<name>-<env>` that converges (`bootstrap/smoke-ci.sh`); the dedicated-Application pattern (same shape as Kong) makes the control plane a normal, reviewable, `git`-driven catalog entry. `linkerd-viz` stays out (headless mesh): the golden signals are scraped by the Phase 14 observability stack |
+| Linkerd | The identity PKI (trust anchor + issuer) is provided **in-cluster** — `identity.externalCA=true` + `identity.issuer.scheme=kubernetes.io/tls` — with cert-manager issuing the issuer `Certificate` and the mesh's public root CA committed as a `Secret` (`linkerd-identity-anchor`, used by a `type: CA` `Issuer`) plus the public cert in the `linkerd-identity-trust-roots` `ConfigMap` | The linkerd-control-plane Helm chart does **not** generate the identity PKI (only the `linkerd install` CLI does): it takes it by `--set-file`, which ArgoCD cannot do without committing certs, or references pre-existing resources. cert-manager can own the issuer `Secret` declaratively but cannot write a `ConfigMap`, so the trust anchor cannot be projected without an extra component (trust-manager/ESO) that is not in the catalog. The anchor is a self-signed mesh root with no external trust relationship, so committing its key (used only by cert-manager to sign the issuer) is the accepted trade — the issuer's private key never enters `git`. The chart-generated webhook certs (`genSelfSignedCert`, random per render) are handled with `ignoreDifferences` on their Secrets + webhook `caBundle`s, like Kong's admission webhook. A path-scoped allowlist in `.gitleaks.toml` exempts exactly that one file from the `private-key` rule so the Security gate stays green (everything else still fails on any leak) |
 | ESO | Short `refreshInterval` (~5 min) in local | Avoids the ExternalSecret wedge that wedged the previous attempt; restarts only ever manual after bootstrap |
 | Vault | `local` runs the **full HA raft trio** (`server.ha.replicas: 3`) rather than the "1 replica local" profile the pre-Phase-2 docs implied; each env overlay now declares `server.ha.replicas` explicitly (local/qa/prod = 3, dev = 1), and `replicaCount` (a no-op for raft HA) is dropped | The user keeps HA in local on purpose: the raft quorum + standby→leader redirect (`vault-active`) must be exercised on the same path the smoke and qa/prod exercise, so `make smoke COMPONENT=vault` validates real HA, not a single-node special case; dev stays single-node to keep the shared integration light |
 | Vault | The jetstack `hashicorp/vault` chart defaults to `global.tlsDisable: true`, which injects plain-http probe addresses that break against the TLS listener; we set `global.tlsDisable: false` and add `retry_join` with `leader_ca_cert_file` in the raft storage block | The chart ships no `retry_join` and no HTTPS probe wiring; without these the readiness probe (`vault status`) spoke HTTP to an HTTPS listener and the raft peers failed to join (`certificate signed by unknown authority` until the CA file was passed) |

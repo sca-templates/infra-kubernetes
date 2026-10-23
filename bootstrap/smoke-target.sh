@@ -12,13 +12,14 @@ case "$component" in
   vault) exec "$(dirname "$0")/smoke-vault.sh" ;;
   external-secrets) exec "$(dirname "$0")/smoke-external-secrets.sh" ;;
   linkerd-crds) exec "$(dirname "$0")/smoke-linkerd-crds.sh" ;;
+  linkerd) exec "$(dirname "$0")/smoke-linkerd.sh" ;;
   cloudnative-pg) exec "$(dirname "$0")/smoke-cloudnative-pg.sh" ;;
   strimzi) exec "$(dirname "$0")/smoke-strimzi.sh" ;;
   redis-operator) exec "$(dirname "$0")/smoke-redis-operator.sh" ;;
   kong) exec "$(dirname "$0")/smoke-kong.sh" ;;
   cloud) exec "$(dirname "$0")/smoke-cloud.sh" ;;
   eks) exec "$(dirname "$0")/smoke-eks.sh" ;;
-  "") echo "usage: $0 <component> (cert-manager, vault, external-secrets, linkerd-crds, cloudnative-pg, strimzi, redis-operator, kong, cloud, eks)" >&2; exit 2 ;;
+  "") echo "usage: $0 <component> (cert-manager, vault, external-secrets, linkerd-crds, linkerd, cloudnative-pg, strimzi, redis-operator, kong, cloud, eks)" >&2; exit 2 ;;
   *,*) echo "ERROR: smoke-target.sh smokes one component; use smoke-ci.sh for a comma-separated list" >&2; exit 2 ;;
   *) echo "ERROR: no smoke command for component '$component'" >&2; exit 2 ;;
 esac

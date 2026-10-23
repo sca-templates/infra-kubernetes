@@ -1,0 +1,85 @@
+# linkerd — base values (shared across environments; per-env tier overrides live
+# in envs/<env>/linkerd.yaml).
+# Official chart: linkerd/linkerd-control-plane, https://helm.linkerd.io/stable.
+# Chart pin (targetRevision) is in argocd/linkerd-<env>.yaml (dedicated app).
+#
+# linkerd-control-plane (wave 30) es el service mesh que se instala sobre los
+# CRDs de linkerd-crds (Fase 4, wave -10) en el namespace `linkerd`. Aporta
+# identidad mTLS para cada workload mallado, más la telemetría de golden
+# signals que una fase posterior de observabilidad scrapea. linkerd-viz NO se
+# instala (ver exclusiones intencionales en docs/status.md): el mesh es headless,
+# dirigido por recursos declarados en git.
+#
+# Desviación del plan (docs/architecture.md#deviations-log): el control plane ES
+# una Application de ArgoCD (`linkerd-<env>`), no un script `linkerd install`.
+# El modelo de script no puede ser validado por el cluster smoke, que lee el
+# catálogo desde `infrastructure/*/` y exige que cada entrada sea una Application
+# `<name>-<env>` que converge (bootstrap/smoke-ci.sh). Sigue el mismo patrón que
+# la Application dedicada de Kong: el chart se instala como un elemento normal
+# del catálogo con la plantilla multi-source estándar.
+
+# ── Identidad (mTLS) ─────────────────────────────────────────────────────────
+# El chart de Linkerd NO autogenera la PKI de identidad (eso solo lo hace el CLI
+# `linkerd install`): hay que aportarla. Se usa el modo "recursos en clúster":
+#   identity.externalCA=true  → el ConfigMap `linkerd-identity-trust-roots`
+#                               (trust anchor, clave `ca-bundle.crt`) debe
+#                               existir antes de instalar.
+#   identity.issuer.scheme=kubernetes.io/tls → el Secret `linkerd-identity-issuer`
+#                               (claves estándar tls.crt/tls.key) debe existir
+#                               antes de instalar.
+#
+# Distribución: cert-manager emite el Secret del issuer desde un `Issuer` tipo CA
+# anclado en el root CA; el trust anchor se aporta en git — su certificado PÚBLICO
+# en `manifests/identity-trust-roots.yaml` (ConfigMap) y su clave en el Secret
+# `linkerd-identity-anchor` (self-signed, sin relación de confianza externa: la
+# clave solo la usa cert-manager para firmar el issuer). Así toda la PKI es
+# declarativa, la clave privada del ISSUER la posee cert-manager (nunca entra en
+# git) y no hace falta un componente nuevo (trust-manager/ESO).
+# Ver docs/architecture.md#deviations-log.
+identity:
+  externalCA: true
+
+  issuer:
+    scheme: kubernetes.io/tls
+
+# El dominio de confianza por defecto es `clusterDomain` cuando está vacío.
+clusterDomain: cluster.local
+
+# ── Proxy / data plane ───────────────────────────────────────────────────────
+# El proxy inyectado es el data plane; el rerouting de iptables lo hace el
+# contenedor efímero `proxy-init` (sin DaemonSet linkerd-cni — el plugin CNI no
+# forma parte de este catálogo). `privileged` se mantiene en false: proxy-init
+# solo necesita las capacidades NET_ADMIN + NET_RAW que pide el chart, que un
+# nodo k3s / EKS concede sin modo privilegiado.
+cniEnabled: false
+
+proxy:
+  # Requests/limits del sidecar inyectado. El chart usa el esquema
+  # `resources.<cpu|memory>.<request|limit>` (no el `requests:` de k8s).
+  resources:
+    cpu:
+      request: 10m
+      limit: ""
+    memory:
+      request: 20Mi
+      limit: ""
+
+# El cronjob de heartbeat llama a linkerd.io; la plataforma es offline-first y
+# nunca llama a un endpoint de casa, así que se desactiva (además requeriría
+# egress).
+disableHeartBeat: true
+
+# Sin Prometheus interno: las métricas del mesh las scrapea el stack de
+# observabilidad (Fase 14), que también posee la URL de phone-home.
+prometheusUrl: ""
+
+# Los objetos PodMonitor necesitan los CRDs monitoring.coreos.com, que llegan
+# con kube-prometheus-stack (Fase 14). Desactivados hasta entonces, para que la
+# app de wave 30 no referencie un CRD que aún no existe.
+podMonitor:
+  enabled: false
+
+# ── Controller ───────────────────────────────────────────────────────────────
+# Una réplica por componente del control plane en el tier base (local/dev); los
+# overlays HA (qa/prod) suben el número, añaden PDBs y anti-affinity.
+controllerReplicas: 1
