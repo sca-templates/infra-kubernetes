@@ -62,12 +62,12 @@ and image pins are set inside each phase and live under
 | Vault | `vault` | hashicorp/vault | Secrets SSOT (KV-v2 + k8s auth) | [infra-vault](https://github.com/sca-templates/infra-vault) | **deployed** (Phase 2) |
 | External Secrets | `external-secrets` | external-secrets/external-secrets | Projects Vault KV → native Secrets | — | **deployed** (Phase 3) |
 | linkerd-crds | `linkerd` | linkerd/linkerd-crds | Mesh CRDs | [infra-linkerd](https://github.com/sca-templates/infra-linkerd) | **deployed** (Phase 4) |
-| CloudNativePG | `cloudnative-pg` | cloudnative-pg/cloudnative-pg | PostgreSQL operator | — | planned (Phase 5) |
+| CloudNativePG | `cloudnative-pg` | cloudnative-pg/cloudnative-pg | PostgreSQL operator | — | **deployed** (Phase 5) |
 | Strimzi | `strimzi` | strimzi/strimzi-kafka-operator | Kafka operator (KRaft) | [infra-kafka](https://github.com/sca-templates/infra-kafka) | **deployed** (Phase 6) |
 | redis-operator | `data` | ot-container-kit/redis-operator | Redis operator | [infra-redis](https://github.com/sca-templates/infra-redis) | **deployed** (Phase 7) |
 | Kong | `kong` | kong/kong (DB-less) | Edge gateway, dedicated Application, no SSA | [infra-kong](https://github.com/sca-templates/infra-kong) | **deployed** (Phase 8) |
 | Linkerd control plane | `linkerd` | linkerd/linkerd-control-plane | mTLS identity, golden signals | [infra-linkerd](https://github.com/sca-templates/infra-linkerd) | **deployed** (Phase 9) |
-| postgres-app (+ keycloak-db) | `data` | CNPG `Cluster` CRs (raw) | App + Keycloak databases; local only | [infra-postgres](https://github.com/sca-templates/infra-postgres) | planned (Phase 10) |
+| postgres-app (+ keycloak-db) | `data` | CNPG `Cluster` CRs (raw) | App + Keycloak databases; all 4 envs | [infra-postgres](https://github.com/sca-templates/infra-postgres) | **deployed** (Phase 10) |
 | Kafka | `data` | `Kafka`/`KafkaNodePool` CRs | Event backbone, SCRAM | [infra-kafka](https://github.com/sca-templates/infra-kafka) | planned (Phase 11) |
 | Redis | `data` | `Redis` CR | Cache | [infra-redis](https://github.com/sca-templates/infra-redis) | planned (Phase 12) |
 | Keycloak | `keycloak` | bitnami/keycloak | OIDC IdP, realm `sca` | [infra-keycloak](https://github.com/sca-templates/infra-keycloak) | planned (Phase 13) |
