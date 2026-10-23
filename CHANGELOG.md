@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/sca-templates/infra-kubernetes/compare/v1.0.0...v1.1.0) (2026-10-23)
+
+
+### Features
+
+* **linkerd:** deploy the control plane as a dedicated ArgoCD app (Phase 9) ([#94](https://github.com/sca-templates/infra-kubernetes/issues/94)) ([22d74a4](https://github.com/sca-templates/infra-kubernetes/commit/22d74a40bb915b82627ac32fd6bf0a78d13f5183))
+
 ## [1.0.0](https://github.com/sca-templates/infra-kubernetes/compare/v0.11.0...v1.0.0) (2026-10-21)
 
 
