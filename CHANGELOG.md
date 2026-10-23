@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.0.0](https://github.com/sca-templates/infra-kubernetes/compare/v2.0.0...v3.0.0) (2026-10-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* **kafka:** Vault KV path for Kafka credentials is now secret/kafka/<env>; the former secret/kafka/scram-admin and secret/kafka/connect paths are no longer seeded.
+
+### Features
+
+* **kafka:** deploy Kafka event backbone with SCRAM (Phase 11) ([#98](https://github.com/sca-templates/infra-kubernetes/issues/98)) ([0a95f0a](https://github.com/sca-templates/infra-kubernetes/commit/0a95f0ae22929524060759c2668fabd39ba0d68b))
+
 ## [2.0.0](https://github.com/sca-templates/infra-kubernetes/compare/v1.1.0...v2.0.0) (2026-10-23)
 
 
