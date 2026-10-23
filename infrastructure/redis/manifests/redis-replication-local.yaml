@@ -1,0 +1,34 @@
+# redis local — RedisReplication (Phase 12).
+#
+# Single-instance Redis (no Sentinel). The password comes from the sibling
+# ExternalSecret via kubernetesConfig.redisSecret; persistence is enabled by
+# the volumeClaimTemplate and the operator enables AOF via the opstree entrypoint.
+apiVersion: redis.redis.opstreelabs.in/v1beta2
+kind: RedisReplication
+metadata:
+  name: redis
+  namespace: data
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  clusterSize: 1
+  kubernetesConfig:
+    image: quay.io/opstree/redis:v7.4.11
+    imagePullPolicy: IfNotPresent
+    redisSecret:
+      name: redis-password
+      key: password
+  podSecurityContext:
+    fsGroup: 1000
+  storage:
+    volumeClaimTemplate:
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+  redisExporter:
+    enabled: true
+    image: quay.io/opstree/redis-exporter:v1.44.0
+    imagePullPolicy: IfNotPresent

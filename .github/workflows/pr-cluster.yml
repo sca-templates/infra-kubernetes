@@ -89,9 +89,11 @@ jobs:
               'argocd/apps-*.yaml',
               'argocd/kong-*.yaml',
               'argocd/kafka-*.yaml',
+              'argocd/redis-*.yaml',
               'envs/local/*.yaml',
               'infrastructure/*/values-base.yaml',
               'infrastructure/kafka/manifests/*.yaml',
+              'infrastructure/redis/manifests/*.yaml',
               'bootstrap/preload-chart-images.sh'
             ) }}
           restore-keys: |

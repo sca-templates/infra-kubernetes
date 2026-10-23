@@ -89,7 +89,7 @@ live.
 | --- | --- |
 | Security and identity | cert-manager (deployed), Vault (deployed), External Secrets Operator (deployed), Keycloak |
 | Edge and mesh | linkerd-crds (deployed), Kong (deployed), Linkerd control plane (deployed) |
-| Data | CloudNativePG (deployed), Strimzi (deployed), redis-operator (deployed), postgres-app/keycloak-db (deployed), Kafka (deployed), Redis |
+| Data | CloudNativePG (deployed), Strimzi (deployed), redis-operator (deployed), postgres-app/keycloak-db (deployed), Kafka (deployed), Redis (deployed) |
 | Observability | kube-prometheus-stack, Loki, Tempo, Alloy |
 | Delivery and resilience | MinIO (local-only), Velero |
 

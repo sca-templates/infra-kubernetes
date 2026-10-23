@@ -80,7 +80,7 @@ worked in parallel.
 | [linkerd](roadmap/linkerd.md) | Edge & Mesh | 30 | M1 control plane | [#14](https://github.com/sca-templates/infra-kubernetes/issues/14) | deployed |
 | [postgres-app](roadmap/postgres-app.md) | Data | 40 | M1 cluster · M1 keycloak-db | [#15](https://github.com/sca-templates/infra-kubernetes/issues/15) · [#27](https://github.com/sca-templates/infra-kubernetes/issues/27) · [#28](https://github.com/sca-templates/infra-kubernetes/issues/28) | deployed |
 | [kafka](roadmap/kafka.md) | Data | 40 | M1 cluster + SCRAM | [#16](https://github.com/sca-templates/infra-kubernetes/issues/16) | deployed |
-| [redis](roadmap/redis.md) | Data | 40 | — | [#17](https://github.com/sca-templates/infra-kubernetes/issues/17) | pending |
+| [redis](roadmap/redis.md) | Data | 40 | — | [#17](https://github.com/sca-templates/infra-kubernetes/issues/17) | deployed (Phase 12) |
 | [keycloak](roadmap/keycloak.md) | Security & Identity | 50 | M1 deploy | [#18](https://github.com/sca-templates/infra-kubernetes/issues/18) | pending |
 | [kube-prometheus-stack](roadmap/kube-prometheus-stack.md) | Observability | 60 | M1 stack · M2 radar | [#19](https://github.com/sca-templates/infra-kubernetes/issues/19) · [#29](https://github.com/sca-templates/infra-kubernetes/issues/29) | pending |
 | [loki](roadmap/loki.md) | Observability | 60 | M1 loki · M2 alloy | [#20](https://github.com/sca-templates/infra-kubernetes/issues/20) | pending |

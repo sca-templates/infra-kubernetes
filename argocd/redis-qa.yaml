@@ -1,0 +1,32 @@
+# redis-qa — RedisReplication with embedded Sentinel, DEDICATED Application.
+#
+# qa auto-syncs but does not prune, per ADR-003.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: redis-qa
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "40"
+spec:
+  project: default
+  source:
+    repoURL: "{{GIT_REPO_URL}}"
+    targetRevision: "{{GIT_TARGET_BRANCH}}"
+    path: infrastructure/redis/manifests
+    directory:
+      recurse: true
+      include: "*-qa.yaml"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: data
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
+      - ServerSideApply=true

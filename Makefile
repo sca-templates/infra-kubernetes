@@ -51,6 +51,7 @@ bootstrap: argocd-up ## Install ArgoCD and apply the Applications for ENV=$(ENV)
 	@[ -f "argocd/apps-$(ENV).yaml" ] || { echo "argocd/apps-$(ENV).yaml is missing"; exit 1; }
 	@[ -f "argocd/postgres-app-$(ENV).yaml" ] || { echo "argocd/postgres-app-$(ENV).yaml is missing"; exit 1; }
 	@[ -f "argocd/kafka-$(ENV).yaml" ] || { echo "argocd/kafka-$(ENV).yaml is missing"; exit 1; }
+	@[ -f "argocd/redis-$(ENV).yaml" ] || { echo "argocd/redis-$(ENV).yaml is missing"; exit 1; }
 	# The Makefile seeds the catalog wiring: argocd/apps-$(ENV).yaml (the platform
 	# ApplicationSet) and the dedicated Applications argocd/kong-$(ENV).yaml,
 	# argocd/linkerd-$(ENV).yaml, argocd/postgres-app-$(ENV).yaml and
@@ -67,6 +68,7 @@ bootstrap: argocd-up ## Install ArgoCD and apply the Applications for ENV=$(ENV)
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/linkerd-$(ENV).yaml" | kubectl apply -f -
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/postgres-app-$(ENV).yaml" | kubectl apply -f -
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/kafka-$(ENV).yaml" | kubectl apply -f -
+	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/redis-$(ENV).yaml" | kubectl apply -f -
 	@if [ -f "argocd/root-app-$(ENV).yaml" ]; then \
 		echo '── Applying root Application (services registry owner)'; \
 		sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/root-app-$(ENV).yaml" | kubectl apply -f -; \
@@ -136,7 +138,7 @@ eks-status: ## Report the emulated EKS cluster status and its nodes
 
 .PHONY: smoke
 smoke: ## Smoke a deployed component: make smoke COMPONENT=cert-manager
-	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cert-manager, vault, external-secrets, linkerd-crds, linkerd, cloudnative-pg, strimzi, redis-operator, kong, postgres-app, kafka, cloud, eks)'; exit 1; }
+	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cert-manager, vault, external-secrets, linkerd-crds, linkerd, cloudnative-pg, strimzi, redis-operator, kong, postgres-app, kafka, redis, cloud, eks)'; exit 1; }
 	bootstrap/smoke-target.sh "$(COMPONENT)"
 
 ##@ Local Git serve

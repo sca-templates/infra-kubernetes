@@ -114,7 +114,7 @@ their own repositories — see
 | linkerd control plane | `linkerd` | linkerd/linkerd-control-plane | 30 | 9 | deployed (Phase 9) |
 | postgres-app (+ keycloak-db) | `data` | CNPG `Cluster` CRs (raw) | 40 | 10 | deployed (Phase 10) |
 | kafka (CR) | `data` | `Kafka` + `KafkaNodePool` CRs | 40 | 11 | deployed (Phase 11) |
-| redis (CR) | `data` | `Redis` CR | 40 | 12 | planned (Phase 12) |
+| redis (CR) | `data` | `RedisReplication` CR | 40 | 12 | deployed (Phase 12) |
 | keycloak | `keycloak` | bitnami/keycloak | 50 | 13 | planned (Phase 13) |
 | kube-prometheus-stack | `observability` | prometheus-community/kube-prometheus-stack | 60 | 14 | planned (Phase 14) |
 | loki | `loki` | grafana/loki | 60 | 15 | planned (Phase 15) |
@@ -130,8 +130,8 @@ Notes:
   cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3),
   linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6),
   redis-operator (Phase 7), Kong (Phase 8), the Linkerd control plane
-  (Phase 9), postgres-app/keycloak-db (Phase 10) and Kafka (Phase 11) are
-  deployed; every other component is `planned (Phase N)`. The column is flipped
+  (Phase 9), postgres-app/keycloak-db (Phase 10), Kafka (Phase 11) and Redis
+  (Phase 12) are deployed; every other component is `planned (Phase N)`. The column is flipped
   to `deployed` inside the phase that lands the component, and `status.md` is
   updated in the same commit.
 - `postgres-app` is a **dedicated raw `Application` per environment** (not in
@@ -140,7 +140,7 @@ Notes:
   (`keycloak`/`keycloak`, consumed by Keycloak in Phase 13). Both run in every
   environment at wave 40. The Kafka and Redis **operators** (waves -10) are
   installed everywhere; their **custom resources** live in `data` at wave 40 —
-  Kafka is deployed at Phase 11 (below), Redis lands at Phase 12.
+  Kafka is deployed at Phase 11 and Redis at Phase 12 (both below).
   redis-operator shares the `data` namespace with the CRs it reconciles, while
   Strimzi and CloudNativePG each get a namespace of their own (see
   [Deviations log](#deviations-log)).
@@ -211,7 +211,7 @@ graph LR
     subgraph W40["40"]
         M[postgres-app / keycloak-db]
         N[Kafka CR]
-        O[Redis CR]
+        O[RedisReplication + Sentinel qa/prod]
     end
     subgraph W50["50"]
         P[Keycloak]
@@ -307,7 +307,7 @@ Application of the service repo (see
 [workflow.md](workflow.md#services-app-repo-as-source)).
 
 Per-component replica profile (intended values; materialized as each phase
-lands — through Kafka, Phase 11):
+lands — through Redis, Phase 12):
 
 | Component | local | dev | qa | prod |
 | --- | --- | --- | --- | --- |
@@ -317,7 +317,7 @@ lands — through Kafka, Phase 11):
 | cloudnative-pg | 1 | 1 | 2 | 2 |
 | strimzi | 1 | 1 | 2 | 2 |
 | redis-operator | 1 | 1 | 2 | 2 |
-| redis | 1 | 1 | 2 | 3 |
+| redis | 1 | 1 | 3 | 3 |
 | kong (gateway + controller, one Deployment) | 1 | 1 | 2 | 2 |
 | keycloak | 1 | 2 | 3 | 3 |
 | postgres-app | 1 | 1 | 3 | 3 |
