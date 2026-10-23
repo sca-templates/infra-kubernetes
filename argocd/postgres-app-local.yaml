@@ -1,0 +1,40 @@
+# postgres-app-local — application + Keycloak databases, DEDICATED Application.
+#
+# `postgres-app` and `keycloak-db` are raw CloudNativePG `Cluster` CRs, so they
+# cannot go through the platform ApplicationSet (which renders Helm charts).
+# They ship in every environment through this per-env Application, at wave 40:
+# after CloudNativePG (-10) and after the Vault/ESO chain that projects the
+# bootstrap credentials.
+#
+# The manifests live in one file per environment under
+# `infrastructure/postgres-app/manifests/`; `directory.include` selects only the
+# files for this environment (the directory is shared by all four).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: postgres-app-local
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "40"
+spec:
+  project: default
+  source:
+    repoURL: "{{GIT_REPO_URL}}"
+    targetRevision: "{{GIT_TARGET_BRANCH}}"
+    path: infrastructure/postgres-app/manifests
+    directory:
+      recurse: true
+      include: "*-local.yaml"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: data
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
+      - ServerSideApply=true

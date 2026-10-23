@@ -10,6 +10,9 @@ set -euo pipefail
 
 NAMESPACE="${VAULT_NAMESPACE:-vault}"
 POD="${VAULT_POD:-vault-0}"
+# Env-scoped KV paths (`secret/<service>/<env>`). The seed script is the local
+# bootstrap; dev/qa/prod seed their own Vaults with the same path shape.
+ENV="${ENV:-local}"
 SECRETS_DIR="${SECRETS_DIR:-.secrets}"
 INIT_FILE="${SECRETS_DIR}/init-keys.json"
 ROOT_FILE="${SECRETS_DIR}/root-token"
@@ -210,8 +213,8 @@ vault_exec write auth/kubernetes/role/external-secrets \
 
 echo "── Seeding local platform values"
 vault_exec kv put secret/keycloak/admin username=admin password="$(openssl rand -hex 24)" >/dev/null
-vault_exec kv put secret/keycloak/db username=keycloak password="$(openssl rand -hex 24)" >/dev/null
-vault_exec kv put secret/postgres-app/superuser username=postgres password="$(openssl rand -hex 24)" >/dev/null
+vault_exec kv put "secret/postgres-app/${ENV}" username=app password="$(openssl rand -hex 24)" >/dev/null
+vault_exec kv put "secret/keycloak-db/${ENV}" username=keycloak password="$(openssl rand -hex 24)" >/dev/null
 vault_exec kv put secret/kafka/scram-admin username=admin password="$(openssl rand -hex 24)" >/dev/null
 vault_exec kv put secret/kafka/connect username=connect password="$(openssl rand -hex 24)" >/dev/null
 vault_exec kv put secret/redis/password password="$(openssl rand -hex 24)" >/dev/null
