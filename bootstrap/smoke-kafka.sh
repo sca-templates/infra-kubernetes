@@ -68,11 +68,11 @@ kubectl -n "${NAMESPACE}" wait --for=condition=Ready "kafkauser/${USER_NAME}" --
 
 echo "── smoke(kafka): broker pods Ready"
 kubectl -n "${NAMESPACE}" wait --for=condition=Ready pod \
-  -l "strimzi.io/cluster=${CLUSTER},strimzi.io/node-pool=${POOL}" --timeout="${TIMEOUT}" >/dev/null
+  -l "strimzi.io/cluster=${CLUSTER},strimzi.io/pool-name=${POOL}" --timeout="${TIMEOUT}" >/dev/null
 
 POD="$(
   kubectl -n "${NAMESPACE}" get pod \
-    -l "strimzi.io/cluster=${CLUSTER},strimzi.io/node-pool=${POOL}" \
+    -l "strimzi.io/cluster=${CLUSTER},strimzi.io/pool-name=${POOL}" \
     -o jsonpath='{.items[0].metadata.name}'
 )"
 [ -n "${POD}" ] || { echo "FAIL: no broker pod for ${CLUSTER}/${POOL}" >&2; exit 1; }

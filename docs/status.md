@@ -10,7 +10,7 @@ Milestones and Issues.
 
 ## Current state
 
-**Phase 10 — postgres-app + keycloak-db deployed.** Phase 0 delivered the scaffold
+**Phase 11 — Kafka deployed.** Phase 0 delivered the scaffold
 (Makefile, `bootstrap/`, `argocd/` with the app-of-apps pattern, the CI
 workflows, the service template, this docs set) and brought the local Floci
 emulated EKS cluster up with ArgoCD. **Phase 1** lands cert-manager on the `local` profile
@@ -43,8 +43,8 @@ run in `data` at Phase 12, webhook off, no PDB, with the 4
 further than the other operators: a throwaway `Redis` CR in a scratch namespace
 must produce a Ready StatefulSet and answer `PING` → `PONG`, which is the
 honest proof that the CR is honored (the `Redis` CRD declares an empty status
-object, so no condition can be asserted). No `Kafka`/`KafkaNodePool` CR exists
-yet (kafka lands at Phase 11), no `Redis` CR either (Phase 12). **Phase 8** lands Kong — the
+object, so no condition can be asserted). The Kafka custom resources land at
+Phase 11 (below); the `Redis` CR at Phase 12. **Phase 8** lands Kong — the
 edge gateway — as a **dedicated `Application` per environment (`kong-<env>`)** at
 wave 20 in the `kong` namespace, deliberately *outside* the `ApplicationSet`:
 chart pinned 3.4.1 (`kong/kong`), gateway `kong:3.9.4` plus the bundled
@@ -77,12 +77,27 @@ all`; CNPG manages `shared_preload_libraries`) and `wal_level=logical`;
 `keycloak-db` is ready for Phase 13. The catalog preload resolves the CNPG
 image from the raw manifests, and `make smoke COMPONENT=postgres-app` validates
 both clusters, both projected users, the extensions and logical WAL.
+**Phase 11** lands the event backbone: a KRaft `Kafka` + `KafkaNodePool`
+(1 dual-role node local/dev, 3 qa/prod) and a `KafkaUser scram-admin` in `data`
+at wave 40, across **all four** environments. Kafka is pinned at `4.2.0`
+(`quay.io/strimzi/kafka:1.2.0-kafka-4.2.0`); the internal listener `9092` is
+TLS + SCRAM-SHA-512 with simple authorization and `scram-admin` as superUser.
+The SCRAM password is projected by ESO from `secret/kafka/<env>` into the
+`kafka-scram-admin` Secret and consumed by the User Operator through
+`KafkaUser.spec.authentication.password.valueFrom`, so Vault stays the source of
+truth. Like postgres-app, the CRs ship through a **dedicated `Application` per
+environment** (`argocd/kafka-<env>.yaml`, `directory.include: "*-<env>.yaml"`)
+rather than the Helm `ApplicationSet`; `local`/`dev` run one node with 1/2 GiB
+storage and RF/minISR `1/1`, `qa`/`prod` run three with 10/20 GiB, RF/minISR
+`3/2` and `preferred` anti-affinity. `make smoke COMPONENT=kafka` waits for the
+projected credentials, Kafka, KafkaUser and brokers, then creates a topic and
+produces/consumes one record over SASL_SSL/SCRAM.
 
 | Fact | Value |
 | --- | --- |
 | Repository | `infra-kubernetes` (local, fully-local git serve; published to GitHub before promotion) |
-| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6), redis-operator (Phase 7), Kong (Phase 8), Linkerd control plane (Phase 9), postgres-app/keycloak-db (Phase 10) |
-| `platform-root-local` | not used — `local` runs no services, so there is no root Application; `make bootstrap ENV=local` seeds the catalog wiring (`apps-local` + `kong-local` + `linkerd-local` + `postgres-app-local`) host-side |
+| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6), redis-operator (Phase 7), Kong (Phase 8), Linkerd control plane (Phase 9), postgres-app/keycloak-db (Phase 10), Kafka (Phase 11) |
+| `platform-root-local` | not used — `local` runs no services, so there is no root Application; `make bootstrap ENV=local` seeds the catalog wiring (`apps-local` + `kong-local` + `linkerd-local` + `postgres-app-local` + `kafka-local`) host-side |
 | `platform-local` ApplicationSet | present, seven elements (`cert-manager` wave -20, `external-secrets` + `linkerd-crds` + `cloudnative-pg` + `strimzi` + `redis-operator` wave -10, `vault` wave 0) |
 | cert-manager app | `cert-manager-local` `Synced` + `Healthy`; `sca-ca` ClusterIssuer `Ready`; leaf Certificate smoke green |
 | vault app | `vault-local` `Synced` + `Healthy`; HA raft trio, TLS via `vault-tls` leaf; `make smoke COMPONENT=vault` → initialized=true sealed=false; seed idempotent and HA-aware |
@@ -94,6 +109,7 @@ both clusters, both projected users, the extensions and logical WAL.
 | kong app | `kong-local` `Synced` + `Healthy` in namespace `kong` (dedicated Application, **no SSA**); chart 3.4.1, gateway Deployment `kong` Ready (containers `ingress-controller` KIC 3.5.5 + `proxy` kong 3.9.4), DB-less (`KONG_DATABASE=off`); IngressClass `kong`; `configuration.konghq.com` CRDs `Established`; `Certificate/kong-proxy` Ready (leaf off `sca-ca`); declarative `Ingress kong-demo` + `KongPlugin demo-termination`; `make smoke COMPONENT=kong` → `GET https://kong.local/demo` → 200 |
 | linkerd app | `linkerd-local` `Synced` + `Healthy` (dedicated Application); chart `linkerd/linkerd-control-plane` 1.16.11 (`stable-2.14.10`); control-plane Deployments `linkerd-identity`/`linkerd-destination`/`linkerd-proxy-injector` Ready; identity PKI in-cluster (ConfigMap `linkerd-identity-trust-roots` + cert-manager-issued Secret `linkerd-identity-issuer`, chain to `root.linkerd.cluster.local` verified); 3 admission webhooks wired; `make smoke COMPONENT=linkerd` green, including **data plane end-to-end**: preflight of the control-plane identity-leaf TTL, an injected `nginx-unprivileged`+`curl` workload (both pods carry `linkerd-proxy`), HTTP 200 through the mesh, live identity leaves and inbound+outbound success metrics; `local` raises `identity.issuer.issuanceLifetime` to `168h0m0s` (emulator clock skew; dev/qa/prod keep 24h) |
 | postgres-app app | `postgres-app-local` `Synced` + `Healthy` (dedicated Application, raw CRs); CNPG `Cluster postgres-app` Ready (1 instance local; image `18.4-standard-trixie`), `keycloak-db` Ready (1 instance local); ESO `postgres-app-credentials` + `keycloak-db-credentials` `SecretSynced`; `pg_stat_statements` + `vector` + `wal_level=logical` verified through `app@app`; `make smoke COMPONENT=postgres-app` green |
+| kafka app | `kafka-local` `Synced` + `Healthy` (dedicated Application, raw CRs); Strimzi `Kafka/kafka` Ready (Kafka `4.2.0`), `KafkaNodePool/kafka` 1 dual-role node local; `KafkaUser/scram-admin` Ready; ESO `kafka-scram-admin` `SecretSynced` from `secret/kafka/local`; internal listener TLS + SCRAM-SHA-512; `make smoke COMPONENT=kafka` → topic create + produce/consume green |
 | git-local-serve | in-cluster git daemon (`git://<node>:9418/sca-infra.git`) `Ready` |
 | Observability / smoke CI | cluster smoke `pr-cluster.yml` **shipped** (Phase 1): selective on PRs as the **required `Smoke` check** on `main` + manual `workflow_dispatch`; no `push` smoke. Multi-component PRs smoke every touched component in one run (one boot/cloud/teardown); changes to the smoke framework (`bootstrap/smoke-*`, `argocd/**`, `Makefile`) resolve to `cert-manager` so the machinery is self-validated; the pinned toolchain is cached (`actions/cache`, keyed on `versions.sh`) (see [ci-cd.md](ci-cd.md)) |
 | Cloud integration smoke | every smoke run also proves the cluster reaches the local cloud emulator (Floci): `make cloud-up` / `make smoke COMPONENT=cloud` green — bucket created and object round-tripped from an in-cluster Job; on by default, `--no-cloud` / `SMOKE_CLOUD=0` opts out. **Dev/CI tooling, not a platform component** (see [ci-cd.md](ci-cd.md)) |
