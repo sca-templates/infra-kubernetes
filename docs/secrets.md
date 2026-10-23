@@ -46,7 +46,7 @@ script adapts as components land).
 | `secret/postgres-app/<env>` | Phase 10 | postgres-app `Cluster` via CNPG |
 | `secret/keycloak-db/<env>` | Phase 10 | keycloak-db `Cluster` via CNPG |
 | `secret/kafka/<env>` | Phase 11 seed | Kafka SCRAM `scram-admin` (ESO → `kafka-scram-admin` → `KafkaUser`) |
-| `secret/redis/<env>` | Phase 12 | Redis `Secret` auth |
+| `secret/redis/<env>` | Phase 12 seed (`seed-vault.sh`) | Redis `Secret` auth via ESO → `redis-password` |
 | `secret/keycloak/admin` | Phase 13 | Keycloak bootstrap admin |
 | `secret/grafana/admin` | Phase 14 | Grafana admin |
 | `secret/minio/root` | Phase 17 | MinIO root credentials |

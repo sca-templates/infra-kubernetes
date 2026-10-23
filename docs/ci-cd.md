@@ -176,8 +176,8 @@ smoke instead of merging untested.
 `make argocd-up` and `make bootstrap` pre-pull the chart images with the host
 Docker and load them into the EKS node (`bootstrap/preload-chart-images.sh`)
 before Helm runs — a **catalog-wide** preload (`--catalog <env>` resolves the
-images for every chart in the env's ApplicationSet plus the dedicated Kong and
-Linkerd apps).
+images for every chart in the env's ApplicationSet plus the dedicated apps, including
+the raw manifests of postgres-app, Kafka and Redis).
 A node-side pull on an ephemeral runner can stall behind registry throttling past
 a Deployment's `progressDeadlineSeconds`, surfacing as a flaky `argocd-up`
 failure that no Helm `--timeout` can fix; pre-pulling takes the registry off the
@@ -328,7 +328,8 @@ Floci's EKS backing, not ArgoCD-managed).
   app-of-apps wiring host-side (`make bootstrap ENV=local`, which resolves the
   ArgoCD manifests' `repoURL`/`targetRevision` to the PR head via the `sed` seam),
   after which ArgoCD reconciles the **real app-of-apps** (ApplicationSet
-  `platform-local` → the dedicated `kong-local` + `linkerd-local`), gates every
+  `platform-local` → the dedicated `kong-local` + `linkerd-local` +
+  `postgres-app-local` + `kafka-local` + `redis-local`), gates every
   platform Application (`<name>-local`, Kong and Linkerd included), seeds Vault
   (it is born sealed, so
   it can only report `Healthy` once `seed-vault.sh` ran), then gates the whole
@@ -337,7 +338,8 @@ Floci's EKS backing, not ArgoCD-managed).
   GitOps path `dev`/`qa`/`prod` use, on an EKS-shaped cluster.
 - **Wiring** — `smoke-ci.sh` has a single path: `make eks-up` boots the EKS
   substrate, `make bootstrap ENV=local` seeds the platform `ApplicationSet` and
-  the dedicated `kong-local`/`linkerd-local` from the PR head and applies the
+  the dedicated `kong-local`/`linkerd-local`/`postgres-app-local`/`kafka-local`/
+  `redis-local` apps from the PR head and applies the
   catalog, the
   catalog is gated `Synced` → Vault seeded → `Synced/Healthy`, and the touched
   component smoke(s), the EKS check and the endpoint check run against it. The
