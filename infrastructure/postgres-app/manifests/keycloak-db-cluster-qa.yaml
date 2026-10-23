@@ -1,0 +1,43 @@
+# keycloak-db qa — CloudNativePG Cluster (Phase 10).
+# Credentials are projected by the sibling ExternalSecret from
+# `secret/keycloak-db/qa`; see `keycloak-db-credentials-qa.yaml`.
+#
+# Keycloak (Phase 13) connects here instead of its in-cluster H2. Database and
+# owner are both `keycloak`, matching the Keycloak chart's DB contract.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: keycloak-db
+  namespace: data
+  annotations:
+    # After the ExternalSecret (wave 0) that creates the bootstrap credentials.
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  instances: 3
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie
+  bootstrap:
+    initdb:
+      database: keycloak
+      owner: keycloak
+      secret:
+        name: keycloak-db-credentials
+      dataChecksums: true
+      encoding: UTF8
+      localeCollate: C
+      localeCType: C
+  storage:
+    size: 5Gi
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  affinity:
+    # HA: spread instances, but `preferred` keeps the overlay schedulable on a
+    # single-node cluster (the promote-test substrate). A hard rule would leave
+    # two of three instances Pending there.
+    enablePodAntiAffinity: true
+    podAntiAffinityType: preferred
+    topologyKey: kubernetes.io/hostname

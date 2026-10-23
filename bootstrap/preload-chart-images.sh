@@ -98,6 +98,7 @@ render_images() {
 
 catalog_images() {
   local env="$1" apps_file="$2" f name ns repo chart version file images=""
+  local raw_path include raw_file img last
   command -v npx >/dev/null 2>&1 && command -v jq >/dev/null 2>&1 || {
     echo "ERROR: --catalog needs node/npx (js-yaml) and jq" >&2
     return 1
@@ -131,6 +132,36 @@ catalog_images() {
       images+="$(render_images "${args[@]}")"$'\n'
     done < <(npx --yes js-yaml@4.1.0 "${f}" \
       | jq -r '.spec.sources[0] | select(.chart != null) | [.repoURL, .chart, .targetRevision] | @tsv')
+
+    # Raw-manifest Applications (e.g. postgres-app): resolve the images their
+    # included files pin, so datastore images are preloaded too. Chart sources
+    # have no path and are skipped here.
+    while IFS=$'\t' read -r raw_path include; do
+      [ -n "${raw_path}" ] || continue
+      if [ ! -d "${raw_path}" ]; then
+        warn "raw source path '${raw_path}' from ${f} does not exist (skip)"
+        continue
+      fi
+      while IFS= read -r raw_file; do
+        while IFS= read -r img; do
+          [ -n "${img}" ] || continue
+          last="${img##*/}"
+          case "${last}" in
+            *:* | *@sha256:*) images+="${img}"$'\n' ;;
+            *) warn "skipping '${img}' from ${raw_file} (no tag/digest)" ;;
+          esac
+        done < <(grep -hE '^[[:space:]]+image(Name)?:[[:space:]]*' "${raw_file}" \
+          | sed -E 's/^[[:space:]]+image(Name)?:[[:space:]]*//' \
+          | tr -d '"' | sort -u || true)
+      done < <(if [ -n "${include}" ]; then
+        find "${raw_path}" -maxdepth 1 -type f -name "${include}"
+      else
+        find "${raw_path}" -maxdepth 1 -type f -name '*.yaml'
+      fi | sort)
+    done < <(npx --yes js-yaml@4.1.0 "${f}" \
+      | jq -r '((.spec.source // empty), ((.spec.sources // [])[]))
+               | select(.path != null)
+               | [.path, (.directory.include // "")] | @tsv')
   done < <(find argocd -maxdepth 1 -name "*-${env}.yaml" | sort)
 
   printf '%s\n' "${images}" | sed '/^$/d' | sort -u

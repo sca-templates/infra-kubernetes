@@ -14,7 +14,7 @@ M1 done when: pod `Running`, app `Synced`/`Healthy`.
   - [ ] `infrastructure/keycloak/` values-base + overlays for 4 envs
         - [ ] envs/local, dev, qa, prod
         - Commits: `feat(keycloak): add chart reference and per-env overlays`
-  - [ ] DB connection to `keycloak-db` (CNPq), not in-cluster H2
+  - [ ] DB connection to `keycloak-db` (CNPG), not in-cluster H2
         Commits: `feat(keycloak): external database connection`
   - [ ] realm `sca` + test client + user
         Commits: `feat(keycloak): sca realm and test client`

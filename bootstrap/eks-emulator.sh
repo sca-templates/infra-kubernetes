@@ -178,6 +178,9 @@ ensure_iam_admin() {
     . "${EKS_ADMIN_FILE}"
     if [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${AWS_SECRET_ACCESS_KEY:-}" ]; then
       echo "  reusing saved admin access key for '${IAM_USER}'"
+      # `get-token` runs in a child process: sourced variables are not exported
+      # by default, so without this the kubeconfig has no IAM credentials.
+      export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
       return 0
     fi
   fi

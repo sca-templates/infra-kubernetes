@@ -1,0 +1,47 @@
+# postgres-app local — CloudNativePG Cluster (Phase 10).
+# Credentials are projected by the sibling ExternalSecret from
+# `secret/postgres-app/local`; see `postgres-app-credentials-local.yaml`.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres-app
+  namespace: data
+  annotations:
+    # After the ExternalSecret (wave 0) that creates the bootstrap credentials.
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie
+  bootstrap:
+    initdb:
+      database: app
+      owner: app
+      secret:
+        name: postgres-app-credentials
+      dataChecksums: true
+      encoding: UTF8
+      localeCollate: C
+      localeCType: C
+      # Runs as the superuser in the application database after initdb.
+      postInitApplicationSQL:
+        - CREATE EXTENSION IF NOT EXISTS vector;
+  postgresql:
+    parameters:
+      # Logical decoding is the CDC foundation for downstream consumers.
+      wal_level: logical
+      # CNPG auto-manages shared_preload_libraries for pg_stat_statements as
+      # soon as a `pg_stat_statements.*` parameter is present; setting the
+      # library directly is rejected as a fixed parameter.
+      pg_stat_statements.track: all
+  storage:
+    size: 1Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  affinity:
+    # Single-node local profile: never block scheduling on anti-affinity.
+    enablePodAntiAffinity: false
