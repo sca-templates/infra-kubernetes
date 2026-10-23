@@ -12,6 +12,12 @@ HELM_VERSION="${HELM_VERSION:-v4.2.4}"
 FLOCI_IMAGE="${FLOCI_IMAGE:-floci/floci:2.3.0}"
 AWS_CLI_IMAGE="${AWS_CLI_IMAGE:-amazon/aws-cli:2.38.1}"
 
+# Linkerd mesh smoke: an ephemeral HTTP server + client injected into the mesh
+# by the control-plane webhook (see bootstrap/smoke-linkerd.sh). Real workloads,
+# pinned by version — never `latest`. The server runs unprivileged on :8080.
+LINKERD_SMOKE_SERVER_IMAGE="${LINKERD_SMOKE_SERVER_IMAGE:-nginxinc/nginx-unprivileged:1.27-alpine}"
+LINKERD_SMOKE_CLIENT_IMAGE="${LINKERD_SMOKE_CLIENT_IMAGE:-curlimages/curl:8.10.1}"
+
 # EKS substrate of the cloud emulator (dev/CI only; the platform's only cluster
 # substrate). Floci backs EKS with a real single-node k3s container and an OCI
 # ECR registry;

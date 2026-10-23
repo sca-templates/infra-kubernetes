@@ -11,3 +11,12 @@ controllerReplicas: 1
 enablePodAntiAffinity: false
 enablePodDisruptionBudget: false
 highAvailability: false
+
+# The emulated EKS node's clock can advance past the identity leaf lifetime
+# (chart default 24h), leaving new proxies with `Expired` certificates on a
+# cluster left running for days. A 7-day leaf (local only; dev/qa/prod keep the
+# 24h default) keeps a developer cluster usable between restarts. The mesh
+# smoke's preflight fails loudly if leaves are still near expiry.
+identity:
+  issuer:
+    issuanceLifetime: 168h0m0s
