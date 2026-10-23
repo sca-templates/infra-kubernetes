@@ -45,7 +45,7 @@ script adapts as components land).
 | `secret/kong/admin` | — (reserved) | **not consumed**: Kong runs DB-less with a plaintext `ClusterIP` admin listener, so no admin credential is projected; the path is reserved for a future admin-auth use |
 | `secret/postgres-app/<env>` | Phase 10 | postgres-app `Cluster` via CNPG |
 | `secret/keycloak-db/<env>` | Phase 10 | keycloak-db `Cluster` via CNPG |
-| `secret/kafka/<env>` | Phase 11 | Kafka SCRAM users |
+| `secret/kafka/<env>` | Phase 11 seed | Kafka SCRAM `scram-admin` (ESO → `kafka-scram-admin` → `KafkaUser`) |
 | `secret/redis/<env>` | Phase 12 | Redis `Secret` auth |
 | `secret/keycloak/admin` | Phase 13 | Keycloak bootstrap admin |
 | `secret/grafana/admin` | Phase 14 | Grafana admin |

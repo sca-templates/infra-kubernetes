@@ -1,0 +1,54 @@
+# kafka local — SCRAM-SHA-512 admin user (Phase 11).
+#
+# The password comes from the `kafka-scram-admin` Secret projected by ESO from
+# Vault. `scram-admin` is also listed as a Kafka superUser in the cluster CR,
+# so the ACLs below are explicit documentation of the access the smoke needs
+# rather than the only thing granting it.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaUser
+metadata:
+  name: scram-admin
+  namespace: data
+  labels:
+    strimzi.io/cluster: kafka
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+spec:
+  authentication:
+    type: scram-sha-512
+    password:
+      valueFrom:
+        secretKeyRef:
+          name: kafka-scram-admin
+          key: password
+  authorization:
+    type: simple
+    acls:
+      - resource:
+          type: topic
+          name: "*"
+          patternType: literal
+        operations:
+          - All
+        type: allow
+      - resource:
+          type: group
+          name: "*"
+          patternType: literal
+        operations:
+          - All
+        type: allow
+      - resource:
+          type: cluster
+          name: kafka-cluster
+          patternType: literal
+        operations:
+          - All
+        type: allow
+      - resource:
+          type: transactionalId
+          name: "*"
+          patternType: literal
+        operations:
+          - All
+        type: allow

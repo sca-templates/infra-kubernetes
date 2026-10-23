@@ -12,8 +12,9 @@ repo.
   projections. Services do **not** live here — each service owns its `deploy/`
   in its own repo (app-repo-as-source, [docs/onboarding-new-service.md](docs/onboarding-new-service.md)).
 - ArgoCD app-of-apps: `make bootstrap` seeds the platform catalog
-  (`apps-<env>.yaml` ApplicationSet + the dedicated `kong-<env>.yaml`
-  Application) with `{{GIT_REPO_URL}}`/`{{GIT_TARGET_BRANCH}}` resolved
+  (`apps-<env>.yaml` ApplicationSet + the dedicated `kong-<env>.yaml`,
+  `linkerd-<env>.yaml`, `postgres-app-<env>.yaml` and `kafka-<env>.yaml`
+  Applications) with `{{GIT_REPO_URL}}`/`{{GIT_TARGET_BRANCH}}` resolved
   host-side; the root Application (`root-app-<env>.yaml`, `dev`/`qa`/`prod`
   only) owns the services registry (`services-<env>.yaml`, never `local`).
 - A **clean restart** of the previous `infra-kubernetes` (which churned in
@@ -68,7 +69,7 @@ and image pins are set inside each phase and live under
 | Kong | `kong` | kong/kong (DB-less) | Edge gateway, dedicated Application, no SSA | [infra-kong](https://github.com/sca-templates/infra-kong) | **deployed** (Phase 8) |
 | Linkerd control plane | `linkerd` | linkerd/linkerd-control-plane | mTLS identity, golden signals | [infra-linkerd](https://github.com/sca-templates/infra-linkerd) | **deployed** (Phase 9) |
 | postgres-app (+ keycloak-db) | `data` | CNPG `Cluster` CRs (raw) | App + Keycloak databases; all 4 envs | [infra-postgres](https://github.com/sca-templates/infra-postgres) | **deployed** (Phase 10) |
-| Kafka | `data` | `Kafka`/`KafkaNodePool` CRs | Event backbone, SCRAM | [infra-kafka](https://github.com/sca-templates/infra-kafka) | planned (Phase 11) |
+| Kafka | `data` | `Kafka`/`KafkaNodePool` CRs | Event backbone, TLS + SCRAM | [infra-kafka](https://github.com/sca-templates/infra-kafka) | **deployed** (Phase 11) |
 | Redis | `data` | `Redis` CR | Cache | [infra-redis](https://github.com/sca-templates/infra-redis) | planned (Phase 12) |
 | Keycloak | `keycloak` | bitnami/keycloak | OIDC IdP, realm `sca` | [infra-keycloak](https://github.com/sca-templates/infra-keycloak) | planned (Phase 13) |
 | kube-prometheus-stack | `observability` | prometheus-community/kube-prometheus-stack | Metrics + Grafana + Alertmanager | [infra-prometheus](https://github.com/sca-templates/infra-prometheus) | planned (Phase 14) |
@@ -127,7 +128,7 @@ guards ([docs/security.md](docs/security.md)).
 | `make prereqs` | Install pinned kubectl/helm into `~/.local/bin` (idempotent, sha256-verified; docker required for the Floci emulator) — `bootstrap/sca.sh prerrequisites` |
 | `make doctor` | Read-only platform health check (toolchain, PATH, docker, cluster, ArgoCD apps, `.env` seam, git source) |
 | `make install-cli` | Symlink `bootstrap/sca.sh` → `~/.local/bin/sca` for direct `sca prereqs` / `sca doctor` / `sca version` |
-| `make bootstrap` | Install ArgoCD + seed the catalog wiring (`apps-`/`kong-`) and the root Application (services registry) for `$ENV` |
+| `make bootstrap` | Install ArgoCD + seed the catalog wiring (`apps-`/dedicated apps) and the root Application (services registry) for `$ENV` |
 | `make status` | Cluster, ArgoCD apps and pod health overview |
 | `make validate` | Static suite + live cluster checks |
 | `make validate-static` | Static suite only: markdownlint, yamllint, YAML parse, `bash -n` |

@@ -1,0 +1,33 @@
+# kafka local — single dual-role KRaft node (Phase 11).
+#
+# local/dev run one controller+broker so the whole event backbone fits on the
+# developer node; qa/prod run three. Storage and resources live on the node
+# pool (not the Kafka CR) in Strimzi's node-pool mode.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaNodePool
+metadata:
+  name: kafka
+  namespace: data
+  labels:
+    strimzi.io/cluster: kafka
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  replicas: 1
+  roles:
+    - controller
+    - broker
+  storage:
+    type: persistent-claim
+    size: 1Gi
+    deleteClaim: false
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  jvmOptions:
+    "-Xms": 256m
+    "-Xmx": 512m

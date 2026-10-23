@@ -1,0 +1,39 @@
+# kafka-dev — Kafka cluster, node pool and SCRAM user, DEDICATED Application.
+#
+# The Kafka resources are raw Strimzi CRs, so they cannot go through the
+# platform ApplicationSet (which renders Helm charts). They ship in every
+# environment through this per-env Application, at wave 40: after Strimzi
+# (-10) and after the Vault/ESO chain that projects the SCRAM password.
+#
+# The manifests live in per-environment files under
+# `infrastructure/kafka/manifests/`; `directory.include` selects only the
+# files for this environment (the directory is shared by all four).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kafka-dev
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "40"
+spec:
+  project: default
+  source:
+    repoURL: "{{GIT_REPO_URL}}"
+    targetRevision: "{{GIT_TARGET_BRANCH}}"
+    path: infrastructure/kafka/manifests
+    directory:
+      recurse: true
+      include: "*-dev.yaml"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: data
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
+      - ServerSideApply=true

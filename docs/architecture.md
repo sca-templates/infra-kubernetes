@@ -5,9 +5,9 @@ sync-waves, namespaces, the secret flow and the environment model. This is a
 **state document** — how the platform *is*. Beyond ArgoCD, cert-manager
 (Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4),
 cloudnative-pg (Phase 5), strimzi (Phase 6), redis-operator (Phase 7), Kong
-(Phase 8), the Linkerd control plane (Phase 9) and postgres-app/keycloak-db
-(Phase 10) are deployed; every other catalog entry is marked `planned` until
-its phase lands. For how changes *flow* through the platform, see
+(Phase 8), the Linkerd control plane (Phase 9), postgres-app/keycloak-db
+(Phase 10) and Kafka (Phase 11) are deployed; every other catalog entry is
+marked `planned` until its phase lands. For how changes *flow* through the platform, see
 [workflow.md](workflow.md); for
 what is done and what is next, see [status.md](status.md).
 
@@ -33,9 +33,9 @@ resolves the `{{GIT_REPO_URL}}`/`{{GIT_TARGET_BRANCH}}` placeholders host-side):
   [workflow.md](workflow.md#services-app-repo-as-source) and
   [onboarding-new-service.md](onboarding-new-service.md).
 
-There is **no global `ServerSideApply`**; Kong and `postgres-app` are dedicated
-per-environment `Application`s (see [Sync-wave map](#sync-wave-map) and the
-[Deviations log](#deviations-log)).
+There is **no global `ServerSideApply`**; Kong, `postgres-app` and Kafka are
+dedicated per-environment `Application`s (see [Sync-wave map](#sync-wave-map)
+and the [Deviations log](#deviations-log)).
 Nothing is deployed by hand after `make bootstrap`.
 
 ## Layers
@@ -92,8 +92,9 @@ set per component when that phase lands (values live under
 `infrastructure/<component>/` and `envs/<env>/` from Phase 1 on); in the table
 ArgoCD, cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3),
 linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6),
-redis-operator (Phase 7), Kong (Phase 8), the Linkerd control plane (Phase 9)
-and postgres-app/keycloak-db (Phase 10) are deployed, the rest are `planned`.
+redis-operator (Phase 7), Kong (Phase 8), the Linkerd control plane (Phase 9),
+postgres-app/keycloak-db (Phase 10) and Kafka (Phase 11) are deployed, the rest
+are `planned`.
 
 **Services are not part of this catalog.** They are registered in
 `argocd/services-<env>.yaml` (app-repo-as-source) and own their manifests in
@@ -112,7 +113,7 @@ their own repositories — see
 | kong | `kong` | kong/kong (DB-less) | 20 | 8 | deployed (Phase 8) |
 | linkerd control plane | `linkerd` | linkerd/linkerd-control-plane | 30 | 9 | deployed (Phase 9) |
 | postgres-app (+ keycloak-db) | `data` | CNPG `Cluster` CRs (raw) | 40 | 10 | deployed (Phase 10) |
-| kafka (CR) | `data` | `Kafka` + `KafkaNodePool` CRs | 40 | 11 | planned (Phase 11) |
+| kafka (CR) | `data` | `Kafka` + `KafkaNodePool` CRs | 40 | 11 | deployed (Phase 11) |
 | redis (CR) | `data` | `Redis` CR | 40 | 12 | planned (Phase 12) |
 | keycloak | `keycloak` | bitnami/keycloak | 50 | 13 | planned (Phase 13) |
 | kube-prometheus-stack | `observability` | prometheus-community/kube-prometheus-stack | 60 | 14 | planned (Phase 14) |
@@ -129,18 +130,28 @@ Notes:
   cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3),
   linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6),
   redis-operator (Phase 7), Kong (Phase 8), the Linkerd control plane
-  (Phase 9) and postgres-app/keycloak-db (Phase 10) are deployed; every other
-  component is `planned (Phase N)`. The column is flipped to `deployed` inside the phase
-  that lands the component, and `status.md` is updated in the same commit.
+  (Phase 9), postgres-app/keycloak-db (Phase 10) and Kafka (Phase 11) are
+  deployed; every other component is `planned (Phase N)`. The column is flipped
+  to `deployed` inside the phase that lands the component, and `status.md` is
+  updated in the same commit.
 - `postgres-app` is a **dedicated raw `Application` per environment** (not in
   the `ApplicationSet` generator list) and owns both CNPG `Cluster`s in `data`:
   `postgres-app` (application database, `app`/`app`) and `keycloak-db`
   (`keycloak`/`keycloak`, consumed by Keycloak in Phase 13). Both run in every
   environment at wave 40. The Kafka and Redis **operators** (waves -10) are
-  installed everywhere; their **custom resources** live in `data` at wave 40.
+  installed everywhere; their **custom resources** live in `data` at wave 40 —
+  Kafka is deployed at Phase 11 (below), Redis lands at Phase 12.
   redis-operator shares the `data` namespace with the CRs it reconciles, while
   Strimzi and CloudNativePG each get a namespace of their own (see
   [Deviations log](#deviations-log)).
+- `kafka` is a **dedicated raw `Application` per environment** (not in the
+  `ApplicationSet` generator list): the Strimzi `Kafka`/`KafkaNodePool`/
+  `KafkaUser` resources are CRs, not a chart. It runs one dual-role
+  (`controller,broker`) node in `local`/`dev` and three in `qa`/`prod`, with
+  the internal listener TLS + SCRAM-SHA-512; the `scram-admin` password is
+  projected by ESO from `secret/kafka/<env>` and consumed by the User Operator
+  via `password.valueFrom.secretKeyRef`. See
+  [Deviations log](#deviations-log).
 - `kong` is a dedicated `Application` per environment (not via the
   `ApplicationSet`): flat-schema CRDs break ArgoCD's structured-merge diff
   under `ServerSideApply=true`, so it runs DB-less with `installCRDs: false`
@@ -296,7 +307,7 @@ Application of the service repo (see
 [workflow.md](workflow.md#services-app-repo-as-source)).
 
 Per-component replica profile (intended values; materialized as each phase
-lands — through postgres-app, Phase 10):
+lands — through Kafka, Phase 11):
 
 | Component | local | dev | qa | prod |
 | --- | --- | --- | --- | --- |
@@ -311,6 +322,7 @@ lands — through postgres-app, Phase 10):
 | keycloak | 1 | 2 | 3 | 3 |
 | postgres-app | 1 | 1 | 3 | 3 |
 | keycloak-db | 1 | 1 | 3 | 3 |
+| kafka (dual-role nodes) | 1 | 1 | 3 | 3 |
 
 - Vault `server.dataStorage.size`: `1Gi` default, `10Gi` (qa), `20Gi` (prod).
 - Keycloak uses `podAntiAffinityPreset: hard` in `qa` and `prod`.
@@ -328,6 +340,7 @@ as each component lands; the log always explains *why*, never just *what*.
 | local git serve (dev tooling) | `make local-git-up` stands up an in-cluster git daemon serving this repo's HEAD **verbatim** (`bootstrap/render-served-apps.sh` mirrors `HEAD` onto the serve branch — no placeholder substitution); local ArgoCD reconciles the served tree instead of GitHub. The CI cluster smoke does **not** use it — `make bootstrap` seeds the wiring host-side | The serving/reconciliation path is exercised on a developer machine; nothing on the serve needs substitution now that `make bootstrap` owns the wiring, so the serve mirrors the repo as-is. The CI runner cannot reach the EKS node's pod network (the emulator publishes only its own port), so the smoke seeds host-side rather than serving resolved content |
 | Kong | DB-less (`database: off`), `ingressController.installCRDs: false`, managed as a dedicated `Application`, no SSA | Kong ships flat-schema CRDs; structured-merge diff breaks under `ServerSideApply=true`, and `--include-crds` re-emits CRDs twice |
 | postgres-app | Dedicated raw `Application` per environment (`postgres-app-<env>`), not in the `ApplicationSet` generator list; one shared manifest directory with `directory.include: "*-<env>.yaml"` | The datastores are raw CNPG `Cluster` CRs, so the Helm-chart generator cannot render them. They run in **all four** environments (app DB + Keycloak DB), and the per-env `include` keeps a single source directory while selecting only that environment's CRs. Like Kong, the dedicated app is also what the cluster smoke discovers as `postgres-app-<env>` |
+| Kafka | Dedicated raw `Application` per environment (`kafka-<env>`), not in the `ApplicationSet`; one shared manifest directory with `directory.include: "*-<env>.yaml"`; `KafkaNodePool` owns storage/resources/JVM; TLS + SCRAM-SHA-512 in all four envs; qa/prod use `preferred` anti-affinity | The `Kafka`/`KafkaNodePool`/`KafkaUser` resources are Strimzi CRs, not a Helm chart, so the chart generator cannot render them. The pool is the Strimzi-native place for the per-env profile (1 dual-role node local/dev, 3 qa/prod) and keeps storage/resources out of the Kafka CR. The SCRAM password is projected by ESO from `secret/kafka/<env>` and referenced by `KafkaUser.spec.authentication.password.valueFrom`, keeping Vault as the secret SSOT instead of letting Strimzi generate and own the password. `preferred` anti-affinity keeps the 3-node profile schedulable on the single-node promote substrate; qa does not prune and prod syncs manually per ADR-003 |
 | Linkerd | Control plane deployed as a **dedicated ArgoCD `Application`** (`argocd/linkerd-<env>.yaml`), **not** by the `linkerd install` script, and with **no `linkerd-viz`** | The script model cannot be validated by the cluster smoke, which discovers the catalog from `infrastructure/*/` and requires every entry to be an ArgoCD `Application` `<name>-<env>` that converges (`bootstrap/smoke-ci.sh`); the dedicated-Application pattern (same shape as Kong) makes the control plane a normal, reviewable, `git`-driven catalog entry. `linkerd-viz` stays out (headless mesh): the golden signals are scraped by the Phase 14 observability stack |
 | Linkerd | The identity PKI (trust anchor + issuer) is provided **in-cluster** — `identity.externalCA=true` + `identity.issuer.scheme=kubernetes.io/tls` — with cert-manager issuing the issuer `Certificate` and the mesh's public root CA committed as a `Secret` (`linkerd-identity-anchor`, used by a `type: CA` `Issuer`) plus the public cert in the `linkerd-identity-trust-roots` `ConfigMap` | The linkerd-control-plane Helm chart does **not** generate the identity PKI (only the `linkerd install` CLI does): it takes it by `--set-file`, which ArgoCD cannot do without committing certs, or references pre-existing resources. cert-manager can own the issuer `Secret` declaratively but cannot write a `ConfigMap`, so the trust anchor cannot be projected without an extra component (trust-manager/ESO) that is not in the catalog. The anchor is a self-signed mesh root with no external trust relationship, so committing its key (used only by cert-manager to sign the issuer) is the accepted trade — the issuer's private key never enters `git`. The chart-generated webhook certs (`genSelfSignedCert`, random per render) are handled with `ignoreDifferences` on their Secrets + webhook `caBundle`s, like Kong's admission webhook. A path-scoped allowlist in `.gitleaks.toml` exempts exactly that one file from the `private-key` rule so the Security gate stays green (everything else still fails on any leak) |
 | ESO | Short `refreshInterval` (~5 min) in local | Avoids the ExternalSecret wedge that wedged the previous attempt; restarts only ever manual after bootstrap |

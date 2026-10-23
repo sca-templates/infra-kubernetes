@@ -88,8 +88,10 @@ jobs:
               'bootstrap/versions.sh',
               'argocd/apps-*.yaml',
               'argocd/kong-*.yaml',
+              'argocd/kafka-*.yaml',
               'envs/local/*.yaml',
               'infrastructure/*/values-base.yaml',
+              'infrastructure/kafka/manifests/*.yaml',
               'bootstrap/preload-chart-images.sh'
             ) }}
           restore-keys: |

@@ -1,0 +1,40 @@
+# kafka prod — Strimzi Kafka cluster (Phase 11).
+#
+# KRaft mode: the KafkaNodePool below owns the three controller+broker nodes,
+# so there is no ZooKeeper. The internal listener is TLS + SCRAM-SHA-512 in
+# every environment; prod raises the replication factors to the HA profile.
+apiVersion: kafka.strimzi.io/v1
+kind: Kafka
+metadata:
+  name: kafka
+  namespace: data
+  annotations:
+    # Required by Strimzi to reconcile Kafka through KafkaNodePool resources.
+    strimzi.io/node-pools: enabled
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  kafka:
+    version: 4.2.0
+    image: quay.io/strimzi/kafka:1.2.0-kafka-4.2.0
+    listeners:
+      - name: internal
+        port: 9092
+        type: internal
+        tls: true
+        authentication:
+          type: scram-sha-512
+    authorization:
+      type: simple
+      superUsers:
+        - scram-admin
+    config:
+      default.replication.factor: 3
+      min.insync.replicas: 2
+      offsets.topic.replication.factor: 3
+      transaction.state.log.replication.factor: 3
+      transaction.state.log.min.isr: 2
+      # Topics are declared through KafkaTopic; the smoke creates its own.
+      auto.create.topics.enable: false
+  entityOperator:
+    topicOperator: {}
+    userOperator: {}

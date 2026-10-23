@@ -1,0 +1,45 @@
+# kafka qa — three dual-role KRaft nodes (Phase 11).
+#
+# `preferred` anti-affinity spreads the brokers when nodes allow it but still
+# schedules on the single-node promote substrate (same trade as postgres-app's
+# qa/prod profile).
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaNodePool
+metadata:
+  name: kafka
+  namespace: data
+  labels:
+    strimzi.io/cluster: kafka
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  replicas: 3
+  roles:
+    - controller
+    - broker
+  storage:
+    type: persistent-claim
+    size: 10Gi
+    deleteClaim: false
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+  jvmOptions:
+    "-Xms": 1g
+    "-Xmx": 1g
+  template:
+    pod:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    strimzi.io/cluster: kafka
+                    strimzi.io/name: kafka-kafka
