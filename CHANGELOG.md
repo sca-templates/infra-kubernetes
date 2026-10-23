@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0](https://github.com/sca-templates/infra-kubernetes/compare/v1.1.0...v2.0.0) (2026-10-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* **db:** Vault KV paths for postgres-app and keycloak DB credentials now include the environment suffix; update consumers still reading the old paths.
+
+### Features
+
+* **db:** deploy postgres-app and keycloak-db on CNPG (Phase 10) ([#96](https://github.com/sca-templates/infra-kubernetes/issues/96)) ([1eb8082](https://github.com/sca-templates/infra-kubernetes/commit/1eb8082dff07d262627c7ecdf043d0891eb64bc7))
+
 ## [1.1.0](https://github.com/sca-templates/infra-kubernetes/compare/v1.0.0...v1.1.0) (2026-10-23)
 
 
