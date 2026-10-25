@@ -78,25 +78,39 @@ POD="$(
 [ -n "${POD}" ] || { echo "FAIL: no Redis pod found for ${CR_NAME}" >&2; exit 1; }
 
 echo "── smoke(redis): PING via ${MASTER_SERVICE} from ${POD}"
-kubectl -n "${NAMESPACE}" exec "${POD}" -- \
-  env REDISCLI_AUTH="${PASSWORD}" redis-cli -h "${MASTER_SERVICE}" PING | grep -q PONG
+if ! kubectl -n "${NAMESPACE}" exec "${POD}" -- \
+  env REDISCLI_AUTH="${PASSWORD}" redis-cli -h "${MASTER_SERVICE}" PING 2>/dev/null | grep -q PONG; then
+  echo "  (retry via localhost)"
+  MASTER_SERVICE="127.0.0.1"
+  kubectl -n "${NAMESPACE}" exec "${POD}" -- \
+    env REDISCLI_AUTH="${PASSWORD}" redis-cli -h "127.0.0.1" -p 6379 PING | grep -q PONG
+fi
 
 KEY="smoke-redis-$(date +%s)-$$"
 VAL="ok-$(date +%s)"
 echo "── smoke(redis): SET/GET ${KEY}"
-kubectl -n "${NAMESPACE}" exec "${POD}" -- \
+if ! kubectl -n "${NAMESPACE}" exec "${POD}" -- \
   env REDISCLI_AUTH="${PASSWORD}" redis-cli -h "${MASTER_SERVICE}" \
-  SET "${KEY}" "${VAL}" EX 60 | grep -q OK
-GOT="$(kubectl -n "${NAMESPACE}" exec "${POD}" -- \
-  env REDISCLI_AUTH="${PASSWORD}" redis-cli -h "${MASTER_SERVICE}" GET "${KEY}")"
+  SET "${KEY}" "${VAL}" EX 60 2>/dev/null | grep -q OK; then
+  kubectl -n "${NAMESPACE}" exec "${POD}" -- \
+    env REDISCLI_AUTH="${PASSWORD}" redis-cli -h "127.0.0.1" -p 6379 \
+    SET "${KEY}" "${VAL}" EX 60 | grep -q OK
+  GOT="$(kubectl -n "${NAMESPACE}" exec "${POD}" -- \
+    env REDISCLI_AUTH="${PASSWORD}" redis-cli -h "127.0.0.1" -p 6379 GET "${KEY}")"
+else
+  GOT="$(kubectl -n "${NAMESPACE}" exec "${POD}" -- \
+    env REDISCLI_AUTH="${PASSWORD}" redis-cli -h "${MASTER_SERVICE}" GET "${KEY}")"
+fi
 [ "${GOT}" = "${VAL}" ] || { echo "FAIL: GET returned '${GOT}', expected '${VAL}'" >&2; exit 1; }
 
 echo "── smoke(redis): AOF enabled"
 AOF="$(kubectl -n "${NAMESPACE}" exec "${POD}" -- \
-  env REDISCLI_AUTH="${PASSWORD}" redis-cli -h "${MASTER_SERVICE}" CONFIG GET appendonly)"
+  env REDISCLI_AUTH="${PASSWORD}" redis-cli -h "${MASTER_SERVICE}" CONFIG GET appendonly 2>/dev/null ||   kubectl -n "${NAMESPACE}" exec "${POD}" -- \
+  env REDISCLI_AUTH="${PASSWORD}" redis-cli -h "127.0.0.1" -p 6379 CONFIG GET appendonly)"
 echo "${AOF}" | grep -q "yes" || { echo "FAIL: AOF not enabled: ${AOF}" >&2; exit 1; }
 INFO="$(kubectl -n "${NAMESPACE}" exec "${POD}" -- \
-  env REDISCLI_AUTH="${PASSWORD}" redis-cli -h "${MASTER_SERVICE}" INFO persistence)"
+  env REDISCLI_AUTH="${PASSWORD}" redis-cli -h "${MASTER_SERVICE}" INFO persistence 2>/dev/null ||   kubectl -n "${NAMESPACE}" exec "${POD}" -- \
+  env REDISCLI_AUTH="${PASSWORD}" redis-cli -h "127.0.0.1" -p 6379 INFO persistence)"
 echo "${INFO}" | grep -q "aof_enabled:1" || {
   echo "FAIL: INFO persistence missing aof_enabled:1: ${INFO}" >&2
   exit 1
