@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.1.0](https://github.com/sca-templates/infra-kubernetes/compare/v3.0.0...v3.1.0) (2026-10-25)
+
+
+### Features
+
+* **redis:** deploy RedisReplication with Sentinel and Vault auth (Phase 12) ([#100](https://github.com/sca-templates/infra-kubernetes/issues/100)) ([489091c](https://github.com/sca-templates/infra-kubernetes/commit/489091c8514f076479a85ed1667dcc04c6eae916))
+
 ## [3.0.0](https://github.com/sca-templates/infra-kubernetes/compare/v2.0.0...v3.0.0) (2026-10-23)
 
 
