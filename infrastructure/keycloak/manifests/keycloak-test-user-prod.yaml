@@ -1,0 +1,29 @@
+# keycloak test user prod — smoke credentials projected from Vault.
+#
+# The realm import resolves ${SCA_SMOKE_USERNAME} / ${SCA_SMOKE_PASSWORD} from
+# these Secret values; the smoke test uses the same Secret for the password
+# grant, so the credential never lives in git.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: keycloak-test-user
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  refreshInterval: 5m
+  secretStoreRef:
+    name: vault
+    kind: ClusterSecretStore
+  target:
+    name: keycloak-test-user
+    creationPolicy: Owner
+  data:
+    - secretKey: username
+      remoteRef:
+        key: secret/keycloak/test-user/prod
+        property: username
+    - secretKey: password
+      remoteRef:
+        key: secret/keycloak/test-user/prod
+        property: password

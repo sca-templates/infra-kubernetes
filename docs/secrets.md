@@ -3,8 +3,8 @@
 Vault is the **single source of truth** for secrets; External Secrets Operator
 (ESO) projects Vault KV into native Kubernetes `Secret`s. The cluster stores
 only projected copies, never the originals. This is a state document — Vault is
-not deployed yet (Phase 2); the design below is normative for the phases that
-consume it.
+deployed (Phase 2); the design below is normative for the phases that consume
+it.
 
 In addition to the cluster plane below there is a **repository plane**: the CI
 release secrets stored as GitHub Actions secrets, documented at the end of this
@@ -44,10 +44,11 @@ script adapts as components land).
 | `secret/external-secrets/k8s-auth` | Phase 2 | k8s auth role/SA binding |
 | `secret/kong/admin` | — (reserved) | **not consumed**: Kong runs DB-less with a plaintext `ClusterIP` admin listener, so no admin credential is projected; the path is reserved for a future admin-auth use |
 | `secret/postgres-app/<env>` | Phase 10 | postgres-app `Cluster` via CNPG |
-| `secret/keycloak-db/<env>` | Phase 10 | keycloak-db `Cluster` via CNPG |
+| `secret/keycloak-db/<env>` | Phase 10 | keycloak-db `Cluster` via CNPG; Keycloak DB credential via ESO |
 | `secret/kafka/<env>` | Phase 11 seed | Kafka SCRAM `scram-admin` (ESO → `kafka-scram-admin` → `KafkaUser`) |
 | `secret/redis/<env>` | Phase 12 seed (`seed-vault.sh`) | Redis `Secret` auth via ESO → `redis-password` |
-| `secret/keycloak/admin` | Phase 13 | Keycloak bootstrap admin |
+| `secret/keycloak/admin` | Phase 13 seed | Keycloak bootstrap admin via ESO |
+| `secret/keycloak/test-user/<env>` | Phase 13 seed | Keycloak realm import + smoke user via ESO |
 | `secret/grafana/admin` | Phase 14 | Grafana admin |
 | `secret/minio/root` | Phase 17 | MinIO root credentials |
 | `secret/velero/credentials` | Phase 18 | Velero object-store credentials |
@@ -70,8 +71,8 @@ initializes on one concrete node, unseals every raft peer (waiting for each to
 auto-join), and directs writes at the elected leader via the `vault-active`
 service. It is also:
 
-- **Idempotent**: re-runs converge to the same state, no cascade of new
-  versions.
+- **Idempotent**: re-runs converge to the same state and do not rotate
+  credentials already consumed by workloads; `SEED_ROTATE=1` forces rotation.
 - **Adaptive**: it seeds a path only when the consuming component's files
   exist (e.g. the Alertmanager config key is skipped until
   kube-prometheus-stack lands in Phase 14).
@@ -96,6 +97,11 @@ Each phase that consumes secrets ships, next to the component, exactly one
 3. Pods reference the projected `Secret` by name; the raw value never appears
    in a manifest.
 4. DoD for that phase includes `make status` showing `SecretSynced`.
+
+Keycloak is the first component with **three** projections: `keycloak-admin`
+(bootstrap admin), `keycloak-db-credentials` (`kubernetes.io/basic-auth`, the
+same Vault path as the CNPG cluster) and `keycloak-test-user` (smoke user,
+resolved by the realm import). See [roadmap/keycloak.md](roadmap/keycloak.md).
 
 Velero diverges only in *target*: `local` uses the in-cluster MinIO, while
 `dev`/`qa`/`prod` use external S3 with credentials injected via Vault/ESO.

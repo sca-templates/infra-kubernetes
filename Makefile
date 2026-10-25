@@ -52,23 +52,26 @@ bootstrap: argocd-up ## Install ArgoCD and apply the Applications for ENV=$(ENV)
 	@[ -f "argocd/postgres-app-$(ENV).yaml" ] || { echo "argocd/postgres-app-$(ENV).yaml is missing"; exit 1; }
 	@[ -f "argocd/kafka-$(ENV).yaml" ] || { echo "argocd/kafka-$(ENV).yaml is missing"; exit 1; }
 	@[ -f "argocd/redis-$(ENV).yaml" ] || { echo "argocd/redis-$(ENV).yaml is missing"; exit 1; }
+	@[ -f "argocd/keycloak-$(ENV).yaml" ] || { echo "argocd/keycloak-$(ENV).yaml is missing"; exit 1; }
 	# The Makefile seeds the catalog wiring: argocd/apps-$(ENV).yaml (the platform
 	# ApplicationSet) and the dedicated Applications argocd/kong-$(ENV).yaml,
-	# argocd/linkerd-$(ENV).yaml, argocd/postgres-app-$(ENV).yaml and
-	# argocd/kafka-$(ENV).yaml are applied with
+	# argocd/linkerd-$(ENV).yaml, argocd/postgres-app-$(ENV).yaml,
+	# argocd/kafka-$(ENV).yaml, argocd/redis-$(ENV).yaml and
+	# argocd/keycloak-$(ENV).yaml are applied with
 	# {{GIT_REPO_URL}}/{{GIT_TARGET_BRANCH}} resolved here, so the generated
 	# children track the ref under test (the PR head in the CI smoke, main
 	# otherwise). The root Application owns only the services registry
 	# (argocd/services-$(ENV).yaml), never these, so there is a single owner.
 	@echo '── Preloading catalog images for ENV=$(ENV)'
 	bootstrap/preload-chart-images.sh --catalog "$(ENV)"
-	@echo '── Applying platform ApplicationSet + Kong + Linkerd + postgres-app + Kafka (GIT_REPO_URL=$(GIT_REPO_URL), GIT_TARGET_BRANCH=$(GIT_TARGET_BRANCH))'
+	@echo '── Applying platform ApplicationSet + Kong + Linkerd + postgres-app + Kafka + Redis + Keycloak (GIT_REPO_URL=$(GIT_REPO_URL), GIT_TARGET_BRANCH=$(GIT_TARGET_BRANCH))'
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/apps-$(ENV).yaml" | kubectl apply -f -
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/kong-$(ENV).yaml" | kubectl apply -f -
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/linkerd-$(ENV).yaml" | kubectl apply -f -
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/postgres-app-$(ENV).yaml" | kubectl apply -f -
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/kafka-$(ENV).yaml" | kubectl apply -f -
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/redis-$(ENV).yaml" | kubectl apply -f -
+	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/keycloak-$(ENV).yaml" | kubectl apply -f -
 	@if [ -f "argocd/root-app-$(ENV).yaml" ]; then \
 		echo '── Applying root Application (services registry owner)'; \
 		sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/root-app-$(ENV).yaml" | kubectl apply -f -; \
@@ -138,7 +141,7 @@ eks-status: ## Report the emulated EKS cluster status and its nodes
 
 .PHONY: smoke
 smoke: ## Smoke a deployed component: make smoke COMPONENT=cert-manager
-	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cert-manager, vault, external-secrets, linkerd-crds, linkerd, cloudnative-pg, strimzi, redis-operator, kong, postgres-app, kafka, redis, cloud, eks)'; exit 1; }
+	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cert-manager, vault, external-secrets, linkerd-crds, linkerd, cloudnative-pg, strimzi, redis-operator, kong, postgres-app, kafka, redis, keycloak, cloud, eks)'; exit 1; }
 	bootstrap/smoke-target.sh "$(COMPONENT)"
 
 ##@ Local Git serve
@@ -172,10 +175,10 @@ status: ## Cluster, ArgoCD apps and pod health overview
 .PHONY: port-forward
 port-forward: ## Reach a platform UI/API locally: make port-forward APP=argocd|vault|keycloak|grafana|prometheus|tempo|postgres|kong-admin|minio
 	@[ -n "$(APP)" ] || { echo 'Usage: make port-forward APP=<name> (argocd, vault, keycloak, grafana, prometheus, tempo, postgres, kong-admin, minio)'; exit 1; }
-	@case "$(APP)" in \
-		argocd)     ns=argocd;        svc=argocd-server;                   ports=8443:443 ;; \
+	@url=; case "$(APP)" in \
+		argocd)     ns=argocd;        svc=argocd-server;                   ports=8443:443; url=https://localhost:8443 ;; \
 		vault)      ns=vault;         svc=vault;                           ports=8200:8200 ;; \
-		keycloak)   ns=keycloak;      svc=keycloak;                        ports=8080:80 ;; \
+		keycloak)   ns=kong;          svc=kong-proxy;                      ports=8443:443; url=https://keycloak.local:8443 ;; \
 		grafana)    ns=observability; svc=kube-prometheus-stack-grafana;   ports=3000:80 ;; \
 		prometheus) ns=observability; svc=kube-prometheus-stack-prometheus; ports=9090:9090 ;; \
 		tempo)      ns=tempo;         svc=tempo;                           ports=3200:3200 ;; \
@@ -184,7 +187,9 @@ port-forward: ## Reach a platform UI/API locally: make port-forward APP=argocd|v
 		minio)      ns=minio;         svc=minio-console;                   ports=9001:9001 ;; \
 		*) echo "ERROR: unknown APP '$(APP)'"; exit 1 ;; \
 	esac; \
-	echo "Forwarding $$ns/$$svc → http://localhost:$${ports%%:*}"; \
+	url="$${url:-http://localhost:$${ports%%:*}}"; \
+	echo "Forwarding $$ns/$$svc → $$url"; \
+	[ "$(APP)" != keycloak ] || echo "Hint: add '127.0.0.1 keycloak.local' to /etc/hosts; the leaf is signed by the sca-ca ClusterIssuer"; \
 	kubectl -n "$$ns" port-forward "svc/$$svc" "$$ports"
 
 ##@ Housekeeping

@@ -4,7 +4,8 @@
 # seed-vault.sh — Initialize, unseal and seed the local Vault instance.
 #   1. Saves init material only under .secrets/
 #   2. Configures KV-v2 and Kubernetes auth for External Secrets Operator
-#   3. Seeds non-production placeholder values; rotate them before promotion
+#   3. Seeds non-production placeholder values only when they are missing
+#      (SEED_ROTATE=1 forces rotation); rotate them before promotion
 # Usage: bootstrap/seed-vault.sh
 set -euo pipefail
 
@@ -13,6 +14,7 @@ POD="${VAULT_POD:-vault-0}"
 # Env-scoped KV paths (`secret/<service>/<env>`). The seed script is the local
 # bootstrap; dev/qa/prod seed their own Vaults with the same path shape.
 ENV="${ENV:-local}"
+SEED_ROTATE="${SEED_ROTATE:-0}"
 SECRETS_DIR="${SECRETS_DIR:-.secrets}"
 INIT_FILE="${SECRETS_DIR}/init-keys.json"
 ROOT_FILE="${SECRETS_DIR}/root-token"
@@ -53,6 +55,20 @@ vault_pod_exec() {
     VAULT_CACERT=/vault/userconfig/vault-tls/ca.crt \
     VAULT_TLS_SERVER_NAME=vault.vault.svc.cluster.local \
     VAULT_TOKEN="$VAULT_TOKEN" vault "$@"
+}
+
+# Seed a KV path only when it does not exist yet. Re-running bootstrap must not
+# rotate credentials that already have consumers (ExternalSecrets, CNPG, Kafka,
+# Redis, ...), so an existing path is left untouched unless SEED_ROTATE=1.
+kv_seed() {
+  local path="$1"
+  shift
+  if [ "$SEED_ROTATE" != "1" ] && vault_exec kv get "$path" >/dev/null 2>&1; then
+    echo "  (kept) ${path}"
+    return 0
+  fi
+  vault_exec kv put "$path" "$@" >/dev/null
+  echo "  (seeded) ${path}"
 }
 
 # Pods that must be unsealed in an HA raft cluster. Derive from the
@@ -211,17 +227,18 @@ vault_exec write auth/kubernetes/role/external-secrets \
   policies=external-secrets \
   ttl=1h >/dev/null
 
-echo "── Seeding local platform values"
-vault_exec kv put secret/keycloak/admin username=admin password="$(openssl rand -hex 24)" >/dev/null
-vault_exec kv put "secret/postgres-app/${ENV}" username=app password="$(openssl rand -hex 24)" >/dev/null
-vault_exec kv put "secret/keycloak-db/${ENV}" username=keycloak password="$(openssl rand -hex 24)" >/dev/null
-vault_exec kv put "secret/kafka/${ENV}" username=scram-admin password="$(openssl rand -hex 24)" >/dev/null
-vault_exec kv put "secret/redis/${ENV}" password="$(openssl rand -hex 24)" >/dev/null
-vault_exec kv put secret/grafana/admin username=admin password="$(openssl rand -hex 24)" >/dev/null
-vault_exec kv put secret/unleash/admin username=admin password="$(openssl rand -hex 24)" >/dev/null
-vault_exec kv put secret/unleash/db username=unleash password="$(openssl rand -hex 24)" >/dev/null
-vault_exec kv put secret/minio/root username=minioadmin password="$(openssl rand -hex 24)" >/dev/null
-vault_exec kv put secret/velero/credentials access_key=minioadmin secret_key="$(openssl rand -hex 24)" >/dev/null
+echo "── Seeding local platform values (idempotent; SEED_ROTATE=1 to rotate)"
+kv_seed secret/keycloak/admin username=admin password="$(openssl rand -hex 24)"
+kv_seed "secret/keycloak/test-user/${ENV}" username=smoke password="$(openssl rand -hex 24)"
+kv_seed "secret/postgres-app/${ENV}" username=app password="$(openssl rand -hex 24)"
+kv_seed "secret/keycloak-db/${ENV}" username=keycloak password="$(openssl rand -hex 24)"
+kv_seed "secret/kafka/${ENV}" username=scram-admin password="$(openssl rand -hex 24)"
+kv_seed "secret/redis/${ENV}" password="$(openssl rand -hex 24)"
+kv_seed secret/grafana/admin username=admin password="$(openssl rand -hex 24)"
+kv_seed secret/unleash/admin username=admin password="$(openssl rand -hex 24)"
+kv_seed secret/unleash/db username=unleash password="$(openssl rand -hex 24)"
+kv_seed secret/minio/root username=minioadmin password="$(openssl rand -hex 24)"
+kv_seed secret/velero/credentials access_key=minioadmin secret_key="$(openssl rand -hex 24)"
 
 # Alertmanager config seed only runs once its source lands (Phase 14); until
 # then it is skipped so the script stays idempotent and phase-agnostic.

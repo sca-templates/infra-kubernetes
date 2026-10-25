@@ -90,10 +90,13 @@ jobs:
               'argocd/kong-*.yaml',
               'argocd/kafka-*.yaml',
               'argocd/redis-*.yaml',
+              'argocd/keycloak-*.yaml',
               'envs/local/*.yaml',
               'infrastructure/*/values-base.yaml',
               'infrastructure/kafka/manifests/*.yaml',
               'infrastructure/redis/manifests/*.yaml',
+              'infrastructure/keycloak/manifests/*.yaml',
+              'infrastructure/keycloak/shared/*.yaml',
               'bootstrap/preload-chart-images.sh'
             ) }}
           restore-keys: |
@@ -144,7 +147,18 @@ jobs:
             add "$(printf '%s' "$f" | sed -E 's|^envs/[^/]+/([^/]+)\.ya?ml$|\1|')"
           done < <(printf '%s\n' "$changed" | grep -oE '^envs/[^/]+/[^/]+\.ya?ml$' || true)
 
-          # 3. per-component smoke scripts: bootstrap/smoke-<c>*.sh → <c>
+          # 3. dedicated Applications argocd/<c>-<env>.yaml → <c> when the
+          #    component owns an infrastructure/<c>/ directory. This runs before
+          #    the generic `argocd/` framework catch-all below, so a keycloak
+          #    Application change smokes keycloak in addition to the default.
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            c="$(printf '%s' "$f" | sed -E 's#^argocd/##; s#\.ya?ml$##; s#-(local|dev|qa|prod)$##')"
+            [ -d "infrastructure/$c" ] || continue
+            add "$c"
+          done < <(printf '%s\n' "$changed" | grep -oE '^argocd/[^/]+\.ya?ml$' || true)
+
+          # 4. per-component smoke scripts: bootstrap/smoke-<c>*.sh → <c>
           #    (smoke-ci/smoke-target are the shared framework; smoke-cloud* → `cloud`).
           #    smoke-eks is exercised by the always-on EKS step, so map it to the
           #    framework default.
@@ -159,7 +173,12 @@ jobs:
             esac
           done < <(printf '%s\n' "$changed" | grep -oE '^bootstrap/smoke-[^/]*\.sh$' || true)
 
-          # 4. cloud/EKS emulator tooling → `cloud` / framework default
+          # 5. Vault seeding is a platform prerequisite → vault.
+          if printf '%s\n' "$changed" | grep -qE '^bootstrap/seed-vault\.sh$'; then
+            add vault
+          fi
+
+          # 6. cloud/EKS emulator tooling → `cloud` / framework default
           #    (self-validates in CI; eks tooling is exercised by the EKS step).
           if printf '%s\n' "$changed" | grep -qE '^bootstrap/cloud-emulator[^/]*\.sh$'; then
             add cloud
@@ -168,7 +187,7 @@ jobs:
             add cert-manager
           fi
 
-          # 5. shared framework/tooling → default component (cert-manager): the
+          # 7. shared framework/tooling → default component (cert-manager): the
           #    smoke's own machinery (and the argocd manifest set / Makefile it
           #    drives) must be exercised by the smoke, not merged untested.
           framework_re='^(Makefile|argocd/|bootstrap/(smoke-ci|smoke-target|render-served-apps|sca|versions|local-git-|preload-chart-images|collect-argocd-diagnostics)[^/]*$)'

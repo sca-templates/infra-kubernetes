@@ -1,0 +1,17 @@
+# keycloak — prod profile (3 replicas, PodDisruptionBudget, soft anti-affinity,
+# manual sync tier owned by argocd/keycloak-prod.yaml).
+
+keycloakHostname: https://keycloak.local
+
+replicas: 3
+
+podDisruptionBudget:
+  maxUnavailable: 1
+
+resources:
+  requests:
+    cpu: "1"
+    memory: 2Gi
+  limits:
+    cpu: "2"
+    memory: 2Gi
