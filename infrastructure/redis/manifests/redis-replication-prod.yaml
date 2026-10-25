@@ -1,0 +1,76 @@
+# redis prod — RedisReplication with embedded Sentinel (Phase 12).
+#
+# clusterSize 3, Sentinel 3 (quorum 2), master group mymaster. Password is
+# sourced from kubernetesConfig.redisSecret; sentinel.redisSecret is omitted
+# deliberately (operator uses it as fallback). AOF via volumeClaimTemplate.
+apiVersion: redis.redis.opstreelabs.in/v1beta2
+kind: RedisReplication
+metadata:
+  name: redis
+  namespace: data
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  clusterSize: 3
+  kubernetesConfig:
+    image: quay.io/opstree/redis:v7.4.11
+    imagePullPolicy: IfNotPresent
+    redisSecret:
+      name: redis-password
+      key: password
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: "2"
+        memory: 2Gi
+  podSecurityContext:
+    fsGroup: 1000
+  storage:
+    volumeClaimTemplate:
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi
+  redisExporter:
+    enabled: true
+    image: quay.io/opstree/redis-exporter:v1.44.0
+    imagePullPolicy: IfNotPresent
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+  sentinel:
+    size: 3
+    image: quay.io/opstree/redis-sentinel:v7.4.11
+    imagePullPolicy: IfNotPresent
+    quorum: "2"
+    downAfterMilliseconds: "5000"
+    failoverTimeout: "10000"
+    parallelSyncs: "1"
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            topologyKey: kubernetes.io/hostname
+            labelSelector:
+              matchLabels:
+                app: redis
+                redis_setup_type: replication
+  pdb:
+    enabled: true
+    minAvailable: 2

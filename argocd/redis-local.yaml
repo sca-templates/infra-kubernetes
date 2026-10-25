@@ -1,0 +1,36 @@
+# redis-local — RedisReplication, DEDICATED Application.
+#
+# Raw RedisReplication/ExternalSecret resources (not a Helm chart), so they
+# live in their own per-env Application like postgres-app and kafka. The
+# manifests are under `infrastructure/redis/manifests/` and filtered by
+# `directory.include` to this environment only. Wave 40: after the redis-operator
+# (-10) and after Vault/ESO project the password.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: redis-local
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "40"
+spec:
+  project: default
+  source:
+    repoURL: "{{GIT_REPO_URL}}"
+    targetRevision: "{{GIT_TARGET_BRANCH}}"
+    path: infrastructure/redis/manifests
+    directory:
+      recurse: true
+      include: "*-local.yaml"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: data
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
+      - ServerSideApply=true

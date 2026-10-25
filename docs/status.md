@@ -10,7 +10,7 @@ Milestones and Issues.
 
 ## Current state
 
-**Phase 11 — Kafka deployed.** Phase 0 delivered the scaffold
+**Phase 12 — Redis deployed.** Phase 0 delivered the scaffold
 (Makefile, `bootstrap/`, `argocd/` with the app-of-apps pattern, the CI
 workflows, the service template, this docs set) and brought the local Floci
 emulated EKS cluster up with ArgoCD. **Phase 1** lands cert-manager on the `local` profile
@@ -93,11 +93,23 @@ storage and RF/minISR `1/1`, `qa`/`prod` run three with 10/20 GiB, RF/minISR
 projected credentials, Kafka, KafkaUser and brokers, then creates a topic and
 produces/consumes one record over SASL_SSL/SCRAM.
 
+**Phase 12** lands the Redis cache: a `RedisReplication` in `data` at wave 40 across all four
+environments — 1 replica in local/dev, 3 in qa/prod with embedded Sentinel 3 (quorum 2,
+master group `mymaster`). Images are pinned to `quay.io/opstree/redis:v7.4.11`,
+`quay.io/opstree/redis-sentinel:v7.4.11` and `quay.io/opstree/redis-exporter:v1.44.0`.
+The password is projected by ESO from `secret/redis/<env>` into `redis-password` and
+consumed through `kubernetesConfig.redisSecret`; persistence is AOF on a PVC, the
+exporter is enabled now (PodMonitor in Phase 14), and qa/prod add PDB + preferred
+anti-affinity. Like postgres-app and Kafka, the CRs ship through a **dedicated
+`Application` per environment** (`argocd/redis-<env>.yaml`, `directory.include:
+"*-<env>.yaml"`); `make smoke COMPONENT=redis` waits for the ExternalSecret and
+StatefulSets, then exercises PING/SET/GET, AOF and (when present) Sentinel quorum.
+
 | Fact | Value |
 | --- | --- |
 | Repository | `infra-kubernetes` (local, fully-local git serve; published to GitHub before promotion) |
-| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6), redis-operator (Phase 7), Kong (Phase 8), Linkerd control plane (Phase 9), postgres-app/keycloak-db (Phase 10), Kafka (Phase 11) |
-| `platform-root-local` | not used — `local` runs no services, so there is no root Application; `make bootstrap ENV=local` seeds the catalog wiring (`apps-local` + `kong-local` + `linkerd-local` + `postgres-app-local` + `kafka-local`) host-side |
+| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6), redis-operator (Phase 7), Kong (Phase 8), Linkerd control plane (Phase 9), postgres-app/keycloak-db (Phase 10), Kafka (Phase 11), Redis (Phase 12) |
+| `platform-root-local` | not used — `local` runs no services, so there is no root Application; `make bootstrap ENV=local` seeds the catalog wiring (`apps-local` + `kong-local` + `linkerd-local` + `postgres-app-local` + `kafka-local` + `redis-local`) host-side |
 | `platform-local` ApplicationSet | present, seven elements (`cert-manager` wave -20, `external-secrets` + `linkerd-crds` + `cloudnative-pg` + `strimzi` + `redis-operator` wave -10, `vault` wave 0) |
 | cert-manager app | `cert-manager-local` `Synced` + `Healthy`; `sca-ca` ClusterIssuer `Ready`; leaf Certificate smoke green |
 | vault app | `vault-local` `Synced` + `Healthy`; HA raft trio, TLS via `vault-tls` leaf; `make smoke COMPONENT=vault` → initialized=true sealed=false; seed idempotent and HA-aware |
@@ -110,6 +122,7 @@ produces/consumes one record over SASL_SSL/SCRAM.
 | linkerd app | `linkerd-local` `Synced` + `Healthy` (dedicated Application); chart `linkerd/linkerd-control-plane` 1.16.11 (`stable-2.14.10`); control-plane Deployments `linkerd-identity`/`linkerd-destination`/`linkerd-proxy-injector` Ready; identity PKI in-cluster (ConfigMap `linkerd-identity-trust-roots` + cert-manager-issued Secret `linkerd-identity-issuer`, chain to `root.linkerd.cluster.local` verified); 3 admission webhooks wired; `make smoke COMPONENT=linkerd` green, including **data plane end-to-end**: preflight of the control-plane identity-leaf TTL, an injected `nginx-unprivileged`+`curl` workload (both pods carry `linkerd-proxy`), HTTP 200 through the mesh, live identity leaves and inbound+outbound success metrics; `local` raises `identity.issuer.issuanceLifetime` to `168h0m0s` (emulator clock skew; dev/qa/prod keep 24h) |
 | postgres-app app | `postgres-app-local` `Synced` + `Healthy` (dedicated Application, raw CRs); CNPG `Cluster postgres-app` Ready (1 instance local; image `18.4-standard-trixie`), `keycloak-db` Ready (1 instance local); ESO `postgres-app-credentials` + `keycloak-db-credentials` `SecretSynced`; `pg_stat_statements` + `vector` + `wal_level=logical` verified through `app@app`; `make smoke COMPONENT=postgres-app` green |
 | kafka app | `kafka-local` `Synced` + `Healthy` (dedicated Application, raw CRs); Strimzi `Kafka/kafka` Ready (Kafka `4.2.0`), `KafkaNodePool/kafka` 1 dual-role node local; `KafkaUser/scram-admin` Ready; ESO `kafka-scram-admin` `SecretSynced` from `secret/kafka/local`; internal listener TLS + SCRAM-SHA-512; `make smoke COMPONENT=kafka` → topic create + produce/consume green |
+| redis app | `redis-local` `Synced` + `Healthy` (dedicated Application, raw CRs); `RedisReplication/redis` (1 replica local/dev) with embedded Sentinel only in qa/prod (3/3, mymaster); password from ESO `redis-password` via `secret/redis/<env>`; AOF on PVC, `redisExporter` enabled; `make smoke COMPONENT=redis` → PING/SET/GET and AOF verified; Sentinel checked in qa/prod |
 | git-local-serve | in-cluster git daemon (`git://<node>:9418/sca-infra.git`) `Ready` |
 | Observability / smoke CI | cluster smoke `pr-cluster.yml` **shipped** (Phase 1): selective on PRs as the **required `Smoke` check** on `main` + manual `workflow_dispatch`; no `push` smoke. Multi-component PRs smoke every touched component in one run (one boot/cloud/teardown); changes to the smoke framework (`bootstrap/smoke-*`, `argocd/**`, `Makefile`) resolve to `cert-manager` so the machinery is self-validated; the pinned toolchain is cached (`actions/cache`, keyed on `versions.sh`) (see [ci-cd.md](ci-cd.md)) |
 | Cloud integration smoke | every smoke run also proves the cluster reaches the local cloud emulator (Floci): `make cloud-up` / `make smoke COMPONENT=cloud` green — bucket created and object round-tripped from an in-cluster Job; on by default, `--no-cloud` / `SMOKE_CLOUD=0` opts out. **Dev/CI tooling, not a platform component** (see [ci-cd.md](ci-cd.md)) |

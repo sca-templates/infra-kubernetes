@@ -18,6 +18,7 @@ case "$component" in
   kafka) exec "$(dirname "$0")/smoke-kafka.sh" ;;
   strimzi) exec "$(dirname "$0")/smoke-strimzi.sh" ;;
   redis-operator) exec "$(dirname "$0")/smoke-redis-operator.sh" ;;
+  redis) exec "$(dirname "$0")/smoke-redis.sh" ;;
   kong) exec "$(dirname "$0")/smoke-kong.sh" ;;
   cloud) exec "$(dirname "$0")/smoke-cloud.sh" ;;
   eks) exec "$(dirname "$0")/smoke-eks.sh" ;;
