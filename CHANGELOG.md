@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.2.0](https://github.com/sca-templates/infra-kubernetes/compare/v3.1.0...v3.2.0) (2026-10-25)
+
+
+### Features
+
+* **keycloak:** deploy the OIDC identity provider (Phase 13) ([#102](https://github.com/sca-templates/infra-kubernetes/issues/102)) ([0801439](https://github.com/sca-templates/infra-kubernetes/commit/0801439284efb196eedf8b030e33a49981f6f3f8))
+
 ## [3.1.0](https://github.com/sca-templates/infra-kubernetes/compare/v3.0.0...v3.1.0) (2026-10-25)
 
 
