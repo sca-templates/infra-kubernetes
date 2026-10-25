@@ -1,0 +1,48 @@
+# keycloak-qa — OIDC identity provider, DEDICATED Application.
+#
+# qa auto-syncs but does not prune, per ADR-003.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: keycloak-qa
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "50"
+spec:
+  project: default
+  sources:
+    - repoURL: https://codecentric.github.io/helm-charts
+      chart: keycloakx
+      targetRevision: 7.4.0
+      helm:
+        releaseName: keycloak
+        valueFiles:
+          - $values/infrastructure/keycloak/values-base.yaml
+          - $values/envs/qa/keycloak.yaml
+    - repoURL: "{{GIT_REPO_URL}}"
+      targetRevision: "{{GIT_TARGET_BRANCH}}"
+      ref: values
+    - repoURL: "{{GIT_REPO_URL}}"
+      targetRevision: "{{GIT_TARGET_BRANCH}}"
+      path: infrastructure/keycloak/manifests
+      directory:
+        recurse: true
+        include: "*-qa.yaml"
+    - repoURL: "{{GIT_REPO_URL}}"
+      targetRevision: "{{GIT_TARGET_BRANCH}}"
+      path: infrastructure/keycloak/shared
+      directory:
+        recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: keycloak
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
+      - ServerSideApply=true

@@ -1,0 +1,18 @@
+# keycloak — qa profile (3 replicas, PodDisruptionBudget, soft anti-affinity).
+# `preferred` anti-affinity keeps the overlay loadable on the single-node
+# promote substrate while spreading replicas on real HA nodes.
+
+keycloakHostname: https://keycloak.local
+
+replicas: 3
+
+podDisruptionBudget:
+  maxUnavailable: 1
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: "2"
+    memory: 2Gi

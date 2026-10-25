@@ -52,7 +52,7 @@ and qa ([docs/workflow.md](docs/workflow.md#services-app-repo-as-source)).
 
 ## 3. Component catalog
 
-**17 components + ArgoCD.** Status column is the source of truth
+**19 components + ArgoCD.** Status column is the source of truth
 (`planned (Phase N)` until the phase lands; `deployed` from then on). Chart
 and image pins are set inside each phase and live under
 `infrastructure/<component>/` + `envs/<env>/`.
@@ -70,8 +70,8 @@ and image pins are set inside each phase and live under
 | Linkerd control plane | `linkerd` | linkerd/linkerd-control-plane | mTLS identity, golden signals | [infra-linkerd](https://github.com/sca-templates/infra-linkerd) | **deployed** (Phase 9) |
 | postgres-app (+ keycloak-db) | `data` | CNPG `Cluster` CRs (raw) | App + Keycloak databases; all 4 envs | [infra-postgres](https://github.com/sca-templates/infra-postgres) | **deployed** (Phase 10) |
 | Kafka | `data` | `Kafka`/`KafkaNodePool` CRs | Event backbone, TLS + SCRAM | [infra-kafka](https://github.com/sca-templates/infra-kafka) | **deployed** (Phase 11) |
-| Redis | `data` | `Redis` CR | Cache | [infra-redis](https://github.com/sca-templates/infra-redis) | planned (Phase 12) |
-| Keycloak | `keycloak` | bitnami/keycloak | OIDC IdP, realm `sca` | [infra-keycloak](https://github.com/sca-templates/infra-keycloak) | planned (Phase 13) |
+| Redis | `data` | `RedisReplication` CR | Cache | [infra-redis](https://github.com/sca-templates/infra-redis) | **deployed** (Phase 12) |
+| Keycloak | `keycloak` | codecentric/keycloakx | OIDC IdP, realm `sca` | [infra-keycloak](https://github.com/sca-templates/infra-keycloak) | **deployed** (Phase 13) |
 | kube-prometheus-stack | `observability` | prometheus-community/kube-prometheus-stack | Metrics + Grafana + Alertmanager | [infra-prometheus](https://github.com/sca-templates/infra-prometheus) | planned (Phase 14) |
 | Loki | `loki` | grafana/loki | Log aggregation | [infra-loki](https://github.com/sca-templates/infra-loki) | planned (Phase 15) |
 | Alloy | `observability` | grafana/alloy | Ships pod logs to Loki | — | planned (Phase 15) |

@@ -1,0 +1,28 @@
+# keycloak admin dev — bootstrap administrator projected from Vault.
+#
+# Keycloak consumes these values as KC_BOOTSTRAP_ADMIN_USERNAME/PASSWORD. The
+# username is part of the path contract; only the password is sensitive.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: keycloak-admin
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  refreshInterval: 5m
+  secretStoreRef:
+    name: vault
+    kind: ClusterSecretStore
+  target:
+    name: keycloak-admin
+    creationPolicy: Owner
+  data:
+    - secretKey: username
+      remoteRef:
+        key: secret/keycloak/admin
+        property: username
+    - secretKey: password
+      remoteRef:
+        key: secret/keycloak/admin
+        property: password

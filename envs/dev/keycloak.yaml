@@ -1,0 +1,6 @@
+# keycloak — dev profile (shared integration, reduced HA). Two replicas with
+# the base footprint; the hostname uses the standard 443 edge (no port).
+
+keycloakHostname: https://keycloak.local
+
+replicas: 2

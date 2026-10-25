@@ -14,8 +14,9 @@ This is a clean restart after the previous `infra-kubernetes` churned in
 ArgoCD is deployed (Phase 0); cert-manager (Phase 1), Vault (Phase 2),
 external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg
 (Phase 5), strimzi (Phase 6), redis-operator (Phase 7), Kong (Phase 8), the
-Linkerd control plane (Phase 9), postgres-app/keycloak-db (Phase 10) and Kafka
-(Phase 11) are deployed; the remaining 7 components are `planned`. The delivery plan lives in
+Linkerd control plane (Phase 9), postgres-app/keycloak-db (Phase 10), Kafka
+(Phase 11), Redis (Phase 12) and Keycloak (Phase 13) are deployed; the
+remaining 6 components are `planned`. The delivery plan lives in
 [docs/roadmap.md](docs/roadmap.md) and what is actually deployed lives in
 [docs/status.md](docs/status.md).
 
@@ -34,7 +35,8 @@ make status
   single-node k3s container + ECR), the only local cluster target.
 - `make bootstrap` installs ArgoCD, seeds the platform catalog wiring
   (`argocd/apps-<env>.yaml` plus the dedicated `kong-<env>`, `linkerd-<env>`,
-  `postgres-app-<env>` and `kafka-<env>` Applications) and applies the
+  `postgres-app-<env>`, `kafka-<env>`, `redis-<env>` and `keycloak-<env>`
+  Applications) and applies the
   environment root Application (services registry). `GIT_REPO_URL` comes from
   `.env` (see `.env.example`); a live URL is a Phase 1 requirement. In `local`
   the component Applications can reconcile a fully-local in-cluster git serve
@@ -74,20 +76,21 @@ and qa. See
 
 ## Platform Components
 
-The catalog is **17 components** plus ArgoCD. `local` runs the full set;
+The catalog is **19 components** plus ArgoCD. `local` runs the full set;
 `dev`/`qa`/`prod` run the operator/security core plus the gateway and Keycloak.
 **Currently deployed: ArgoCD (Phase 0), cert-manager (Phase 1), Vault
 (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg
 (Phase 5), strimzi (Phase 6), redis-operator (Phase 7), Kong (Phase 8), the
-Linkerd control plane (Phase 9), postgres-app/keycloak-db (Phase 10) and Kafka
-(Phase 11); every other component is `planned (Phase N)`.**
+Linkerd control plane (Phase 9), postgres-app/keycloak-db (Phase 10), Kafka
+(Phase 11), Redis (Phase 12) and Keycloak (Phase 13); every other component is
+`planned (Phase N)`.**
 The status column in
 [docs/architecture.md](docs/architecture.md) is the source of truth for what is
 live.
 
 | Area | Components |
 | --- | --- |
-| Security and identity | cert-manager (deployed), Vault (deployed), External Secrets Operator (deployed), Keycloak |
+| Security and identity | cert-manager (deployed), Vault (deployed), External Secrets Operator (deployed), Keycloak (deployed) |
 | Edge and mesh | linkerd-crds (deployed), Kong (deployed), Linkerd control plane (deployed) |
 | Data | CloudNativePG (deployed), Strimzi (deployed), redis-operator (deployed), postgres-app/keycloak-db (deployed), Kafka (deployed), Redis (deployed) |
 | Observability | kube-prometheus-stack, Loki, Tempo, Alloy |

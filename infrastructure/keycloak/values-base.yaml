@@ -1,0 +1,171 @@
+# keycloak — base values (shared across environments; per-env tier overrides
+# live in envs/<env>/keycloak.yaml).
+# Official chart: codecentric/keycloakx, served from
+# https://codecentric.github.io/helm-charts. Keycloak is a DEDICATED Application
+# per environment (wave 50) because it is both a Helm release and the owner of
+# the realm/tls/ExternalSecret manifests; the chart pin lives in
+# argocd/keycloak-<env>.yaml.
+#
+# Keycloak is the OIDC identity provider for the platform (realm `sca`). It uses
+# the existing CNPG `keycloak-db` cluster (Phase 10) instead of the in-process
+# H2 database, and all credentials are projected from Vault by External Secrets.
+
+# `fullnameOverride` keeps the StatefulSet/Services stable (`keycloak`,
+# `keycloak-http`, `keycloak-headless`) regardless of the release name, matching
+# the convention of the other dedicated components.
+fullnameOverride: keycloak
+
+image:
+  repository: quay.io/keycloak/keycloak
+  tag: "26.8.1"
+  pullPolicy: IfNotPresent
+
+# The edge is Kong (TLS termination); Keycloak serves plain HTTP behind it and
+# trusts Kong's X-Forwarded-* headers.
+proxy:
+  enabled: true
+  mode: xforwarded
+  http:
+    enabled: true
+
+# Realm import is a startup-time operation: the chart mounts the shared realm
+# ConfigMap at /opt/keycloak/data/import and this arg makes Keycloak import it.
+# Imports are skipped when the realm already exists, so this is safe on restart.
+args:
+  - start
+  - --import-realm
+
+http:
+  # Serve Keycloak at the root (the chart default is the legacy /auth prefix).
+  relativePath: /
+  # Management endpoints (health/metrics) also live at the root.
+  managementRelativePath: /
+  internalPort: http-internal
+  internalScheme: HTTP
+
+cache:
+  stack: default
+
+metrics:
+  enabled: true
+
+health:
+  enabled: true
+
+# Per-env hostname used by Keycloak when it builds issuer/redirect URLs. The
+# local profile includes the Kong port (8443); dev/qa/prod use the standard 443.
+keycloakHostname: https://keycloak.local
+
+database:
+  vendor: postgres
+  hostname: keycloak-db-rw.data.svc.cluster.local
+  port: 5432
+  database: keycloak
+  username: keycloak
+  existingSecret: keycloak-db-credentials
+  existingSecretKey: password
+
+dbchecker:
+  enabled: true
+  image:
+    repository: docker.io/busybox
+    tag: "1.37"
+    pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  httpPort: 80
+  httpsPort: 8443
+
+ingress:
+  enabled: true
+  ingressClassName: kong
+  servicePort: http
+  rules:
+    - host: keycloak.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - keycloak.local
+      secretName: keycloak-tls
+  console:
+    enabled: false
+
+# Bootstrap admin and smoke test-user credentials. The realm ConfigMap uses
+# ${SCA_SMOKE_USERNAME} / ${SCA_SMOKE_PASSWORD} placeholders, which Keycloak
+# resolves from these environment variables at import time.
+extraEnv: |
+  - name: KC_BOOTSTRAP_ADMIN_USERNAME
+    valueFrom:
+      secretKeyRef:
+        name: keycloak-admin
+        key: username
+  - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: keycloak-admin
+        key: password
+  - name: SCA_SMOKE_USERNAME
+    valueFrom:
+      secretKeyRef:
+        name: keycloak-test-user
+        key: username
+  - name: SCA_SMOKE_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: keycloak-test-user
+        key: password
+  - name: KC_HOSTNAME
+    value: {{ .Values.keycloakHostname | quote }}
+
+# Soft anti-affinity in every tier: qa/prod spread replicas on real HA nodes,
+# while the single-node promote/local substrate can still schedule them.
+affinity: |
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: topology.kubernetes.io/hostname
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: keycloakx
+              app.kubernetes.io/instance: keycloak
+
+# Keycloak's default startup probe is 60 × 5s; a cold JVM + DB migration can
+# exceed that on a loaded node, so allow up to ~10 minutes.
+startupProbe: |
+  httpGet:
+    path: '{{ tpl (coalesce .Values.http.managementRelativePath .Values.http.relativePath) $ | trimSuffix "/" }}/health'
+    port: '{{ .Values.http.internalPort }}'
+    scheme: '{{ .Values.http.internalScheme }}'
+  initialDelaySeconds: 15
+  timeoutSeconds: 1
+  failureThreshold: 120
+  periodSeconds: 5
+
+# Default (dev) footprint; env overlays adjust local/qa/prod.
+replicas: 2
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: "1"
+    memory: 2Gi
+
+# The realm is a shared ConfigMap mounted into the Keycloak pod; the chart's
+# startup arg imports every *-realm.json in the directory.
+extraVolumes: |
+  - name: realm-import
+    configMap:
+      name: keycloak-realm-sca
+      items:
+        - key: sca-realm.json
+          path: sca-realm.json
+extraVolumeMounts: |
+  - name: realm-import
+    mountPath: /opt/keycloak/data/import
+    readOnly: true

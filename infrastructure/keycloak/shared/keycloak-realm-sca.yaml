@@ -1,0 +1,84 @@
+# keycloak-realm-sca — the platform OIDC realm, imported at Keycloak startup.
+#
+# Mounted at /opt/keycloak/data/import by the chart (see values-base.yaml) and
+# imported once via `--import-realm`; Keycloak skips an already-existing realm.
+# The smoke user/password are environment-variable placeholders resolved from
+# the keycloak-test-user Secret, so no credential is committed to git.
+#
+# The smoke client is public (PKCE S256) and enables the direct grant solely so
+# the smoke can obtain a token without a browser. The redirect URIs cover the
+# local edge (8443) and the real-cluster edge (443).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-realm-sca
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+data:
+  sca-realm.json: |
+    {
+      "realm": "sca",
+      "enabled": true,
+      "displayName": "sca",
+      "sslRequired": "external",
+      "registrationAllowed": false,
+      "loginWithEmailAllowed": true,
+      "duplicateEmailsAllowed": false,
+      "resetPasswordAllowed": false,
+      "editUsernameAllowed": false,
+      "roles": {
+        "realm": [
+          {
+            "name": "user",
+            "description": "Platform user"
+          }
+        ]
+      },
+      "defaultRole": {
+        "name": "user"
+      },
+      "clients": [
+        {
+          "clientId": "sca-smoke",
+          "name": "sca smoke",
+          "enabled": true,
+          "protocol": "openid-connect",
+          "publicClient": true,
+          "standardFlowEnabled": true,
+          "directAccessGrantsEnabled": true,
+          "implicitFlowEnabled": false,
+          "serviceAccountsEnabled": false,
+          "redirectUris": [
+            "https://keycloak.local/*",
+            "https://keycloak.local:8443/*"
+          ],
+          "webOrigins": [
+            "+"
+          ],
+          "attributes": {
+            "pkce.code.challenge.method": "S256"
+          }
+        }
+      ],
+      "users": [
+        {
+          "username": "${SCA_SMOKE_USERNAME}",
+          "enabled": true,
+          "emailVerified": true,
+          "firstName": "Smoke",
+          "lastName": "Test",
+          "email": "smoke@example.invalid",
+          "credentials": [
+            {
+              "type": "password",
+              "value": "${SCA_SMOKE_PASSWORD}",
+              "temporary": false
+            }
+          ],
+          "realmRoles": [
+            "user"
+          ]
+        }
+      ]
+    }

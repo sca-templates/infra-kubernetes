@@ -1,0 +1,28 @@
+# keycloak-tls — edge leaf certificate for the Keycloak hostname.
+#
+# Kong's Ingress Controller picks the certificate from the Ingress TLS secret,
+# so the browser/smoke sees a certificate issued by the platform sca-ca and
+# scoped to keycloak.local (not Kong's default proxy certificate).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: keycloak-tls
+  namespace: keycloak
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  secretName: keycloak-tls
+  issuerRef:
+    name: sca-ca
+    kind: ClusterIssuer
+  # sca-ca is a SelfSigned issuer, so the leaf signs itself. Without a
+  # commonName the subject and issuer DNs are empty and curl/OpenSSL rejects
+  # the certificate (error 60, "couldn't get X509-issuer name").
+  commonName: keycloak.local
+  dnsNames:
+    - keycloak.local
+  duration: 2160h # 90d
+  renewBefore: 360h # 15d
+  privateKey:
+    algorithm: RSA
+    size: 2048

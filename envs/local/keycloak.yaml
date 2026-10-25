@@ -1,0 +1,15 @@
+# keycloak — local profile (developer cluster: 1 replica, minimal resources).
+# The local Kong edge is reached on 8443, so the issuer/redirect hostname keeps
+# that port; ingress matches the bare host (Kubernetes hosts cannot carry ports).
+
+keycloakHostname: https://keycloak.local:8443
+
+replicas: 1
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
