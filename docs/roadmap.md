@@ -171,3 +171,16 @@ pre-release history as a signed baseline — see
 A change lands via PR → CI (static; selective cluster smoke from Phase 1) → human
 review → merge → each environment's ArgoCD applies it per its sync policy. See
 [workflow.md](workflow.md) for the full flow and the escalation (rollback) gate.
+
+
+## Migration Epics (Phase A)
+
+The following epics are planned for cost optimization:
+
+| Epic | Area | Priority | Status | Notes |
+| --- | --- | --- | --- | --- |
+| Replace Keycloak with Zitadel | Security & Identity | High | Proposed | Complete replacement. Inventory dependencies first. |
+| Replace Kafka/Strimzi with NATS JetStream | Data | Medium | Proposed | Togglable between SNS/SQS and NATS. No consumers currently. |
+| Replace Linkerd with CNI-native mTLS | Edge & Mesh | High | Proposed | PoC required. Loss of L7 features. |
+| Prioritize Velero + Backups (CNPG + Vault) | Delivery & Resilience | **Critical** | Proposed | Must complete before disruptive migrations. |
+| Validate CNPG as RDS replacement | Data | High | Proposed | Requires tested backups and restore procedures. |
