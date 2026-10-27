@@ -1,0 +1,21 @@
+# velero — local overlay
+configuration:
+  backupStorageLocation:
+    - name: default
+      provider: aws
+      bucket: velero
+      config:
+        region: minio
+        s3ForcePathStyle: "true"
+        s3Url: http://minio.minio.svc.cluster.local:9000
+
+schedules:
+  critical-namespaces:
+    disabled: false
+    schedule: "0 2 * * *"
+    template:
+      includedNamespaces:
+        - data
+        - vault
+        - keycloak
+      ttl: 720h0m0s

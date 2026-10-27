@@ -183,3 +183,14 @@ The following epics are planned for cost optimization:
 | Replace Linkerd with CNI-native mTLS | Edge & Mesh | High | Proposed | PoC required. Loss of L7 features. |
 | Prioritize Velero + Backups (CNPG + Vault) | Delivery & Resilience | **Critical** | Proposed | Must complete before disruptive migrations. |
 | Validate CNPG as RDS replacement | Data | High | Proposed | Requires tested backups and restore procedures. |
+
+## Phase B (Velero, CNPG Backups, Vault Raft Snapshots) — Priority
+
+### Work Log
+
+| Date | Change | PR/Commit | Notes |
+| --- | --- | --- | --- |
+| 2026-10-27 | Deploy MinIO (local S3 backend) for Velero | pending | Phase 17, wave 70, local only |
+| 2026-10-27 | Deploy Velero with AWS S3 plugin to MinIO | pending | Phase 18, wave 80 |
+| 2026-10-27 | Configure CNPG backups to S3/MinIO with retention | pending | PITR capable |
+| 2026-10-27 | Add Vault Raft snapshot CronJob to S3 | pending | Complementary to Velero |

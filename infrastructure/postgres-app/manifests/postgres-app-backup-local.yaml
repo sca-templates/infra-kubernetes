@@ -1,0 +1,11 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Backup
+metadata:
+  name: postgres-app-daily
+  namespace: data
+  annotations:
+    argocd.argoproj.io/sync-wave: "50"
+spec:
+  cluster:
+    name: postgres-app
+  method: barmanObjectStore

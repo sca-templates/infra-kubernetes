@@ -1,0 +1,15 @@
+# minio — local overlay
+# Standalone MinIO for Velero backups in local environment
+mode: standalone
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+persistence:
+  enabled: true
+  size: 10Gi

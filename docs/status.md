@@ -194,3 +194,10 @@ password-grant token accepted by userinfo (`make smoke COMPONENT=keycloak`).
 | Linkerd → CNI-native mTLS | **Planned** | PoC required in Floci first. |
 | Velero + Backups | **High Priority** | CNPG backups, Vault Raft snapshots. Must validate restores. |
 | CNPG RDS replacement | **In Progress** | Needs backup validation. |
+
+## Phase B additions (in progress)
+
+| Component | Namespace | Status | Notes |
+| --- | --- | --- | --- |
+| minio | minio | planned (Phase 17) | Local-only S3 backend for Velero |
+| velero | velero | planned (Phase 18) | Cluster backups with schedules |

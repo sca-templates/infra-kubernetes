@@ -33,6 +33,22 @@ spec:
       # soon as a `pg_stat_statements.*` parameter is present; setting the
       # library directly is rejected as a fixed parameter.
       pg_stat_statements.track: all
+  backup:
+    barmanObjectStore:
+      destinationPath: s3://cnpg-backups/
+      endpointURL: http://minio.minio.svc.cluster.local:9000
+      s3Credentials:
+        accessKeyId:
+          name: cnpg-s3-credentials
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: cnpg-s3-credentials
+          key: ACCESS_SECRET_KEY
+      wal:
+        compression: gzip
+      data:
+        compression: gzip
+    retentionPolicy: "7d"
   storage:
     size: 1Gi
   resources:

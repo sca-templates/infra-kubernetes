@@ -1,0 +1,53 @@
+# velero — base values
+# Official chart: vmware-tanzu/velero
+# Chart pin (targetRevision) is set in argocd/apps-<env>.yaml
+
+image:
+  repository: velero/velero
+  tag: v1.16.1
+  pullPolicy: IfNotPresent
+
+initContainers:
+  - name: velero-plugin-for-aws
+    image: velero/velero-plugin-for-aws:v1.11.1
+    imagePullPolicy: IfNotPresent
+    volumeMounts:
+      - mountPath: /target
+        name: plugins
+
+# Configuration
+configuration:
+  backupStorageLocation:
+    - name: default
+      provider: aws
+      bucket: velero
+      config:
+        region: minio
+        s3ForcePathStyle: "true"
+        s3Url: http://minio.minio.svc.cluster.local:9000
+  volumeSnapshotLocation: []
+  defaultVolumesToFsBackup: false
+
+credentials:
+  useSecret: true
+  existingSecret: velero-credentials
+
+# Deploy node agent for filesystem backups if needed
+deployNodeAgent: false
+
+# Schedules for critical namespaces
+schedules: {}
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# Service account
+serviceAccount:
+  server:
+    create: true
+    name: velero

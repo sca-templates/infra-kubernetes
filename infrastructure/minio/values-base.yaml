@@ -1,0 +1,52 @@
+# minio — base values (local-only S3 stand-in for Velero).
+# Official chart: minio/minio (https://charts.min.io/).
+# Chart pin (targetRevision) is set in argocd/apps-<env>.yaml; the image tag is
+# pinned here, never `latest`. MinIO runs only in local (see envs/local/).
+
+mode: standalone
+
+# Use the official MinIO image
+image:
+  repository: quay.io/minio/minio
+  tag: RELEASE.2025-09-07T16-13-09Z
+  pullPolicy: IfNotPresent
+
+rootUser: minioadmin
+# rootPassword comes from existingSecret or set via env; in this setup we
+# inject from a Secret created by ExternalSecret (see manifests/).
+existingSecret: minio-root-credentials
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: "9000"
+
+consoleService:
+  type: ClusterIP
+  port: "9001"
+
+# Persistence
+persistence:
+  enabled: true
+  size: 10Gi
+  storageClass: ""
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# Buckets to create on startup
+buckets:
+  - name: velero
+    policy: none
+    purge: false
+
+# Disable default policies, configure via policy
+policies: []
+
+# Run as root is not ideal, but MinIO official chart handles this
+users: []

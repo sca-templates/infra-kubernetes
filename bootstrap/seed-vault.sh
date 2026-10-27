@@ -250,3 +250,5 @@ else
 fi
 
 echo "Vault initialized, unsealed and seeded. Init material remains in ${SECRETS_DIR}."
+# CNPG backups to MinIO/S3
+kv_seed secret/cnpg/backup access_key=minioadmin secret_key="$(openssl rand -hex 24)" || true
