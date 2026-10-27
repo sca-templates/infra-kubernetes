@@ -374,7 +374,6 @@ Phase 1 — a required PR check, profile `local` — see [ci-cd.md](ci-cd.md)),
 merges to `main`, and each environment's ArgoCD applies it according to its own
 sync policy (`local`/`dev` auto, `qa` auto-no-prune, `prod` manual by a human).
 
-
 ## Migration Plan (Phase A - In Progress)
 
 The following migrations are planned to optimize costs while maintaining service quality:
