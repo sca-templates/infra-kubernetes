@@ -24,24 +24,26 @@ spec:
           labels:
             app: vault-raft-snapshot
         spec:
+          automountServiceAccountToken: false
           serviceAccountName: vault-snapshot
           restartPolicy: OnFailure
           securityContext:
             runAsNonRoot: true
-            runAsUser: 1000
-            runAsGroup: 1000
-            fsGroup: 1000
+            runAsUser: 65532
+            runAsGroup: 65532
+            fsGroup: 65532
             seccompProfile:
               type: RuntimeDefault
           containers:
             - name: snapshot
               image: amazon/aws-cli:2.27.63
-              imagePullPolicy: IfNotPresent
+              imagePullPolicy: Always
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
                 runAsNonRoot: true
-                runAsUser: 1000
+                runAsUser: 65532
+                runAsGroup: 65532
                 capabilities:
                   drop:
                     - ALL
