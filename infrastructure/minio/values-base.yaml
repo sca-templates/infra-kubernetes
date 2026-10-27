@@ -44,6 +44,12 @@ buckets:
   - name: velero
     policy: none
     purge: false
+  - name: vault-snapshots
+    policy: none
+    purge: false
+  - name: cnpg-backups
+    policy: none
+    purge: false
 
 # Disable default policies, configure via policy
 policies: []
