@@ -51,3 +51,11 @@ serviceAccount:
   server:
     create: true
     name: velero
+
+# Disable upgradeCRDs job to avoid bitnamilegacy/kubectl dependency issues
+upgradeCRDs: false
+
+kubectl:
+  image:
+    repository: registry.k8s.io/kubectl
+    tag: v1.33.4
