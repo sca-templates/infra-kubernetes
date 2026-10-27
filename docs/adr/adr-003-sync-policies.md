@@ -1,18 +1,23 @@
-# ADR-003: Sync Policies
+# ADR-003: ArgoCD Sync Policies
 
 ## Status
+
 Accepted
 
 ## Context
-Different environments have different risk profiles and need different sync behaviors.
+
+Different environments have different risk profiles and operational requirements. A one-size-fits-all sync policy is not appropriate.
 
 ## Decision
-- **local**: auto-sync + prune (platform), no services
-- **dev**: auto-sync + prune (platform), services synced on demand by promote workflow
-- **qa**: auto-sync, NO prune (platform), services synced by promote workflow
-- **prod**: manual sync (platform and services), services via version pin in services-prod.yaml
+
+- **local**: auto-sync + prune enabled for rapid iteration
+- **dev**: auto-sync + prune enabled for platform, services synced on demand via promote workflow
+- **qa**: auto-sync enabled, prune disabled for safety
+- **prod**: manual sync only, no auto-sync or prune
 
 ## Consequences
-- qa/prod have extra protection against accidental pruning
-- prod requires human intervention for all changes
-- Clear promotion path
+
+- qa/prod have extra protection against accidental deletions
+- local/dev allow faster iteration
+- prod requires explicit approval for all changes
+- Services follow app-repo-as-source pattern with promotion gates
