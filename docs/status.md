@@ -184,3 +184,13 @@ password-grant token accepted by userinfo (`make smoke COMPONENT=keycloak`).
   log](architecture.md#deviations-log): they are the normative record.
 - `local` is the demo/CI substrate; treat everything it runs as the minimal
   but *complete* platform, not as a reduced copy.
+
+## Migration Status (Phase A)
+
+| Component/Migration | Status | Notes |
+| --- | --- | --- |
+| Keycloak → Zitadel | **Planned** | Complete replacement. Inventory in progress. |
+| Kafka/Strimzi → NATS JetStream | **Planned** | Togglable design. No current consumers. |
+| Linkerd → CNI-native mTLS | **Planned** | PoC required in Floci first. |
+| Velero + Backups | **High Priority** | CNPG backups, Vault Raft snapshots. Must validate restores. |
+| CNPG RDS replacement | **In Progress** | Needs backup validation. |

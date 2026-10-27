@@ -373,3 +373,18 @@ by CI (static always; selective cluster smoke of the touched component from
 Phase 1 — a required PR check, profile `local` — see [ci-cd.md](ci-cd.md)),
 merges to `main`, and each environment's ArgoCD applies it according to its own
 sync policy (`local`/`dev` auto, `qa` auto-no-prune, `prod` manual by a human).
+
+## Migration Plan (Phase A - In Progress)
+
+The following migrations are planned to optimize costs while maintaining service quality:
+
+| Migration | Status | Notes |
+| --- | --- | --- |
+| Keycloak → Zitadel | **Proposed** | Complete replacement, no parallel long-term deployment. All OIDC clients must be migrated. |
+| Kafka/Strimzi → NATS JetStream | **Proposed** | Togglable between SNS/SQS (external AWS) and NATS (in-cluster). No current consumers. |
+| Linkerd → CNI-native mTLS | **Proposed** | L3/L4 mTLS via WireGuard/IPsec. Loss of L7 features (retries, timeouts, traffic split). PoC required first. |
+| CNPG as RDS replacement | **In Progress** | Requires validated backups/PITR and Velero. |
+| Vault hardening | **Proposed** | Raft snapshots to S3/MinIO. |
+| Velero priority | **High Priority** | Critical for backups before disruptive migrations. |
+
+See [ADRs](adr/) for detailed decisions.
