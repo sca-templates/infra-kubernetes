@@ -63,7 +63,7 @@ logs/
 
 ### Custom ###
 # Tooling deps and user-managed notes
-0.Project_info
+0.Project_info/
 context/structure.txt
 node_modules/
 .codegraph/
@@ -71,4 +71,3 @@ node_modules/
 # Local scratch — not part of the repo
 pr-summary-generator.md
 pr.md
-0.Project_info/
