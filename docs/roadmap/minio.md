@@ -8,14 +8,16 @@ for the Velero backup backend (#23).
 
 No natural phases → issues directly under the project.
 
-- [ ] Issue #22 · Deploy `minio/minio` (local)
+- [x] Issue #22 · Deploy `minio/minio` (local)
   Depends on: —
-  - [ ] `infrastructure/minio/` values + local-only overlays
+  - [x] `infrastructure/minio/` values + local-only overlays
         - Commits: `feat(minio): minio chart and local overlays`
-  - [ ] bucket(s) for Velero + credentials in `.secrets/`
+  - [x] bucket(s) for Velero + `secret/minio/root` projected by ESO
+        The chart's `post-install` hook is replaced by the normal
+        `minio-buckets` Job (`velero`, `vault-snapshots`, `cnpg-backups`).
         Commits: `feat(minio): velero bucket and credentials`
-  - [ ] smoke: `mc`/S3 client lists the Velero bucket
+  - [x] smoke: in-cluster AWS CLI Job lists/head-buckets and round-trips an object
         Commits: `test(minio): velero bucket smoke`
-  - [ ] docs: Work Log row + catalog Status → deployed
+  - [x] docs: Work Log row + catalog Status → deployed
         Commits: `docs(minio): mark deployed`
   Issue done when: MinIO serves the Velero bucket; ready for Velero (#23).

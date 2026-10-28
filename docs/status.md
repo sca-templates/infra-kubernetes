@@ -10,7 +10,8 @@ Milestones and Issues.
 
 ## Current state
 
-**Phase 13 — Keycloak deployed.** Phase 0 delivered the scaffold
+**Phase 13 — Keycloak deployed; Phase 17/18 — MinIO + Velero (local).**
+Phase 0 delivered the scaffold
 (Makefile, `bootstrap/`, `argocd/` with the app-of-apps pattern, the CI
 workflows, the service template, this docs set) and brought the local Floci
 emulated EKS cluster up with ArgoCD. **Phase 1** lands cert-manager on the `local` profile
@@ -127,9 +128,9 @@ password-grant token accepted by userinfo (`make smoke COMPONENT=keycloak`).
 | Fact | Value |
 | --- | --- |
 | Repository | `infra-kubernetes` (local, fully-local git serve; published to GitHub before promotion) |
-| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6), redis-operator (Phase 7), Kong (Phase 8), Linkerd control plane (Phase 9), postgres-app/keycloak-db (Phase 10), Kafka (Phase 11), Redis (Phase 12), Keycloak (Phase 13) |
+| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6), redis-operator (Phase 7), Kong (Phase 8), Linkerd control plane (Phase 9), postgres-app/keycloak-db (Phase 10), Kafka (Phase 11), Redis (Phase 12), Keycloak (Phase 13), MinIO (Phase 17, local), Velero (Phase 18, local) |
 | `platform-root-local` | not used — `local` runs no services, so there is no root Application; `make bootstrap ENV=local` seeds the catalog wiring (`apps-local` + `kong-local` + `linkerd-local` + `postgres-app-local` + `kafka-local` + `redis-local` + `keycloak-local`) host-side |
-| `platform-local` ApplicationSet | present, seven elements (`cert-manager` wave -20, `external-secrets` + `linkerd-crds` + `cloudnative-pg` + `strimzi` + `redis-operator` wave -10, `vault` wave 0) |
+| `platform-local` ApplicationSet | present, nine elements (`cert-manager` wave -20, `external-secrets` + `linkerd-crds` + `cloudnative-pg` + `strimzi` + `redis-operator` wave -10, `vault` wave 0, `minio` wave 70, `velero` wave 80) |
 | cert-manager app | `cert-manager-local` `Synced` + `Healthy`; `sca-ca` ClusterIssuer `Ready`; leaf Certificate smoke green |
 | vault app | `vault-local` `Synced` + `Healthy`; HA raft trio, TLS via `vault-tls` leaf; `make smoke COMPONENT=vault` → initialized=true sealed=false; seed idempotent and HA-aware |
 | external-secrets app | `external-secrets-local` `Synced` + `Healthy`; `ClusterSecretStore vault` Ready (k8s-auth `external-secrets`, TLS via `vault-tls`); short `refreshInterval` (5m); `make smoke COMPONENT=external-secrets` → throwaway ExternalSecret `SecretSynced` + data verified |
@@ -192,12 +193,17 @@ password-grant token accepted by userinfo (`make smoke COMPONENT=keycloak`).
 | Keycloak → Zitadel | **Planned** | Complete replacement. Inventory in progress. |
 | Kafka/Strimzi → NATS JetStream | **Planned** | Togglable design. No current consumers. |
 | Linkerd → CNI-native mTLS | **Planned** | PoC required in Floci first. |
-| Velero + Backups | **High Priority** | CNPG backups, Vault Raft snapshots. Must validate restores. |
+| Velero + Backups | **High Priority** | MinIO + Velero landed in `local` (Phase 17/18); CNPG scheduled backups wired. Restore validation and the real Vault raft snapshot payload remain Phase B follow-ups. |
 | CNPG RDS replacement | **In Progress** | Needs backup validation. |
 
 ## Phase B additions (in progress)
 
 | Component | Namespace | Status | Notes |
 | --- | --- | --- | --- |
-| minio | minio | planned (Phase 17) | Local-only S3 backend for Velero |
-| velero | velero | planned (Phase 18) | Cluster backups with schedules |
+| minio | minio | deployed (Phase 17, local) | Local-only S3 backend for Velero; buckets created by a normal Job (`minio-buckets`) |
+| velero | velero | deployed (Phase 18, local) | Cluster backups to MinIO; the backup smoke creates and deletes a real `Backup` |
+
+MinIO and Velero are covered by `bootstrap/smoke-minio.sh` and
+`bootstrap/smoke-velero.sh`; the latter waits for the `BackupStorageLocation` to
+be `Available` and a `Backup` to reach `Completed`. Restore and the Vault raft
+snapshot payload are tracked as Phase B follow-ups.

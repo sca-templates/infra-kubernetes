@@ -238,7 +238,22 @@ kv_seed secret/grafana/admin username=admin password="$(openssl rand -hex 24)"
 kv_seed secret/unleash/admin username=admin password="$(openssl rand -hex 24)"
 kv_seed secret/unleash/db username=unleash password="$(openssl rand -hex 24)"
 kv_seed secret/minio/root username=minioadmin password="$(openssl rand -hex 24)"
-kv_seed secret/velero/credentials access_key=minioadmin secret_key="$(openssl rand -hex 24)"
+
+# Velero (and the Vault snapshot job) must authenticate as the MinIO root user:
+# seed the same credential pair instead of an independent random one. Mirror it
+# when missing, rotated, or out of sync so an existing cluster self-heals.
+MINIO_USER="$(vault_exec kv get -field=username secret/minio/root)"
+MINIO_PASSWORD="$(vault_exec kv get -field=password secret/minio/root)"
+if [ "$SEED_ROTATE" = "1" ] \
+  || ! vault_exec kv get secret/velero/credentials >/dev/null 2>&1 \
+  || [ "$(vault_exec kv get -field=access_key secret/velero/credentials)" != "$MINIO_USER" ] \
+  || [ "$(vault_exec kv get -field=secret_key secret/velero/credentials)" != "$MINIO_PASSWORD" ]; then
+  vault_exec kv put secret/velero/credentials \
+    access_key="$MINIO_USER" secret_key="$MINIO_PASSWORD" >/dev/null
+  echo "  (mirrored) secret/velero/credentials -> secret/minio/root"
+else
+  echo "  (kept) secret/velero/credentials"
+fi
 
 # Alertmanager config seed only runs once its source lands (Phase 14); until
 # then it is skipped so the script stays idempotent and phase-agnostic.
@@ -250,5 +265,3 @@ else
 fi
 
 echo "Vault initialized, unsealed and seeded. Init material remains in ${SECRETS_DIR}."
-# CNPG backups to MinIO/S3
-kv_seed secret/cnpg/backup access_key=minioadmin secret_key="$(openssl rand -hex 24)" || true

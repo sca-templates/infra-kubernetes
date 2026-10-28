@@ -120,8 +120,8 @@ their own repositories — see
 | loki | `loki` | grafana/loki | 60 | 15 | planned (Phase 15) |
 | alloy | `observability` | grafana/alloy | 60 | 15 | planned (Phase 15) |
 | tempo | `tempo` | grafana/tempo | 60 | 16 | planned (Phase 16) |
-| minio | `minio` | minio/minio | 70 | 17 | planned (Phase 17) |
-| velero | `velero` | vmware-tanzu/velero | 80 | 18 | planned (Phase 18) |
+| minio | `minio` | minio/minio | 70 | 17 | deployed (Phase 17, local) |
+| velero | `velero` | vmware-tanzu/velero | 80 | 18 | deployed (Phase 18, local) |
 | argocd | `argocd` | argoproj/argo-cd (Makefile bootstrap) | -30 | 0.0 | deployed — root app OutOfSync until the repo is live |
 
 Notes:
@@ -130,9 +130,9 @@ Notes:
   cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3),
   linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6),
   redis-operator (Phase 7), Kong (Phase 8), the Linkerd control plane
-  (Phase 9), postgres-app/keycloak-db (Phase 10), Kafka (Phase 11), Redis (Phase 12)
-  and Keycloak (Phase 13) are deployed; every other component is `planned
-  (Phase N)`. The column is flipped
+  (Phase 9), postgres-app/keycloak-db (Phase 10), Kafka (Phase 11), Redis (Phase 12),
+  Keycloak (Phase 13), MinIO (Phase 17) and Velero (Phase 18) are deployed; the
+  observability components (Phases 14-16) remain `planned (Phase N)`. The column is flipped
   to `deployed` inside the phase that lands the component, and `status.md` is
   updated in the same commit.
 - `postgres-app` is a **dedicated raw `Application` per environment** (not in
@@ -365,6 +365,7 @@ as each component lands; the log always explains *why*, never just *what*.
 | Services | A service is **app-repo-as-source**: its Kubernetes manifests live in the service's own repo (`deploy/`); dev/qa ArgoCD track `main` and are synced to the selected commit by the service's `promote` workflow (ArgoCD API, scoped token), while prod tracks the **version tag pinned** in `services-prod.yaml` (`version`, bumped by a reviewed `chore(services)` PR that also carries the go/no-go). `local` intentionally does **not** run services (`services-<env>.yaml` exists only for `dev`/`qa`/`prod`) | Services iterate daily (multiple deploys a day per service) and a PR-per-deployment in `infra-kubernetes` would turn TBD into a bottleneck. Keeping services self-owned while the catalog components stay centralized (the two `ApplicationSet`s in the root app) preserves git as the deployment gate: dev/qa are ArgoCD app syncs run from the service repo, prod is a one-line version bump (`chore(services)`, so it never opens an infra release PR) plus a human `Sync` (ADR-003). Each service release cuts an immutable semver tag that is marked `latest` only once prod adopted it (the Releases row above), which is what makes prod rollback a revert of the pin. This is a documented deviation from the single-repo-catalog model, constrained to the services registry |
 | Cloud emulator (dev/CI tooling) | The cluster smoke stands up a local cloud emulator (Floci) as a **Docker container on the runner**, published into the EKS-substrate cluster with a selector-less `Service` + `EndpointSlice` in a scratch `cloud` namespace — **not** as an ArgoCD Application, with no sync-wave and no catalog entry | Proving cloud integration needs an endpoint, not a cloud account: the emulator is the EKS substrate itself, so it is published via an endpoint-backed Service to give the platform a stable in-cluster DNS name without IAM, per-cloud configuration or a managed service. It is tooling for the smoke ([ci-cd.md](ci-cd.md)), so it deliberately stays out of the platform catalog |
 | EKS substrate (dev/CI tooling) | The `Smoke` job runs on Floci's emulated **EKS** — the platform's only cluster substrate (a real single-node k3s container + OCI ECR registry): `bootstrap/eks-emulator.sh` mints a throwaway IAM user/key, creates the cluster, writes a `floci-eks` kube-context, and the smoke boots the **full platform** on it via the real `make bootstrap` app-of-apps — **not** as an ArgoCD Application, with no sync-wave and no catalog entry | It proves the two EKS-specific paths a plain local cluster does not — an IAM-authenticated kubeconfig to a live API server, and an image pulled in-cluster from the emulated ECR via the node's registry mirror — while running the whole catalog through the same GitOps path `dev`/`qa`/`prod` use. The cluster and IAM key are throwaway (deleted on `make eks-down`), so it stays out of the platform catalog like the endpoint emulator |
+| MinIO + Velero (local) | Vault-dependent ExternalSecrets and the MinIO bucket-creation Job sit in each Application's **final** sync wave. MinIO's chart `buckets` hook is replaced by a normal `minio-buckets` Job, and Velero's S3 credentials mirror `secret/minio/root`. | ArgoCD v3 health-gates **intermediate** sync waves: a resource that needs a sealed Vault at wave `-5`/`0` deadlocks the whole sync, because `smoke-ci.sh` seeds Vault only after every Application reports `Synced`. Collapsing each affected Application to its final wave lets it report `Synced` while Vault is sealed; the post-seed `Synced/Healthy` gate then asserts real health. The chart's bucket Job is a Helm `post-install` hook, which ArgoCD maps to `PostSync` and would block the same way, so a plain idempotent Job creates the buckets instead. Velero previously seeded an independent random S3 key that cannot authenticate against MinIO; the seed now copies the MinIO root pair (and fixes an existing mismatch). |
 
 ## Change flow (summary)
 

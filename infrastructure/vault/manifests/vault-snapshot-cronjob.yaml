@@ -12,7 +12,10 @@ metadata:
   name: vault-raft-snapshot
   namespace: vault
   annotations:
-    argocd.argoproj.io/sync-wave: "10"
+    # Same (final) wave as the chart; the CronJob itself does not need Vault to
+    # be unsealed, but a later wave would make the chart's StatefulSet
+    # intermediate and health-gate the sync while Vault is sealed.
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   schedule: "0 */6 * * *"
   successfulJobsHistoryLimit: 3

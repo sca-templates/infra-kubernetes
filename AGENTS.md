@@ -76,8 +76,8 @@ and image pins are set inside each phase and live under
 | Loki | `loki` | grafana/loki | Log aggregation | [infra-loki](https://github.com/sca-templates/infra-loki) | planned (Phase 15) |
 | Alloy | `observability` | grafana/alloy | Ships pod logs to Loki | — | planned (Phase 15) |
 | Tempo | `tempo` | grafana/tempo | Distributed tracing (OTLP) | [infra-tempo](https://github.com/sca-templates/infra-tempo) | planned (Phase 16) |
-| MinIO | `minio` | minio/minio | S3 stand-in (local): Velero | — | planned (Phase 17) |
-| Velero | `velero` | vmware-tanzu/velero | Cluster backup/restore | [infra-velero](https://github.com/sca-templates/infra-velero) | planned (Phase 18) |
+| MinIO | `minio` | minio/minio | S3 stand-in (local): Velero | — | **deployed** (Phase 17) |
+| Velero | `velero` | vmware-tanzu/velero | Cluster backup/restore | [infra-velero](https://github.com/sca-templates/infra-velero) | **deployed** (Phase 18) |
 | ArgoCD | `argocd` | argoproj/argo-cd (Makefile) | GitOps engine | — | **deployed** (Phase 0.0) |
 
 **Intentional exclusions** (per the restart plan): no Consul in-cluster

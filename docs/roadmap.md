@@ -85,8 +85,8 @@ worked in parallel.
 | [kube-prometheus-stack](roadmap/kube-prometheus-stack.md) | Observability | 60 | M1 stack · M2 radar | [#19](https://github.com/sca-templates/infra-kubernetes/issues/19) · [#29](https://github.com/sca-templates/infra-kubernetes/issues/29) | pending |
 | [loki](roadmap/loki.md) | Observability | 60 | M1 loki · M2 alloy | [#20](https://github.com/sca-templates/infra-kubernetes/issues/20) | pending |
 | [tempo](roadmap/tempo.md) | Observability | 60 | — | [#21](https://github.com/sca-templates/infra-kubernetes/issues/21) | pending |
-| [minio](roadmap/minio.md) | Delivery & Resilience | 70 | — | [#22](https://github.com/sca-templates/infra-kubernetes/issues/22) | pending |
-| [velero](roadmap/velero.md) | Delivery & Resilience | 80 | M1 install · M2 restore | [#23](https://github.com/sca-templates/infra-kubernetes/issues/23) · [#30](https://github.com/sca-templates/infra-kubernetes/issues/30) | pending |
+| [minio](roadmap/minio.md) | Delivery & Resilience | 70 | — | [#22](https://github.com/sca-templates/infra-kubernetes/issues/22) | deployed (local) |
+| [velero](roadmap/velero.md) | Delivery & Resilience | 80 | M1 install · M2 restore | [#23](https://github.com/sca-templates/infra-kubernetes/issues/23) · [#30](https://github.com/sca-templates/infra-kubernetes/issues/30) | M1 deployed (local); M2 pending |
 
 Issues are the tracker; `#N` links resolve to `infra-kubernetes`. Sub-issues
 (collections under an epic) match the out-phased components (Vault, postgres-app,
@@ -190,7 +190,7 @@ The following epics are planned for cost optimization:
 
 | Date | Change | PR/Commit | Notes |
 | --- | --- | --- | --- |
-| 2026-10-27 | Deploy MinIO (local S3 backend) for Velero | pending | Phase 17, wave 70, local only |
-| 2026-10-27 | Deploy Velero with AWS S3 plugin to MinIO | pending | Phase 18, wave 80 |
-| 2026-10-27 | Configure CNPG backups to S3/MinIO with retention | pending | PITR capable |
-| 2026-10-27 | Add Vault Raft snapshot CronJob to S3 | pending | Complementary to Velero |
+| 2026-10-27 | Deploy MinIO (local S3 backend) for Velero | PR #109 | Phase 17, wave 70, local only; buckets via a normal `minio-buckets` Job |
+| 2026-10-27 | Deploy Velero with AWS S3 plugin to MinIO | PR #109 | Phase 18, wave 80; smoke creates a real `Backup` that reaches `Completed` |
+| 2026-10-27 | Configure CNPG backups to S3/MinIO with retention | PR #109 (in progress) | `ScheduledBackup` wired and S3 credentials fixed; PITR/restore validation pending |
+| 2026-10-27 | Add Vault Raft snapshot CronJob to S3 | PR #109 (in progress) | CronJob + credentials wired; real `operator raft snapshot save` payload pending |

@@ -39,19 +39,11 @@ resources:
     cpu: 500m
     memory: 512Mi
 
-# Buckets to create on startup
-buckets:
-  - name: velero
-    policy: none
-    purge: false
-  - name: vault-snapshots
-    policy: none
-    purge: false
-  - name: cnpg-backups
-    policy: none
-    purge: false
-
-# Disable default policies, configure via policy
+# Buckets are created by manifests/minio-buckets-job.yaml, not by the chart's
+# `buckets` value: that renders a Helm post-install hook, which Argo CD maps to
+# a PostSync hook. The hook would block the sync until the root secret exists,
+# but Vault is seeded only after every Application is Synced, so it deadlocks.
+# The normal Job in the same final wave is health-gated after the seed instead.
 policies: []
 
 # Run as root is not ideal, but MinIO official chart handles this

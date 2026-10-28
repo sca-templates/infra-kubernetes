@@ -51,7 +51,7 @@ script adapts as components land).
 | `secret/keycloak/test-user/<env>` | Phase 13 seed | Keycloak realm import + smoke user via ESO |
 | `secret/grafana/admin` | Phase 14 | Grafana admin |
 | `secret/minio/root` | Phase 17 | MinIO root credentials |
-| `secret/velero/credentials` | Phase 18 | Velero object-store credentials |
+| `secret/velero/credentials` | Phase 18 | Velero object-store credentials (also read by the Vault snapshot job); mirrored from `secret/minio/root` in `local` |
 | `secret/platform/alertmanager` | Phase 14 | Alertmanager routing config (`useExistingSecret`) |
 
 Nothing above is written by Vault itself yet — Vault arrives at Phase 2 and
@@ -105,6 +105,10 @@ resolved by the realm import). See [roadmap/keycloak.md](roadmap/keycloak.md).
 
 Velero diverges only in *target*: `local` uses the in-cluster MinIO, while
 `dev`/`qa`/`prod` use external S3 with credentials injected via Vault/ESO.
+In `local`, `bootstrap/seed-vault.sh` mirrors `secret/minio/root` into
+`secret/velero/credentials` (same access/secret pair), so Velero and the Vault
+snapshot job authenticate as the MinIO root user; CNPG reads
+`secret/minio/root` directly. Re-running the seed repairs a pair that drifted.
 See [architecture.md](architecture.md) and [observability-radar.md](observability-radar.md).
 
 ## Repository secrets (GitHub Actions)

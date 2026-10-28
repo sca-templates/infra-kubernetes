@@ -4,9 +4,11 @@ metadata:
   name: postgres-app-scheduled
   namespace: data
   annotations:
-    argocd.argoproj.io/sync-wave: "50"
+    # Same (final) wave as the Cluster: no health gate while Vault is sealed.
+    argocd.argoproj.io/sync-wave: "10"
 spec:
-  schedule: "0 3 * * *"
+  # CNPG cron format is six fields (seconds included).
+  schedule: "0 0 3 * * *"
   backupOwnerReference: self
   cluster:
     name: postgres-app
