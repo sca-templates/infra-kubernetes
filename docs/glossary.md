@@ -35,7 +35,7 @@ live in [architecture.md](architecture.md).
 | **Keycloak**                  | OIDC IdP (realm `sca`). Phase 13                                                           |
 | **kube-prometheus-stack**     | Prometheus + Grafana + Alertmanager + the `ServiceMonitor`/`PrometheusRule` CRDs. Phase 14 |
 | **Loki / Alloy / Tempo**      | Log aggregation / pod-log shipping / distributed tracing (OTLP). Phases 15/16              |
-| **MinIO**                     | S3-compatible object store, local-only (Velero, Loki, storage tests). Phase 17             |
+| **Floci S3**                  | Local S3 emulator in the cloud/EKS tooling; Velero's local backup backend                   |
 | **Velero**                    | Cluster backup/restore to object storage. Phase 18                                         |
 
 Phase numbers refer to the roadmap in [roadmap.md](roadmap.md).

@@ -22,9 +22,9 @@ configuration:
       provider: aws
       bucket: velero
       config:
-        region: minio
+        region: us-east-1
         s3ForcePathStyle: "true"
-        s3Url: http://minio.minio.svc.cluster.local:9000
+        s3Url: http://floci.cloud.svc.cluster.local:4566
   volumeSnapshotLocation: []
   defaultVolumesToFsBackup: false
 

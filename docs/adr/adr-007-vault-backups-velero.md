@@ -13,7 +13,7 @@ Vault stores secrets as source of truth. CNPG databases need backups. Cluster st
 Implement dual backup strategy:
 
 1. **Velero** - Cluster-level backups including resources and PVs (prioritize Phase 18)
-2. **Vault Raft snapshots** - Specific backup of Vault's Raft datastore to S3/MinIO via CronJob
+2. **Vault Raft snapshots** - Specific backup of Vault's Raft datastore to object storage via CronJob
 3. **CNPG backups** - Native CNPG backups to object storage with PITR
 
 ## Consequences
@@ -26,7 +26,7 @@ Implement dual backup strategy:
 
 ## Implementation
 
-- Prioritize Velero deployment
-- Create Vault snapshot CronJob
-- Configure CNPG backups
+- Prioritize Velero deployment (local: Floci S3)
+- Vault snapshot CronJob and CNPG backups are deferred until restore
+  validation is designed and tested
 - Document and test restore procedures

@@ -61,13 +61,6 @@ spec:
             targetRevision: 0.34.1
             wave: "0"
             path: vault/manifests
-          - name: minio
-            namespace: minio
-            chartRepo: https://charts.min.io/
-            chart: minio
-            targetRevision: 5.4.0
-            wave: "70"
-            path: minio/manifests
           - name: velero
             namespace: velero
             chartRepo: https://vmware-tanzu.github.io/helm-charts

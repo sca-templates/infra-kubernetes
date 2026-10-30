@@ -12,7 +12,7 @@ Using managed RDS has ongoing costs. CloudNativePG is already deployed for postg
 
 Use CloudNativePG as the primary PostgreSQL solution, replacing Amazon RDS. This requires:
 
-- Validated automated backups to S3/MinIO
+- Validated automated backups to object storage (local: Floci S3)
 - Point-in-Time Recovery (PITR) capability
 - Velero for cluster/PV backups
 - Proper HA configuration
@@ -29,5 +29,8 @@ Use CloudNativePG as the primary PostgreSQL solution, replacing Amazon RDS. This
 ## Implementation
 
 - Prioritize Velero (Phase 18)
-- Configure CNPG backups
+- CNPG native backups are deferred until restore validation is designed
 - Test restores thoroughly
+
+The local phase currently ships Velero only (against Floci S3). The CNPG
+scheduled-backup path was removed from that PR rather than left untested.

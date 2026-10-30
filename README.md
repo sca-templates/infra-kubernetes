@@ -76,7 +76,7 @@ and qa. See
 
 ## Platform Components
 
-The catalog is **19 components** plus ArgoCD. `local` runs the full set;
+The catalog is **18 components** plus ArgoCD. `local` runs the full set;
 `dev`/`qa`/`prod` run the operator/security core plus the gateway and Keycloak.
 **Currently deployed: ArgoCD (Phase 0), cert-manager (Phase 1), Vault
 (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg
@@ -94,10 +94,10 @@ live.
 | Edge and mesh | linkerd-crds (deployed), Kong (deployed), Linkerd control plane (deployed) |
 | Data | CloudNativePG (deployed), Strimzi (deployed), redis-operator (deployed), postgres-app/keycloak-db (deployed), Kafka (deployed), Redis (deployed) |
 | Observability | kube-prometheus-stack, Loki, Tempo, Alloy |
-| Delivery and resilience | MinIO (local-only), Velero |
+| Delivery and resilience | Velero |
 
-MinIO is **local-only** (S3 stand-in for Velero); `dev`/`qa`/`prod` point
-Velero at external S3 via Vault/ESO credentials. All images and charts are
+Velero is **local-only** and uses Floci's S3 emulator; `dev`/`qa`/`prod` will
+point Velero at external S3 via Vault/ESO credentials. All images and charts are
 pinned to explicit upstream versions — this repository builds no images.
 Services use app-repo-as-source (see
 [docs/onboarding-new-service.md](docs/onboarding-new-service.md)).

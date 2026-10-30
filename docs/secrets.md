@@ -50,8 +50,7 @@ script adapts as components land).
 | `secret/keycloak/admin` | Phase 13 seed | Keycloak bootstrap admin via ESO |
 | `secret/keycloak/test-user/<env>` | Phase 13 seed | Keycloak realm import + smoke user via ESO |
 | `secret/grafana/admin` | Phase 14 | Grafana admin |
-| `secret/minio/root` | Phase 17 | MinIO root credentials |
-| `secret/velero/credentials` | Phase 18 | Velero object-store credentials (also read by the Vault snapshot job); mirrored from `secret/minio/root` in `local` |
+| `secret/velero/credentials` | Phase 18 seed | Velero object-store credentials; `local` pins Floci's dummy `test/test` pair |
 | `secret/platform/alertmanager` | Phase 14 | Alertmanager routing config (`useExistingSecret`) |
 
 Nothing above is written by Vault itself yet — Vault arrives at Phase 2 and
@@ -103,12 +102,12 @@ Keycloak is the first component with **three** projections: `keycloak-admin`
 same Vault path as the CNPG cluster) and `keycloak-test-user` (smoke user,
 resolved by the realm import). See [roadmap/keycloak.md](roadmap/keycloak.md).
 
-Velero diverges only in *target*: `local` uses the in-cluster MinIO, while
-`dev`/`qa`/`prod` use external S3 with credentials injected via Vault/ESO.
-In `local`, `bootstrap/seed-vault.sh` mirrors `secret/minio/root` into
-`secret/velero/credentials` (same access/secret pair), so Velero and the Vault
-snapshot job authenticate as the MinIO root user; CNPG reads
-`secret/minio/root` directly. Re-running the seed repairs a pair that drifted.
+Velero diverges only in *target*: `local` uses Floci's S3 emulator, while
+`dev`/`qa`/`prod` will use external S3 with credentials injected via Vault/ESO.
+In `local`, `bootstrap/seed-vault.sh` writes the dummy `test/test` pair to
+`secret/velero/credentials`; the `floci-buckets` Job uses the same fixed pair
+directly, so it does not depend on ESO. CNPG backups and Vault raft snapshots
+are not wired in `local`.
 See [architecture.md](architecture.md) and [observability-radar.md](observability-radar.md).
 
 ## Repository secrets (GitHub Actions)

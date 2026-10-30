@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 sca-templates contributors
 # SPDX-License-Identifier: MIT
-# smoke-velero.sh — verify Velero is operational against MinIO: the server is
+# smoke-velero.sh — verify Velero is operational against Floci S3: the server is
 # Ready, the default BackupStorageLocation is Available, the
 # `velero-critical-namespaces` schedule exists, and a real Backup of the
 # `default` namespace completes.
