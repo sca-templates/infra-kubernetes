@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.3.0](https://github.com/sca-templates/infra-kubernetes/compare/v3.2.0...v3.3.0) (2026-10-30)
+
+
+### Features
+
+* **backups:** add minio velero cnpg and vault snapshots ([#109](https://github.com/sca-templates/infra-kubernetes/issues/109)) ([ada2225](https://github.com/sca-templates/infra-kubernetes/commit/ada2225f7a8426dc79c72f855dd9d4ffde35095e))
+
 ## [3.2.0](https://github.com/sca-templates/infra-kubernetes/compare/v3.1.0...v3.2.0) (2026-10-25)
 
 
