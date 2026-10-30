@@ -1,7 +1,7 @@
 # Project: Implement Velero
 
 Area: Delivery & Resilience · Wave 80 · Environments: local→dev→qa→prod
-Depends on: minio (#22, local) for the backup backend.
+Depends on: Floci S3 (local dev/CI tooling) for the backup backend.
 Project done when: Velero installed; a scheduled backup of a test namespace runs;
 restore proves the backup (`Backup` `Completed` + `Restore` succeeds).
 
@@ -9,16 +9,18 @@ restore proves the backup (`Backup` `Completed` + `Restore` succeeds).
 
 M1 done when: Velero pod `Running`, backup location available.
 
-- [ ] Issue #23 · Deploy `vmware-tanzu/velero`
-  Depends on: minio (#22)
-  - [ ] `infrastructure/velero/` values-base + overlays for 4 envs
-        - [ ] envs/local, dev, qa, prod
+- [x] Issue #23 · Deploy `vmware-tanzu/velero` (local M1)
+  Depends on: Floci S3 (local dev/CI tooling)
+  - [x] `infrastructure/velero/` values-base + overlays for 4 envs
+        - [x] `envs/local` (Floci S3); `dev`/`qa`/`prod` are stubs pending real S3
         - Commits: `feat(velero): add chart reference and per-env overlays`
-  - [ ] backup storage location → MinIO S3 (local)
-        Commits: `feat(velero): minio backup location`
-  - [ ] smoke: `velero backup create` a test namespace, `Backup` `Completed`
+  - [x] backup storage location → Floci S3 (local)
+        Commits: `feat(velero): floci backup location`
+  - [x] smoke: real `Backup` of a test namespace reaches `Completed`
+        `bootstrap/smoke-velero.sh` also asserts the BSL is `Available` and the
+        `velero-critical-namespaces` schedule exists.
         Commits: `test(velero): backup smoke`
-  - [ ] docs: Work Log row + catalog Status → deployed
+  - [x] docs: Work Log row + catalog Status → deployed
         Commits: `docs(velero): mark deployed`
   Issue done when: backup of a test namespace `Completed`.
 

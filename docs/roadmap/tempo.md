@@ -1,7 +1,7 @@
 # Project: Implement Tempo
 
 Area: Observability · Wave 60 · Environments: local→dev→qa→prod
-Depends on: cert-manager (#6); MinIO (#22, local) for storage where applicable.
+Depends on: cert-manager (#6); local storage is TBD (MinIO retired).
 Project done when: Tempo ingests OTLP traces; a trace is queryable; Grafana shows
 traces correlated with logs/metrics.
 

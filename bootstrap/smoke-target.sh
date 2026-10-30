@@ -21,9 +21,10 @@ case "$component" in
   redis) exec "$(dirname "$0")/smoke-redis.sh" ;;
   kong) exec "$(dirname "$0")/smoke-kong.sh" ;;
   keycloak) exec "$(dirname "$0")/smoke-keycloak.sh" ;;
+  velero) exec "$(dirname "$0")/smoke-velero.sh" ;;
   cloud) exec "$(dirname "$0")/smoke-cloud.sh" ;;
   eks) exec "$(dirname "$0")/smoke-eks.sh" ;;
-  "") echo "usage: $0 <component> (cert-manager, vault, external-secrets, linkerd-crds, linkerd, cloudnative-pg, postgres-app, kafka, strimzi, redis-operator, kong, redis, keycloak, cloud, eks)" >&2; exit 2 ;;
+  "") echo "usage: $0 <component> (cert-manager, vault, external-secrets, linkerd-crds, linkerd, cloudnative-pg, postgres-app, kafka, strimzi, redis-operator, kong, redis, keycloak, velero, cloud, eks)" >&2; exit 2 ;;
   *,*) echo "ERROR: smoke-target.sh smokes one component; use smoke-ci.sh for a comma-separated list" >&2; exit 2 ;;
   *) echo "ERROR: no smoke command for component '$component'" >&2; exit 2 ;;
 esac

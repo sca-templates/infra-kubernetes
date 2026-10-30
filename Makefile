@@ -141,7 +141,7 @@ eks-status: ## Report the emulated EKS cluster status and its nodes
 
 .PHONY: smoke
 smoke: ## Smoke a deployed component: make smoke COMPONENT=cert-manager
-	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cert-manager, vault, external-secrets, linkerd-crds, linkerd, cloudnative-pg, strimzi, redis-operator, kong, postgres-app, kafka, redis, keycloak, cloud, eks)'; exit 1; }
+	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cert-manager, vault, external-secrets, linkerd-crds, linkerd, cloudnative-pg, strimzi, redis-operator, kong, postgres-app, kafka, redis, keycloak, velero, cloud, eks)'; exit 1; }
 	bootstrap/smoke-target.sh "$(COMPONENT)"
 
 ##@ Local Git serve
@@ -173,8 +173,8 @@ status: ## Cluster, ArgoCD apps and pod health overview
 	@kubectl get pods -A --no-headers | grep -vE 'Running|Completed' || echo 'all healthy'
 
 .PHONY: port-forward
-port-forward: ## Reach a platform UI/API locally: make port-forward APP=argocd|vault|keycloak|grafana|prometheus|tempo|postgres|kong-admin|minio
-	@[ -n "$(APP)" ] || { echo 'Usage: make port-forward APP=<name> (argocd, vault, keycloak, grafana, prometheus, tempo, postgres, kong-admin, minio)'; exit 1; }
+port-forward: ## Reach a platform UI/API locally: make port-forward APP=argocd|vault|keycloak|grafana|prometheus|tempo|postgres|kong-admin
+	@[ -n "$(APP)" ] || { echo 'Usage: make port-forward APP=<name> (argocd, vault, keycloak, grafana, prometheus, tempo, postgres, kong-admin)'; exit 1; }
 	@url=; case "$(APP)" in \
 		argocd)     ns=argocd;        svc=argocd-server;                   ports=8443:443; url=https://localhost:8443 ;; \
 		vault)      ns=vault;         svc=vault;                           ports=8200:8200 ;; \
@@ -184,7 +184,6 @@ port-forward: ## Reach a platform UI/API locally: make port-forward APP=argocd|v
 		tempo)      ns=tempo;         svc=tempo;                           ports=3200:3200 ;; \
 		postgres)   ns=data;          svc=postgres-app-rw;                 ports=5432:5432 ;; \
 		kong-admin) ns=kong;          svc=kong-admin;                      ports=8001:8001 ;; \
-		minio)      ns=minio;         svc=minio-console;                   ports=9001:9001 ;; \
 		*) echo "ERROR: unknown APP '$(APP)'"; exit 1 ;; \
 	esac; \
 	url="$${url:-http://localhost:$${ports%%:*}}"; \

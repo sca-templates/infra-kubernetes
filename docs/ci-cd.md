@@ -143,6 +143,14 @@ monitored. See the [roadmap](roadmap.md) for the Phase 1 gate and its smoke.
   `Smoke` job boots the whole platform catalog on the Floci emulated **EKS**
   substrate (*EKS substrate smoke* below) and requires every Application to
   converge `Synced`/`Healthy`, with Vault seeded before the health gate.
+  Because ArgoCD health-gates **intermediate** sync waves, every resource that
+  needs a sealed Vault (ExternalSecrets, including Velero's credentials) must
+  share its Application's **final** wave; otherwise the Application cannot
+  reach `Synced` and the seed never runs (see the Velero + Floci S3 row in
+  [architecture.md](architecture.md#deviations-log)). Velero's smoke creates a
+  real `Backup` of the `default` namespace and waits for `Completed`; the
+  `floci-buckets` Job creates the bucket using Floci's fixed dummy credentials
+  and therefore does not add a Vault dependency to the sync.
 - **`workflow_dispatch`** (manual) — one-off smoke of a component/ref
   (`component` + `ref` inputs, defaults `cert-manager`/`main`) for testing
   without opening a PR. Nothing else triggers the workflow; there is no

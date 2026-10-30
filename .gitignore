@@ -63,7 +63,7 @@ logs/
 
 ### Custom ###
 # Tooling deps and user-managed notes
-0.Project_info
+0.Project_info/
 context/structure.txt
 node_modules/
 .codegraph/

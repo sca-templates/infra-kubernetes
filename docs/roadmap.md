@@ -25,7 +25,7 @@ worked in parallel.
 [13 keycloak]
 [14 kube-prometheus-stack] ──┬─▶ [15 loki/alloy]
                              └─▶ [16 tempo]
-[17 minio] ──▶ [18 velero]
+[18 velero]
 ```
 
 - **Wave −20/−10**: security + operator layer — `01`–`07` install first,
@@ -35,7 +35,8 @@ worked in parallel.
 - **Wave 40**: datastores `10`–`12` (clusters/CRs) behind their operators.
 - **Wave 50**: `13` Keycloak behind its DB (`10`).
 - **Wave 60**: observability `14`–`16` (parallel after data keys).
-- **Wave 70/80**: `17` MinIO (local only) then `18` Velero.
+- **Wave 80**: `18` Velero (local backend: Floci S3). Phase 17 (MinIO) is
+  retired.
 - Everything is **local-first**; promotion to `dev`/`qa`/`prod` is gated per
   green project (see [workflow.md](workflow.md)).
 
@@ -85,8 +86,8 @@ worked in parallel.
 | [kube-prometheus-stack](roadmap/kube-prometheus-stack.md) | Observability | 60 | M1 stack · M2 radar | [#19](https://github.com/sca-templates/infra-kubernetes/issues/19) · [#29](https://github.com/sca-templates/infra-kubernetes/issues/29) | pending |
 | [loki](roadmap/loki.md) | Observability | 60 | M1 loki · M2 alloy | [#20](https://github.com/sca-templates/infra-kubernetes/issues/20) | pending |
 | [tempo](roadmap/tempo.md) | Observability | 60 | — | [#21](https://github.com/sca-templates/infra-kubernetes/issues/21) | pending |
-| [minio](roadmap/minio.md) | Delivery & Resilience | 70 | — | [#22](https://github.com/sca-templates/infra-kubernetes/issues/22) | pending |
-| [velero](roadmap/velero.md) | Delivery & Resilience | 80 | M1 install · M2 restore | [#23](https://github.com/sca-templates/infra-kubernetes/issues/23) · [#30](https://github.com/sca-templates/infra-kubernetes/issues/30) | pending |
+| [minio](roadmap/minio.md) | Delivery & Resilience | 70 | — | [#22](https://github.com/sca-templates/infra-kubernetes/issues/22) | retired (Floci S3) |
+| [velero](roadmap/velero.md) | Delivery & Resilience | 80 | M1 install · M2 restore | [#23](https://github.com/sca-templates/infra-kubernetes/issues/23) · [#30](https://github.com/sca-templates/infra-kubernetes/issues/30) | M1 deployed (local); M2 pending |
 
 Issues are the tracker; `#N` links resolve to `infra-kubernetes`. Sub-issues
 (collections under an epic) match the out-phased components (Vault, postgres-app,
@@ -183,3 +184,14 @@ The following epics are planned for cost optimization:
 | Replace Linkerd with CNI-native mTLS | Edge & Mesh | High | Proposed | PoC required. Loss of L7 features. |
 | Prioritize Velero + Backups (CNPG + Vault) | Delivery & Resilience | **Critical** | Proposed | Must complete before disruptive migrations. |
 | Validate CNPG as RDS replacement | Data | High | Proposed | Requires tested backups and restore procedures. |
+
+## Phase B (Velero) — Priority
+
+### Work Log
+
+| Date | Change | PR/Commit | Notes |
+| --- | --- | --- | --- |
+| 2026-10-28 | Use Floci S3 for local Velero; retire MinIO | PR #109 | Floci is already up for every EKS smoke; no in-cluster S3 component; a `floci-buckets` Job creates the `velero` bucket |
+| 2026-10-28 | Deploy Velero with the AWS S3 plugin | PR #109 | Phase 18, wave 80, local only; smoke creates a real `Backup` that reaches `Completed` |
+| 2026-10-28 | Defer CNPG scheduled backups | PR #109 | Remove the untested `ScheduledBackup`/`barmanObjectStore`; revisit with restore validation |
+| 2026-10-28 | Defer Vault Raft snapshots | PR #109 | Remove the untested CronJob; revisit with a real `operator raft snapshot save` payload |

@@ -1,0 +1,29 @@
+# velero — local overlay
+configuration:
+  backupStorageLocation:
+    - name: default
+      provider: aws
+      bucket: velero
+      config:
+        region: us-east-1
+        s3ForcePathStyle: "true"
+        s3Url: http://floci.cloud.svc.cluster.local:4566
+
+schedules:
+  critical-namespaces:
+    disabled: false
+    schedule: "0 2 * * *"
+    template:
+      includedNamespaces:
+        - data
+        - vault
+        - keycloak
+      ttl: 720h0m0s
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

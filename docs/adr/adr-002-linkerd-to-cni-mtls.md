@@ -1,24 +1,26 @@
-# ADR-002: Replace Linkerd with CNI-native mTLS
+# ADR-002: Linkerd CNI and mTLS
 
 ## Status
-Proposed
+
+Accepted
 
 ## Context
-Linkerd provides service mesh capabilities including mTLS, observability, traffic management (retries, timeouts, traffic splits), and ServiceProfiles. However, sidecar proxies add overhead (CPU/RAM). Modern CNI plugins (Cilium, Calico) can provide mTLS at L3/L4 using WireGuard or IPsec with lower overhead.
+
+Default Linkerd installation uses init containers to configure iptables, requiring elevated privileges. This can conflict with security policies and certain cluster configurations.
 
 ## Decision
-Replace Linkerd service mesh with CNI-native mTLS. Use Cilium or Calico with WireGuard/IPsec encryption. Accept loss of L7 traffic management features (retries, timeouts, traffic splits, ServiceProfiles) in exchange for reduced resource consumption.
+
+Use Linkerd CNI plugin for traffic redirection instead of init containers. Maintain Linkerd's mTLS capabilities for service-to-service encryption.
 
 ## Consequences
-- Reduced resource consumption (no sidecar containers)
-- Simpler architecture
-- Loss of L7 observability and traffic control features
-- Must implement NetworkPolicies carefully
-- Observability relies more on Kube-Prometheus/Loki/Tempo
-- Requires thorough testing in all environments
+
+- Reduced privilege requirements (no NET_ADMIN in init containers)
+- Better compatibility with Pod Security Standards and restrictive policies
+- Requires installing Linkerd CNI before the control plane
+- Slightly more complex installation order (CNI first, control plane after)
 
 ## Implementation
-- PoC in Floci before production
-- Remove linkerd-crds and linkerd-control-plane
-- Remove linkerd.io/inject annotations
-- Configure CNI with encryption enabled
+
+- PoC in Floci before production rollout
+- Install `linkerd-cni` DaemonSet before `linkerd-control-plane`
+- Follow Linkerd CNI documentation for compatibility matrix

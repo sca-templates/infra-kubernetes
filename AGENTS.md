@@ -52,7 +52,7 @@ and qa ([docs/workflow.md](docs/workflow.md#services-app-repo-as-source)).
 
 ## 3. Component catalog
 
-**19 components + ArgoCD.** Status column is the source of truth
+**18 components + ArgoCD.** Status column is the source of truth
 (`planned (Phase N)` until the phase lands; `deployed` from then on). Chart
 and image pins are set inside each phase and live under
 `infrastructure/<component>/` + `envs/<env>/`.
@@ -76,12 +76,11 @@ and image pins are set inside each phase and live under
 | Loki | `loki` | grafana/loki | Log aggregation | [infra-loki](https://github.com/sca-templates/infra-loki) | planned (Phase 15) |
 | Alloy | `observability` | grafana/alloy | Ships pod logs to Loki | — | planned (Phase 15) |
 | Tempo | `tempo` | grafana/tempo | Distributed tracing (OTLP) | [infra-tempo](https://github.com/sca-templates/infra-tempo) | planned (Phase 16) |
-| MinIO | `minio` | minio/minio | S3 stand-in (local): Velero | — | planned (Phase 17) |
-| Velero | `velero` | vmware-tanzu/velero | Cluster backup/restore | [infra-velero](https://github.com/sca-templates/infra-velero) | planned (Phase 18) |
+| Velero | `velero` | vmware-tanzu/velero | Cluster backup/restore (local: Floci S3) | [infra-velero](https://github.com/sca-templates/infra-velero) | **deployed** (Phase 18) |
 | ArgoCD | `argocd` | argoproj/argo-cd (Makefile) | GitOps engine | — | **deployed** (Phase 0.0) |
 
 **Intentional exclusions** (per the restart plan): no Consul in-cluster
-(ADR-001; native DNS + Linkerd replace it), no Unleash, no
+(ADR-001; native DNS + Linkerd replace it), no MinIO, no Unleash, no
 KafkaConnect/Debezium, no kafka-ui, no linkerd-viz in-cluster, no cloud
 in-cluster. No `latest` tags; this repo builds nothing. **Services are not part
 of this catalog** — each service owns its `deploy/` and is registered in
@@ -110,8 +109,7 @@ before CRs; Vault before ESO syncs; datastores before consumers.
 | 50 | Consumers: keycloak |
 | 60 | Observability: kube-prometheus-stack, loki, alloy, tempo |
 | 60 | Service apps (registry `services-<env>.yaml`) — consumers of the catalog, wave set per service |
-| 70 | MinIO (local only) |
-| 80 | Velero |
+| 80 | Velero (local: Floci S3) |
 
 The normative map with rationale lives in `docs/architecture.md`.
 

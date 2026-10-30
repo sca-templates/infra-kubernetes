@@ -1,21 +1,15 @@
-# Project: Implement MinIO
+# Project: MinIO (retired)
 
-Area: Delivery & Resilience · Wave 70 · Environments: local only (S3 stand-in for
-Velero); not on dev/qa/prod.
-Depends on: — (local-only object storage).
-Project done when: MinIO `Running`; buckets for Velero exist; S3 access works
-for the Velero backup backend (#23).
+Area: Delivery & Resilience · Wave 70 · Status: **retired**.
 
-No natural phases → issues directly under the project.
+MinIO was evaluated as the local S3 backend for Velero and removed from PR
+109: the upstream `quay.io/minio/minio` image is no longer publicly pullable,
+and Floci already provides an S3 emulator in every local/EKS smoke run. Velero
+now points at `http://floci.cloud.svc.cluster.local:4566` and the
+`floci-buckets` Job creates its bucket.
 
-- [ ] Issue #22 · Deploy `minio/minio` (local)
-  Depends on: —
-  - [ ] `infrastructure/minio/` values + local-only overlays
-        - Commits: `feat(minio): minio chart and local overlays`
-  - [ ] bucket(s) for Velero + credentials in `.secrets/`
-        Commits: `feat(minio): velero bucket and credentials`
-  - [ ] smoke: `mc`/S3 client lists the Velero bucket
-        Commits: `test(minio): velero bucket smoke`
-  - [ ] docs: Work Log row + catalog Status → deployed
-        Commits: `docs(minio): mark deployed`
-  Issue done when: MinIO serves the Velero bucket; ready for Velero (#23).
+- [x] Issue #22 · Evaluate `minio/minio` (local)
+  - [x] chart, overlays, credentials and bucket-creation Job
+  - [x] smoke: AWS CLI round-trip
+  - [x] decision: retire MinIO in favour of Floci S3 (no in-cluster object
+        store); see [velero.md](velero.md)

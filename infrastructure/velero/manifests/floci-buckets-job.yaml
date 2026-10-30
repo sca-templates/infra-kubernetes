@@ -1,0 +1,74 @@
+# Create Velero's bucket in the local Floci S3 emulator. Floci accepts the
+# fixed dummy credentials used by the cloud smoke, so this Job does not depend
+# on Vault/ESO being seeded before the Application can converge.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: floci-buckets
+  namespace: velero
+  labels:
+    app.kubernetes.io/name: floci-buckets
+    app.kubernetes.io/part-of: velero
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: floci-buckets
+        app.kubernetes.io/part-of: velero
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: aws
+          image: amazon/aws-cli:2.38.1@sha256:733d5be1015825e4038c6016f3fa9954868ddee1f611b73be795a9cc2e706bfd
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-ec"]
+          env:
+            - name: HOME
+              value: /tmp
+            - name: AWS_DEFAULT_REGION
+              value: us-east-1
+            - name: AWS_ENDPOINT_URL
+              value: http://floci.cloud.svc.cluster.local:4566
+            - name: BUCKET
+              value: velero
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          args:
+            - |
+              set -eu
+              mkdir -p "${HOME}/.aws"
+              printf '[default]\nregion = us-east-1\ns3 =\n  addressing_style = path\n' > "${HOME}/.aws/config"
+              printf '[default]\naws_access_key_id = test\naws_secret_access_key = test\n' > "${HOME}/.aws/credentials"
+              aws --endpoint-url "${AWS_ENDPOINT_URL}" s3api create-bucket --bucket "${BUCKET}" >/dev/null 2>&1 || true
+              aws --endpoint-url "${AWS_ENDPOINT_URL}" s3api head-bucket --bucket "${BUCKET}"
+              echo "FLOCI_BUCKET_OK bucket=${BUCKET}"
+      volumes:
+        - name: tmp
+          emptyDir: {}

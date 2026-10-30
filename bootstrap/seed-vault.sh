@@ -237,8 +237,13 @@ kv_seed "secret/redis/${ENV}" password="$(openssl rand -hex 24)"
 kv_seed secret/grafana/admin username=admin password="$(openssl rand -hex 24)"
 kv_seed secret/unleash/admin username=admin password="$(openssl rand -hex 24)"
 kv_seed secret/unleash/db username=unleash password="$(openssl rand -hex 24)"
-kv_seed secret/minio/root username=minioadmin password="$(openssl rand -hex 24)"
-kv_seed secret/velero/credentials access_key=minioadmin secret_key="$(openssl rand -hex 24)"
+
+# Velero's local backend is Floci's S3 emulator, which accepts its fixed dummy
+# credentials. Pin the pair instead of letting an old object-store value
+# survive on an existing cluster.
+vault_exec kv put secret/velero/credentials \
+  access_key=test secret_key=test >/dev/null
+echo "  (seeded) secret/velero/credentials"
 
 # Alertmanager config seed only runs once its source lands (Phase 14); until
 # then it is skipped so the script stays idempotent and phase-agnostic.

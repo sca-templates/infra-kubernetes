@@ -1,8 +1,8 @@
 # Project: Implement Loki + Alloy
 
 Area: Observability · Wave 60 · Environments: local→dev→qa→prod
-Depends on: cert-manager (#6); storage on MinIO (#22, local) once available —
-`loki` config references the MinIO S3 endpoint.
+Depends on: cert-manager (#6); local object storage is TBD (MinIO retired;
+Floci S3, a PVC or a per-env store is acceptable).
 Project done when: Loki ingests; Alloy ships pod logs to Loki; logs queryable
 across namespaces.
 
@@ -15,7 +15,7 @@ M1 done when: Loki `Running`, a log line is queryable.
   - [ ] `infrastructure/loki/` values-base + overlays for 4 envs
         - [ ] envs/local, dev, qa, prod
         - Commits: `feat(loki): add chart reference and per-env overlays`
-  - [ ] storage: MinIO S3 (local) or PVC/per-env store
+  - [ ] storage: Floci S3 (local), PVC, or a per-env store
         Commits: `feat(loki): storage configuration`
   - [ ] smoke: `logcli query` returns a pod log line
         Commits: `test(loki): log query smoke`

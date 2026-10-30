@@ -1,0 +1,35 @@
+# Egress-only policy for the bucket-creation Job: DNS plus the Floci S3
+# endpoint. The endpoint is published as a selector-less Service backed by the
+# host-side emulator, so it is reached by address rather than pod labels.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: floci-buckets
+  namespace: velero
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: floci-buckets
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 4566

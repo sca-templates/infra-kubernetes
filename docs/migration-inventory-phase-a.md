@@ -8,7 +8,7 @@ Keycloak components to remove and replace with Zitadel:
 - **Infrastructure**: infrastructure/keycloak/
 - **Env configs**: envs/*/keycloak.yaml
 - **Database**: keycloak-db cluster in postgres-app (may be removable)
-- **Secrets**: secret/keycloak/* (admin, test-user), secret/keycloak-db/*
+- **Secrets**: secret/keycloak/*(admin, test-user), secret/keycloak-db/*
 - **Namespace**: keycloak
 - **Kong routes**: Routes to keycloak.local
 - **Service template**: May have OIDC integration

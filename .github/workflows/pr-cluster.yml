@@ -141,10 +141,12 @@ jobs:
             fi
           done
 
-          # 2. envs/<env>/<c>.yaml → <c>
+          # 2. envs/<env>/<c>.yaml → <c>, if the component still exists.
           while IFS= read -r f; do
             [ -n "$f" ] || continue
-            add "$(printf '%s' "$f" | sed -E 's|^envs/[^/]+/([^/]+)\.ya?ml$|\1|')"
+            c="$(printf '%s' "$f" | sed -E 's|^envs/[^/]+/([^/]+)\.ya?ml$|\1|')"
+            [ -d "infrastructure/$c" ] || continue
+            add "$c"
           done < <(printf '%s\n' "$changed" | grep -oE '^envs/[^/]+/[^/]+\.ya?ml$' || true)
 
           # 3. dedicated Applications argocd/<c>-<env>.yaml → <c> when the
@@ -169,7 +171,10 @@ jobs:
               ci|target) ;;
               cloud|cloud-*) add cloud ;;
               eks) add cert-manager ;;
-              *) add "$c" ;;
+              *)
+                [ -d "infrastructure/$c" ] || continue
+                add "$c"
+                ;;
             esac
           done < <(printf '%s\n' "$changed" | grep -oE '^bootstrap/smoke-[^/]*\.sh$' || true)
 
