@@ -185,14 +185,6 @@ diagnose() {
 
 echo "== smoke-ci: components=${COMPONENTS[*]} ref=${ref} keep=${KEEP_CLUSTER} boot=${BOOT_CLUSTER} cloud=${CLOUD_ON}"
 
-# kubectl authenticates through `aws eks get-token`, so every mode — including
-# `--no-cluster` against an existing substrate — needs the Floci IAM credentials
-# and endpoint exported, not only the boot path.
-if [ -f ".secrets/eks-admin.env" ]; then
-  # shellcheck disable=SC1091
-  . ".secrets/eks-admin.env"
-  export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
-fi
 export AWS_ENDPOINT_URL="http://127.0.0.1:${FLOCI_PORT:-4566}"
 export AWS_DEFAULT_REGION="${FLOCI_AWS_REGION:-us-east-1}"
 export AWS_EC2_METADATA_DISABLED=true
@@ -201,6 +193,18 @@ if [ "${BOOT_CLUSTER}" = "1" ]; then
   echo "── make eks-up"
   make eks-up
 fi
+
+# kubectl authenticates through `aws eks get-token`. A fresh runner has no
+# `.secrets/eks-admin.env` until `make eks-up` creates it, so load it only after
+# the boot path; this also covers `--no-cluster`, where an existing substrate
+# already left the file behind.
+if [ ! -f ".secrets/eks-admin.env" ]; then
+  echo "ERROR: .secrets/eks-admin.env missing; cannot authenticate kubectl to the Floci EKS substrate" >&2
+  exit 1
+fi
+# shellcheck disable=SC1091
+. ".secrets/eks-admin.env"
+export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
 
 # Wait for an Application to become Synced (any health). Health is deliberately
 # NOT a gate here: stateful components (e.g. Vault) are born sealed/uninitialized
@@ -280,6 +284,15 @@ wait_for_healthy() {
 # network). `local` runs no services, so there is no root Application to apply.
 echo "── make bootstrap ENV=${ENV:-local} (full platform on the EKS substrate)"
 ENV="${ENV:-local}" GIT_TARGET_BRANCH="${ref}" make bootstrap
+
+# Fail fast if the host cannot authenticate to the substrate: otherwise every
+# wait below mistakes an AWS exec-credential failure for an Application that has
+# not appeared yet and burns the full convergence timeout.
+echo "── preflight: verify kubectl can authenticate against the EKS substrate"
+if ! kubectl get namespace argocd >/dev/null 2>&1; then
+  echo "ERROR: kubectl cannot reach the cluster; check the Floci EKS credentials and context" >&2
+  exit 1
+fi
 
 echo "── waiting for ${#CATALOG[@]} platform Applications to converge: ${CATALOG[*]}"
 for c in "${CATALOG[@]}"; do
