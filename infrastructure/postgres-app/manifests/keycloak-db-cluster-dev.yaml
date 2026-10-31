@@ -20,6 +20,7 @@ spec:
     # instance falls back to the primary. WAL archiving is always from the
     # primary.
     target: prefer-standby
+    retentionPolicy: "30d"
     barmanObjectStore:
       destinationPath: s3://sca-dev-cnpg/keycloak-db
       s3Credentials:
@@ -37,7 +38,6 @@ spec:
         maxParallel: 2
       data:
         compression: gzip
-      retentionPolicy: "30d"
   bootstrap:
     initdb:
       database: keycloak

@@ -6,4 +6,4 @@ kind: ServiceAccount
 metadata:
   name: vault-snapshot
   namespace: vault
-automountServiceAccountToken: true
+automountServiceAccountToken: false

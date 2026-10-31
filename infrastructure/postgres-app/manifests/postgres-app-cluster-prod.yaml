@@ -17,6 +17,7 @@ spec:
     # instance falls back to the primary. WAL archiving is always from the
     # primary.
     target: prefer-standby
+    retentionPolicy: "90d"
     barmanObjectStore:
       destinationPath: s3://sca-prod-cnpg/postgres-app
       s3Credentials:
@@ -34,7 +35,6 @@ spec:
         maxParallel: 2
       data:
         compression: gzip
-      retentionPolicy: "90d"
   bootstrap:
     initdb:
       database: app

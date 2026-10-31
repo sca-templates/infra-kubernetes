@@ -6,13 +6,21 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 -include .env
+-include .secrets/eks-admin.env
 
 ENV ?= local
 ARGOCD_CHART_VERSION ?= 9.5.22
 GIT_REPO_URL ?= https://github.com/sca-templates/infra-kubernetes
 GIT_TARGET_BRANCH ?= main
+FLOCI_PORT ?= 4566
+FLOCI_AWS_REGION ?= us-east-1
+AWS_ENDPOINT_URL ?= http://127.0.0.1:$(FLOCI_PORT)
+AWS_DEFAULT_REGION ?= $(FLOCI_AWS_REGION)
+AWS_EC2_METADATA_DISABLED ?= true
 
 export KUBECONFIG
+export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+export AWS_ENDPOINT_URL AWS_DEFAULT_REGION AWS_EC2_METADATA_DISABLED
 
 ##@ Setup
 

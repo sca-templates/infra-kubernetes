@@ -361,6 +361,13 @@ Floci's EKS backing, not ArgoCD-managed).
   network (the emulator publishes only its own port), so no git serve is
   involved. `--no-cluster` reuses an existing bootstrapped
   cluster; the run always shares the one required `Smoke` check.
+- **Local auth** — `make eks-up` writes throwaway IAM credentials to
+  `.secrets/eks-admin.env`. The `Makefile` includes that file and exports the
+  `AWS_*` variables, so `make bootstrap`, `make status` and `smoke-ci.sh`
+  (including `--no-cluster`) can all authenticate through `aws eks get-token`.
+  The emulator state is ephemeral: after it is recreated outside a clean
+  `make eks-down`, remove the stale `.secrets/eks-admin.env` before
+  `make eks-up` so a fresh IAM key is minted.
 - **Pins** — Floci, the AWS CLI and the EKS/ECR coordinates (`FLOCI_EKS_*`,
   `FLOCI_AWS_*`) are pinned in `bootstrap/versions.sh`, covered by the pin guards
   ([security.md](security.md)), and overridable via `.env`.

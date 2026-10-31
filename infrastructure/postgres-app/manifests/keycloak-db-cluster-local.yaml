@@ -20,6 +20,7 @@ spec:
     # instance falls back to the primary. WAL archiving is always from the
     # primary.
     target: prefer-standby
+    retentionPolicy: "7d"
     barmanObjectStore:
       destinationPath: s3://cnpg-backups/keycloak-db
       endpointURL: http://floci.cloud.svc.cluster.local:4566
@@ -38,7 +39,6 @@ spec:
         maxParallel: 2
       data:
         compression: gzip
-      retentionPolicy: "7d"
   bootstrap:
     initdb:
       database: keycloak
