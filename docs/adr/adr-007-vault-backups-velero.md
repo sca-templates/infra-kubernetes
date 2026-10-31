@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted (implementation landed; live restore validation pending)
 
 ## Context
 
@@ -10,7 +10,7 @@ Vault stores secrets as source of truth. CNPG databases need backups. Cluster st
 
 ## Decision
 
-Implement dual backup strategy:
+Implement a three-layer backup strategy:
 
 1. **Velero** - Cluster-level backups including resources and PVs (prioritize Phase 18)
 2. **Vault Raft snapshots** - Specific backup of Vault's Raft datastore to object storage via CronJob
@@ -26,7 +26,13 @@ Implement dual backup strategy:
 
 ## Implementation
 
-- Prioritize Velero deployment (local: Floci S3)
-- Vault snapshot CronJob and CNPG backups are deferred until restore
-  validation is designed and tested
-- Document and test restore procedures
+- Velero runs in all four environments: `local` on Floci S3, external buckets
+  elsewhere; scheduled backups cover the critical namespaces.
+- CNPG clusters write Barman base backups + WAL with daily `ScheduledBackup`s;
+  the restore smoke proves PITR and latest-backup restores.
+- A `vault-raft-snapshot` CronJob saves, inspects, uploads, and ages out Vault
+  Raft snapshots; it is a dedicated Application at wave 90.
+- Backup credentials are projected by ESO (`secret/cnpg/<env>`,
+  `secret/vault-snapshot/<env>`, `secret/velero/credentials`).
+- Runbooks and environment retention live in [backups.md](../backups.md).
+- Live restore validation on the Floci EKS substrate is the remaining gate.

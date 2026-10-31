@@ -12,7 +12,7 @@ M1 done when: Velero pod `Running`, backup location available.
 - [x] Issue #23 · Deploy `vmware-tanzu/velero` (local M1)
   Depends on: Floci S3 (local dev/CI tooling)
   - [x] `infrastructure/velero/` values-base + overlays for 4 envs
-        - [x] `envs/local` (Floci S3); `dev`/`qa`/`prod` are stubs pending real S3
+        - [x] `envs/local` (Floci S3); `dev`/`qa`/`prod` select their external bucket and CSI volume snapshots
         - Commits: `feat(velero): add chart reference and per-env overlays`
   - [x] backup storage location → Floci S3 (local)
         Commits: `feat(velero): floci backup location`
@@ -29,10 +29,14 @@ M1 done when: Velero pod `Running`, backup location available.
 M2 done when: a `Restore` from the completed backup succeeds.
 
 - [ ] Issue #30 · Restore proof
-  - [ ] `velero restore` from the completed backup
+  - [x] `velero restore` from the completed backup (implementation)
+        `bootstrap/smoke-velero.sh` creates a `Restore` CR; the runbook lives in
+        [backups.md](../backups.md#velero-backup-and-restore).
         Commits: `feat(velero): restore flow`
-  - [ ] smoke: restored namespace has its resources back
+  - [x] smoke: restored namespace has its resources back (implementation)
+        The smoke deletes a scratch namespace, restores it, and verifies the
+        marker; a live green run is still required.
         Commits: `test(velero): restore smoke`
-  - [ ] docs: runbook/troubleshooting note in [workflow.md](../workflow.md)
+  - [x] docs: runbook/troubleshooting note in [backups.md](../backups.md)
         Commits: `docs(velero): restore runbook`
-  Issue done when: restore round-trip succeeds.
+  Issue done when: restore round-trip succeeds on a live cluster.

@@ -231,9 +231,13 @@ wait_for_wal_archive() {
 
 create_restore_cluster() {
   local name="$1" source="$2" backup="$3" secret="$4" target_time="${5:-}"
-  local storage image target_yaml=""
+  local storage image database owner target_yaml=""
   storage="$(kubectl -n "$NAMESPACE" get cluster "$source" -o jsonpath='{.spec.storage.size}')"
   image="$(kubectl -n "$NAMESPACE" get cluster "$source" -o jsonpath='{.spec.imageName}')"
+  database="$(kubectl -n "$NAMESPACE" get cluster "$source" -o jsonpath='{.spec.bootstrap.initdb.database}')"
+  owner="$(kubectl -n "$NAMESPACE" get cluster "$source" -o jsonpath='{.spec.bootstrap.initdb.owner}')"
+  database="${database:-app}"
+  owner="${owner:-$database}"
   [ -n "$storage" ] && [ -n "$image" ] || {
     echo "FAIL: could not read storage/image from Cluster ${source}" >&2
     exit 1
@@ -271,6 +275,8 @@ spec:
         name: ${backup}
       secret:
         name: ${secret}
+      database: "${database}"
+      owner: "${owner}"
 ${target_yaml}
 EOF
 

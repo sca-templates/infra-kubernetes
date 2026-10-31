@@ -80,7 +80,7 @@ echo "── smoke(vault): raft snapshot CronJob and S3 credentials"
 for attempt in {1..60}; do
   if kubectl -n "$NAMESPACE" get serviceaccount vault-snapshot >/dev/null 2>&1 \
     && kubectl -n "$NAMESPACE" get cronjob vault-raft-snapshot >/dev/null 2>&1 \
-    && kubectl -n "$NAMESPACE" get secret vault-snapshot-credentials >/dev/null 2>&1; then
+    && kubectl -n "$NAMESPACE" get externalsecret vault-snapshot-credentials >/dev/null 2>&1; then
     break
   fi
   [ "$attempt" -eq 60 ] && {
@@ -90,7 +90,9 @@ for attempt in {1..60}; do
   }
   sleep 2
 done
-kubectl -n "$NAMESPACE" wait --for=condition=Ready externalsecret/vault-snapshot-credentials --timeout="$TIMEOUT" >/dev/null
+kubectl -n "$NAMESPACE" annotate externalsecret vault-snapshot-credentials \
+  force-sync="$(date +%s)" --overwrite >/dev/null 2>&1 || true
+kubectl -n "$NAMESPACE" wait --for=condition=Ready externalsecret/vault-snapshot-credentials --timeout="$SNAPSHOT_TIMEOUT" >/dev/null
 
 kubectl -n "$NAMESPACE" delete job "$SNAPSHOT_JOB" --ignore-not-found >/dev/null
 kubectl -n "$NAMESPACE" create job --from=cronjob/vault-raft-snapshot "$SNAPSHOT_JOB" >/dev/null

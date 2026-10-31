@@ -57,8 +57,8 @@ bootstrap: argocd-up ## Install ArgoCD and apply the Applications for ENV=$(ENV)
 	# The Makefile seeds the catalog wiring: argocd/apps-$(ENV).yaml (the platform
 	# ApplicationSet) and the dedicated Applications argocd/kong-$(ENV).yaml,
 	# argocd/linkerd-$(ENV).yaml, argocd/postgres-app-$(ENV).yaml,
-	# argocd/kafka-$(ENV).yaml, argocd/redis-$(ENV).yaml and
-	# argocd/keycloak-$(ENV).yaml are applied with
+	# argocd/kafka-$(ENV).yaml, argocd/redis-$(ENV).yaml,
+	# argocd/keycloak-$(ENV).yaml and argocd/vault-backup-$(ENV).yaml are applied with
 	# {{GIT_REPO_URL}}/{{GIT_TARGET_BRANCH}} resolved here, so the generated
 	# children track the ref under test (the PR head in the CI smoke, main
 	# otherwise). The root Application owns only the services registry
