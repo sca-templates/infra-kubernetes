@@ -119,7 +119,7 @@ their own repositories — see
 | loki | `loki` | grafana/loki | 60 | 15 | planned (Phase 15) |
 | alloy | `observability` | grafana/alloy | 60 | 15 | planned (Phase 15) |
 | tempo | `tempo` | grafana/tempo | 60 | 16 | planned (Phase 16) |
-| velero | `velero` | vmware-tanzu/velero | 80 | 18 | deployed (Phase 18, local) |
+| velero | `velero` | vmware-tanzu/velero | 80 | 18 | deployed (Phase 18); backup layer expanded in Phase B |
 | argocd | `argocd` | argoproj/argo-cd (Makefile bootstrap) | -30 | 0.0 | deployed — root app OutOfSync until the repo is live |
 
 Notes:
@@ -130,7 +130,10 @@ Notes:
   redis-operator (Phase 7), Kong (Phase 8), the Linkerd control plane
   (Phase 9), postgres-app/keycloak-db (Phase 10), Kafka (Phase 11), Redis (Phase 12),
   Keycloak (Phase 13) and Velero (Phase 18) are deployed; the
-  observability components (Phases 14-16) remain `planned (Phase N)`. The column is flipped
+  observability components (Phases 14-16) remain `planned (Phase N)`. The
+  CNPG scheduled backups and Vault Raft snapshot CronJob are **backup
+  resources**, not separate catalog components; they are described in
+  [backups.md](backups.md) and tracked in `status.md`. The column is flipped
   to `deployed` inside the phase that lands the component, and `status.md` is
   updated in the same commit.
 - `postgres-app` is a **dedicated raw `Application` per environment** (not in
@@ -170,8 +173,10 @@ Notes:
   up; its identity PKI is provided in-cluster (cert-manager owns the issuer).
   See [Deviations log](#deviations-log).
 - `local` is the only environment running the full catalog including the
-  observability stack and Velero (backed by Floci S3). See
-  [Environment model](#environment-model).
+  observability stack; Velero, CNPG backups, and Vault Raft snapshots are
+  **configured in all four** environments (local on Floci S3, external S3
+  elsewhere). See
+  [Environment model](#environment-model) and [backups.md](backups.md).
 - **Not a component:** the local cloud emulator (Floci, `bootstrap/cloud-emulator.sh`)
   used by the cluster smoke is dev/CI tooling — no sync-wave, no catalog row, a
   scratch `cloud` namespace that exists only during a smoke run. Floci also backs
@@ -231,6 +236,9 @@ graph LR
     subgraph W80["80"]
         V[Velero]
     end
+    subgraph W90["90"]
+        W[Vault backup - dedicated app]
+    end
     B --> C
     C --> D
     D --> I
@@ -239,6 +247,8 @@ graph LR
     L --> M
     M --> P
     P --> Q
+    D --> W
+    I --> W
 ```
 
 Key relationships:
@@ -249,6 +259,16 @@ Key relationships:
   (wave 10) runs after the Vault pod is `Running` — it is CI/manual, not an
   ArgoCD hook.
 - **Kong (wave 20) before everything behind the gateway.**
+- **Backup resources**: the CNPG `ScheduledBackup`s and backup-credential
+  `ExternalSecret`s share the datastore wave so they never introduce an
+  intermediate health gate while Vault is sealed. The Vault Raft snapshot
+  CronJob is its own dedicated Application, annotated wave 90 to document the
+  intended order after Vault and ESO; because the Makefile applies these
+  standalone Applications directly, that annotation does not order them
+  across apps. The CronJob stays dormant until its schedule or the smoke
+  triggers it, so ESO can finish projecting credentials in the meantime. The
+  local bucket Job runs as a Velero `PreSync` hook. See
+  [backups.md](backups.md).
 - **kube-prometheus-stack (wave 60) before the radar** — the `ServiceMonitor`
   and `PrometheusRule` CRDs ship with this app. The radar design is in
   [observability-radar.md](observability-radar.md).
@@ -328,10 +348,11 @@ lands — through Keycloak, Phase 13):
 - Vault `server.dataStorage.size`: `1Gi` default, `10Gi` (qa), `20Gi` (prod).
 - Keycloak uses **preferred** pod anti-affinity in every environment (qa/prod
   spread on real HA nodes; the single-node promote substrate still schedules).
-- `local` is the only environment that deploys the observability stack and
-  Velero, because it also plays the role of the demo/CI substrate. Velero's
-  local backend is Floci's S3 emulator (dev/CI tooling), not a catalog
-  component.
+- `local` is the only environment that deploys the observability stack,
+  because it also plays the role of the demo/CI substrate. Velero, CNPG
+  backups, and Vault Raft snapshots are configured in all four environments;
+  their local object store is Floci's S3 emulator (dev/CI tooling), not a
+  catalog component. See [backups.md](backups.md).
 
 ## Deviations log
 
@@ -361,7 +382,10 @@ as each component lands; the log always explains *why*, never just *what*.
 | Services | A service is **app-repo-as-source**: its Kubernetes manifests live in the service's own repo (`deploy/`); dev/qa ArgoCD track `main` and are synced to the selected commit by the service's `promote` workflow (ArgoCD API, scoped token), while prod tracks the **version tag pinned** in `services-prod.yaml` (`version`, bumped by a reviewed `chore(services)` PR that also carries the go/no-go). `local` intentionally does **not** run services (`services-<env>.yaml` exists only for `dev`/`qa`/`prod`) | Services iterate daily (multiple deploys a day per service) and a PR-per-deployment in `infra-kubernetes` would turn TBD into a bottleneck. Keeping services self-owned while the catalog components stay centralized (the two `ApplicationSet`s in the root app) preserves git as the deployment gate: dev/qa are ArgoCD app syncs run from the service repo, prod is a one-line version bump (`chore(services)`, so it never opens an infra release PR) plus a human `Sync` (ADR-003). Each service release cuts an immutable semver tag that is marked `latest` only once prod adopted it (the Releases row above), which is what makes prod rollback a revert of the pin. This is a documented deviation from the single-repo-catalog model, constrained to the services registry |
 | Cloud emulator (dev/CI tooling) | The cluster smoke stands up a local cloud emulator (Floci) as a **Docker container on the runner**, published into the EKS-substrate cluster with a selector-less `Service` + `EndpointSlice` in a scratch `cloud` namespace — **not** as an ArgoCD Application, with no sync-wave and no catalog entry | Proving cloud integration needs an endpoint, not a cloud account: the emulator is the EKS substrate itself, so it is published via an endpoint-backed Service to give the platform a stable in-cluster DNS name without IAM, per-cloud configuration or a managed service. It is tooling for the smoke ([ci-cd.md](ci-cd.md)), so it deliberately stays out of the platform catalog |
 | EKS substrate (dev/CI tooling) | The `Smoke` job runs on Floci's emulated **EKS** — the platform's only cluster substrate (a real single-node k3s container + OCI ECR registry): `bootstrap/eks-emulator.sh` mints a throwaway IAM user/key, creates the cluster, writes a `floci-eks` kube-context, and the smoke boots the **full platform** on it via the real `make bootstrap` app-of-apps — **not** as an ArgoCD Application, with no sync-wave and no catalog entry | It proves the two EKS-specific paths a plain local cluster does not — an IAM-authenticated kubeconfig to a live API server, and an image pulled in-cluster from the emulated ECR via the node's registry mirror — while running the whole catalog through the same GitOps path `dev`/`qa`/`prod` use. The cluster and IAM key are throwaway (deleted on `make eks-down`), so it stays out of the platform catalog like the endpoint emulator |
-| Velero + Floci S3 (local) | Velero's Vault-dependent `ExternalSecret` sits in the Application's **final** sync wave. The backup backend is Floci's S3 emulator (dev/CI tooling, not a catalog component), and a plain `floci-buckets` Job creates the `velero` bucket with Floci's fixed dummy credentials. | ArgoCD v3 health-gates **intermediate** sync waves: a resource that needs a sealed Vault at wave `-5`/`0` deadlocks the whole sync, because `smoke-ci.sh` seeds Vault only after every Application reports `Synced`. Keeping the Velero credentials projection in the final wave lets the app report `Synced` while Vault is sealed; the post-seed `Synced/Healthy` gate then asserts real health. Floci is already up for every smoke/local EKS run, so using it removes the in-cluster object-store component (and its unavailable upstream image) while keeping the backup path real. The bucket Job uses the same dummy `test/test` pair as the cloud smoke, so it does not wait on Vault/ESO; `seed-vault.sh` pins the Velero credential path to that pair on existing clusters. CNPG scheduled backups and Vault raft snapshots are deferred until restore validation (Phase B), rather than shipping untested backup jobs. |
+| Velero + Floci S3 (local) | Velero's Vault-dependent `ExternalSecret` sits in the Application's **final** sync wave. The backup backend is Floci's S3 emulator (dev/CI tooling, not a catalog component), and a plain `floci-buckets` Job creates the `velero` bucket with Floci's fixed dummy credentials. | ArgoCD v3 health-gates **intermediate** sync waves: a resource that needs a sealed Vault at wave `-5`/`0` deadlocks the whole sync, because `smoke-ci.sh` seeds Vault only after every Application reports `Synced`. Keeping the Velero credentials projection in the final wave lets the app report `Synced` while Vault is sealed; the post-seed `Synced/Healthy` gate then asserts real health. Floci is already up for every smoke/local EKS run, so using it removes the in-cluster object-store component (and its unavailable upstream image) while keeping the backup path real. The bucket Job uses the same dummy `test/test` pair as the cloud smoke, so it does not wait on Vault/ESO; `seed-vault.sh` pins the Velero credential path to that pair on existing clusters. CNPG scheduled backups and Vault Raft snapshots were deferred in Phase 18; Phase B lands them as tested-in-git resources with restore smokes, while live restore validation remains pending. |
+| CNPG backups + PITR | Both `Cluster`s carry `spec.backup.barmanObjectStore`; `ScheduledBackup`s run daily with environment retention, and the backup credentials are projected by ESO from `secret/cnpg/<env>` at the same wave as the clusters | Native CNPG backups are the restore path for PostgreSQL data; Velero only covers the Kubernetes objects. Keeping the credentials `ExternalSecret` and `ScheduledBackup`s at the datastore wave avoids an intermediate ArgoCD health gate while Vault is sealed. The local profile sets `archive_timeout: 60s` so the PITR smoke does not wait for a full WAL segment. `bootstrap/smoke-postgres-app.sh` exercises both a PITR restore and a latest-backup restore. |
+| Vault Raft snapshots | A dedicated `Application` per environment (`vault-backup-<env>`, wave 90) owns the CronJob and credentials; the shared ServiceAccount and upload script live in the Vault Application. The CronJob validates the snapshot with `vault operator raft snapshot inspect` before uploading and applies age-based retention | Raft snapshots are the authoritative Vault restore path and are complementary to Velero. The dedicated app keeps the Vault-dependent `ExternalSecret` and Job out of the Vault chart's health gate; the CronJob is dormant until its schedule or a smoke triggers it, so a sealed Vault cannot deadlock the initial sync. The Kubernetes-auth role/policy is seeded by `bootstrap/seed-vault.sh` and the smoke forces an ESO refresh after seeding. |
+| Backup bucket bootstrap (local) | The `floci-buckets` Job creates `velero`, `cnpg-backups`, and `vault-snapshots` as a Velero `PreSync` hook; external environments skip it when Floci is unreachable | Floci has no pre-created buckets, and the Velero Job already owns the local object-store bootstrap. CNPG retries WAL/base-backup uploads until the bucket exists; the restore smoke waits for `ContinuousArchiving=True` before asserting, so a short bucket race is absorbed. External buckets are created out of band. |
 
 ## Change flow (summary)
 
@@ -380,8 +404,8 @@ The following migrations are planned to optimize costs while maintaining service
 | Keycloak → Zitadel | **Proposed** | Complete replacement, no parallel long-term deployment. All OIDC clients must be migrated. |
 | Kafka/Strimzi → NATS JetStream | **Proposed** | Togglable between SNS/SQS (external AWS) and NATS (in-cluster). No current consumers. |
 | Linkerd → CNI-native mTLS | **Proposed** | L3/L4 mTLS via WireGuard/IPsec. Loss of L7 features (retries, timeouts, traffic split). PoC required first. |
-| CNPG as RDS replacement | **In Progress** | Requires validated backups/PITR and Velero. |
-| Vault hardening | **Proposed** | Raft snapshots to object storage (deferred; not wired in local). |
-| Velero priority | **High Priority** | Critical for backups before disruptive migrations. |
+| CNPG as RDS replacement | **In Progress** | Backups/PITR are implemented and smoke-tested in git; a live green restore run is still required before closing the gate. |
+| Vault hardening | **Landed (live validation pending)** | Raft snapshots to object storage are implemented in all four environments; see [backups.md](backups.md). |
+| Velero priority | **High Priority** | Velero, CNPG backups, and Vault snapshots are the backup gate before disruptive migrations. |
 
 See [ADRs](adr/) for detailed decisions.

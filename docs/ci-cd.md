@@ -147,10 +147,15 @@ monitored. See the [roadmap](roadmap.md) for the Phase 1 gate and its smoke.
   needs a sealed Vault (ExternalSecrets, including Velero's credentials) must
   share its Application's **final** wave; otherwise the Application cannot
   reach `Synced` and the seed never runs (see the Velero + Floci S3 row in
-  [architecture.md](architecture.md#deviations-log)). Velero's smoke creates a
-  real `Backup` of the `default` namespace and waits for `Completed`; the
-  `floci-buckets` Job creates the bucket using Floci's fixed dummy credentials
-  and therefore does not add a Vault dependency to the sync.
+  [architecture.md](architecture.md#deviations-log)). The backup smokes are
+  part of the same gate: Velero creates a real `Backup`, deletes a scratch
+  namespace, restores it and verifies the marker; CNPG proves a PITR restore on
+  `postgres-app` and a latest-backup restore on `keycloak-db`; Vault triggers
+  its Raft snapshot CronJob and asserts the saved/inspected/uploaded markers.
+  The `floci-buckets` Job creates `velero`, `cnpg-backups`, and
+  `vault-snapshots` using Floci's fixed dummy credentials and therefore does
+  not add a Vault dependency to the sync. The schedules, retention and restore
+  runbooks live in [backups.md](backups.md).
 - **`workflow_dispatch`** (manual) — one-off smoke of a component/ref
   (`component` + `ref` inputs, defaults `cert-manager`/`main`) for testing
   without opening a PR. Nothing else triggers the workflow; there is no
@@ -356,6 +361,13 @@ Floci's EKS backing, not ArgoCD-managed).
   network (the emulator publishes only its own port), so no git serve is
   involved. `--no-cluster` reuses an existing bootstrapped
   cluster; the run always shares the one required `Smoke` check.
+- **Local auth** — `make eks-up` writes throwaway IAM credentials to
+  `.secrets/eks-admin.env`. The `Makefile` includes that file and exports the
+  `AWS_*` variables, so `make bootstrap`, `make status` and `smoke-ci.sh`
+  (including `--no-cluster`) can all authenticate through `aws eks get-token`.
+  The emulator state is ephemeral: after it is recreated outside a clean
+  `make eks-down`, remove the stale `.secrets/eks-admin.env` before
+  `make eks-up` so a fresh IAM key is minted.
 - **Pins** — Floci, the AWS CLI and the EKS/ECR coordinates (`FLOCI_EKS_*`,
   `FLOCI_AWS_*`) are pinned in `bootstrap/versions.sh`, covered by the pin guards
   ([security.md](security.md)), and overridable via `.env`.

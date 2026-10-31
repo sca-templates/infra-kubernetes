@@ -1,0 +1,18 @@
+# Scheduled CNPG base backups — local.
+#
+# CloudNativePG uses a six-field cron expression (seconds first). The schedules
+# are kept in the same sync wave as the Clusters so the Vault-dependent
+# credentials do not create an intermediate ArgoCD health gate.
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: postgres-app-daily
+  namespace: data
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  schedule: "0 30 1 * * *"
+  backupOwnerReference: cluster
+  immediate: false
+  cluster:
+    name: postgres-app

@@ -1,6 +1,15 @@
-# Create Velero's bucket in the local Floci S3 emulator. Floci accepts the
+# Create the backup buckets in the local Floci S3 emulator. Floci accepts the
 # fixed dummy credentials used by the cloud smoke, so this Job does not depend
-# on Vault/ESO being seeded before the Application can converge.
+# on Vault/ESO being seeded before the Application can converge. The same Job
+# owns every local backup bucket, so the local backend is provisioned in one
+# place:
+#   - velero          Kubernetes resources (Velero)
+#   - cnpg-backups    CloudNativePG base backups + WAL archive
+#   - vault-snapshots Vault raft snapshots
+#
+# dev/qa/prod use external S3 buckets created out of band. In those clusters the
+# Floci endpoint is unreachable; the Job probes it and exits successfully
+# without touching anything, so it stays harmless on every environment.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -40,10 +49,14 @@ spec:
               value: /tmp
             - name: AWS_DEFAULT_REGION
               value: us-east-1
+            - name: AWS_EC2_METADATA_DISABLED
+              value: "true"
+            - name: AWS_PAGER
+              value: ""
             - name: AWS_ENDPOINT_URL
               value: http://floci.cloud.svc.cluster.local:4566
-            - name: BUCKET
-              value: velero
+            - name: BUCKETS
+              value: velero cnpg-backups vault-snapshots
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -66,9 +79,15 @@ spec:
               mkdir -p "${HOME}/.aws"
               printf '[default]\nregion = us-east-1\ns3 =\n  addressing_style = path\n' > "${HOME}/.aws/config"
               printf '[default]\naws_access_key_id = test\naws_secret_access_key = test\n' > "${HOME}/.aws/credentials"
-              aws --endpoint-url "${AWS_ENDPOINT_URL}" s3api create-bucket --bucket "${BUCKET}" >/dev/null 2>&1 || true
-              aws --endpoint-url "${AWS_ENDPOINT_URL}" s3api head-bucket --bucket "${BUCKET}"
-              echo "FLOCI_BUCKET_OK bucket=${BUCKET}"
+              if ! timeout 5 aws --endpoint-url "${AWS_ENDPOINT_URL}" s3api list-buckets >/dev/null 2>&1; then
+                echo "FLOCI_S3_UNAVAILABLE endpoint=${AWS_ENDPOINT_URL} (external-S3 environment; skip local bucket bootstrap)"
+                exit 0
+              fi
+              for bucket in ${BUCKETS}; do
+                aws --endpoint-url "${AWS_ENDPOINT_URL}" s3api create-bucket --bucket "${bucket}" >/dev/null 2>&1 || true
+                aws --endpoint-url "${AWS_ENDPOINT_URL}" s3api head-bucket --bucket "${bucket}"
+                echo "FLOCI_BUCKET_OK bucket=${bucket}"
+              done
       volumes:
         - name: tmp
           emptyDir: {}

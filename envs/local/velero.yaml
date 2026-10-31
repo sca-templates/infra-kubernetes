@@ -1,4 +1,8 @@
 # velero — local overlay
+#
+# The local backup backend is Floci's S3 emulator, which accepts the fixed
+# dummy credentials used by the cloud smoke. The bucket is provisioned by the
+# `floci-buckets` PreSync Job in infrastructure/velero/manifests.
 configuration:
   backupStorageLocation:
     - name: default
@@ -8,6 +12,8 @@ configuration:
         region: us-east-1
         s3ForcePathStyle: "true"
         s3Url: http://floci.cloud.svc.cluster.local:4566
+  # No CSI snapshot driver on the local k3s substrate.
+  volumeSnapshotLocation: []
 
 schedules:
   critical-namespaces:
@@ -18,7 +24,10 @@ schedules:
         - data
         - vault
         - keycloak
-      ttl: 720h0m0s
+        - kong
+        - cert-manager
+      ttl: 168h0m0s
+      snapshotVolumes: false
 
 resources:
   requests:

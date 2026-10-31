@@ -12,6 +12,29 @@ metadata:
 spec:
   instances: 3
   imageName: ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie
+  backup:
+    # Prefer a standby for base backups when the cluster has one; a single
+    # instance falls back to the primary. WAL archiving is always from the
+    # primary.
+    target: prefer-standby
+    retentionPolicy: "90d"
+    barmanObjectStore:
+      destinationPath: s3://sca-prod-cnpg/postgres-app
+      s3Credentials:
+        accessKeyId:
+          name: cnpg-backup-credentials
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: cnpg-backup-credentials
+          key: ACCESS_SECRET_KEY
+        region:
+          name: cnpg-backup-credentials
+          key: AWS_REGION
+      wal:
+        compression: gzip
+        maxParallel: 2
+      data:
+        compression: gzip
   bootstrap:
     initdb:
       database: app

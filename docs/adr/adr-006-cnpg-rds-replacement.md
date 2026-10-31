@@ -28,9 +28,10 @@ Use CloudNativePG as the primary PostgreSQL solution, replacing Amazon RDS. This
 
 ## Implementation
 
-- Prioritize Velero (Phase 18)
-- CNPG native backups are deferred until restore validation is designed
-- Test restores thoroughly
+- Prioritize Velero (Phase 18).
+- CNPG native backups (Barman base backups + WAL/PITR) landed in Phase B with
+  a restore smoke; a live green run is still required.
+- Test restores thoroughly before treating the RDS replacement as proven.
 
-The local phase currently ships Velero only (against Floci S3). The CNPG
-scheduled-backup path was removed from that PR rather than left untested.
+The local phase ships Velero against Floci S3, plus the Phase B CNPG backup
+path. See [backups.md](../backups.md).

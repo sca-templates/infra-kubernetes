@@ -1,0 +1,56 @@
+# Upload/retention helper for the Vault raft snapshot CronJob. The snapshot is
+# written by the Vault CLI into a shared emptyDir, then copied to S3 by the
+# AWS CLI container. Keeping the script shared means the environment overlays
+# only carry coordinates (bucket, prefix, endpoint, retention).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-snapshot-script
+  namespace: vault
+data:
+  upload.sh: |
+    #!/bin/sh
+    set -eu
+    : "${S3_BUCKET:?S3_BUCKET is required}"
+    : "${S3_PREFIX:=raft}"
+    : "${S3_RETENTION_DAYS:=30}"
+    : "${AWS_SHARED_CREDENTIALS_FILE:?AWS_SHARED_CREDENTIALS_FILE is required}"
+    if [ -z "${AWS_DEFAULT_REGION:-}" ] && [ -r /credentials/AWS_DEFAULT_REGION ]; then
+      AWS_DEFAULT_REGION="$(cat /credentials/AWS_DEFAULT_REGION)"
+      export AWS_DEFAULT_REGION
+    fi
+    : "${AWS_DEFAULT_REGION:?AWS_DEFAULT_REGION is required}"
+    case "${S3_RETENTION_DAYS}" in
+      *[!0-9]*|'') echo "invalid S3_RETENTION_DAYS: ${S3_RETENTION_DAYS}" >&2; exit 1 ;;
+    esac
+
+    mkdir -p "${HOME}/.aws" "${TMPDIR}"
+    if [ -n "${S3_ENDPOINT_URL:-}" ]; then
+      printf '[default]\ns3 =\n  addressing_style = path\n' > "${HOME}/.aws/config"
+    fi
+
+    timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+    key="${S3_PREFIX%/}/vault-${timestamp}.snap"
+    endpoint_args=""
+    if [ -n "${S3_ENDPOINT_URL:-}" ]; then
+      endpoint_args="--endpoint-url ${S3_ENDPOINT_URL}"
+    fi
+
+    # shellcheck disable=SC2086
+    aws ${endpoint_args} s3 cp /work/vault.snap "s3://${S3_BUCKET}/${key}" --only-show-errors
+    # shellcheck disable=SC2086
+    aws ${endpoint_args} s3api head-object --bucket "${S3_BUCKET}" --key "${key}" >/dev/null
+    echo "VAULT_SNAPSHOT_UPLOADED s3://${S3_BUCKET}/${key}"
+
+    cutoff_epoch=$(( $(date -u +%s) - S3_RETENTION_DAYS * 86400 ))
+    # shellcheck disable=SC2086
+    aws ${endpoint_args} s3 ls "s3://${S3_BUCKET}/${S3_PREFIX%/}/" | while read -r day clock _ object; do
+      [ -n "${day:-}" ] && [ -n "${clock:-}" ] && [ -n "${object:-}" ] || continue
+      object_epoch="$(date -u -d "${day}T${clock}Z" +%s 2>/dev/null || true)"
+      [ -n "${object_epoch}" ] || continue
+      if [ "${object_epoch}" -lt "${cutoff_epoch}" ]; then
+        # shellcheck disable=SC2086
+        aws ${endpoint_args} s3 rm "s3://${S3_BUCKET}/${S3_PREFIX%/}/${object}" --only-show-errors
+        echo "VAULT_SNAPSHOT_EXPIRED ${object}"
+      fi
+    done
