@@ -12,6 +12,8 @@ set -euo pipefail
 NAMESPACE="${VAULT_NAMESPACE:-vault}"
 POD="${VAULT_POD:-vault-0}"
 TIMEOUT="${SMOKE_TIMEOUT:-120s}"
+SNAPSHOT_TIMEOUT="${SMOKE_SNAPSHOT_TIMEOUT:-300s}"
+SNAPSHOT_JOB="vault-raft-snapshot-smoke"
 
 VAULT_ADDR="https://vault.vault.svc.cluster.local:8200"
 VAULT_CACERT="/vault/userconfig/vault-tls/ca.crt"
@@ -73,3 +75,46 @@ if [ "$initialized" != "true" ] || [ "$sealed" != "false" ]; then
 fi
 
 echo "[OK] smoke(vault): Vault initialized=${initialized} sealed=${sealed}"
+
+echo "── smoke(vault): raft snapshot CronJob and S3 credentials"
+for attempt in {1..60}; do
+  if kubectl -n "$NAMESPACE" get serviceaccount vault-snapshot >/dev/null 2>&1 \
+    && kubectl -n "$NAMESPACE" get cronjob vault-raft-snapshot >/dev/null 2>&1 \
+    && kubectl -n "$NAMESPACE" get secret vault-snapshot-credentials >/dev/null 2>&1; then
+    break
+  fi
+  [ "$attempt" -eq 60 ] && {
+    echo "FAIL: Vault snapshot resources are not ready (vault-backup Application not synced?)" >&2
+    kubectl -n "$NAMESPACE" get serviceaccount,cronjob,externalsecret,secret 2>&1 | grep -E 'vault-snapshot|vault-raft|NAME' >&2 || true
+    exit 1
+  }
+  sleep 2
+done
+kubectl -n "$NAMESPACE" wait --for=condition=Ready externalsecret/vault-snapshot-credentials --timeout="$TIMEOUT" >/dev/null
+
+kubectl -n "$NAMESPACE" delete job "$SNAPSHOT_JOB" --ignore-not-found >/dev/null
+kubectl -n "$NAMESPACE" create job --from=cronjob/vault-raft-snapshot "$SNAPSHOT_JOB" >/dev/null
+
+if ! kubectl -n "$NAMESPACE" wait --for=condition=complete "job/$SNAPSHOT_JOB" --timeout="$SNAPSHOT_TIMEOUT" >/dev/null; then
+  echo "FAIL: Vault raft snapshot job did not complete" >&2
+  kubectl -n "$NAMESPACE" describe "job/$SNAPSHOT_JOB" >&2 2>/dev/null || true
+  kubectl -n "$NAMESPACE" logs "job/$SNAPSHOT_JOB" --all-containers=true >&2 2>/dev/null || true
+  exit 1
+fi
+
+snapshot_logs="$(kubectl -n "$NAMESPACE" logs "job/$SNAPSHOT_JOB" --all-containers=true 2>/dev/null || true)"
+if ! grep -q 'VAULT_SNAPSHOT_OK' <<<"$snapshot_logs"; then
+  echo "FAIL: Vault raft snapshot was not created/inspected" >&2
+  printf '%s\n' "$snapshot_logs" >&2
+  exit 1
+fi
+if ! grep -q 'VAULT_SNAPSHOT_UPLOADED' <<<"$snapshot_logs"; then
+  echo "FAIL: Vault raft snapshot was not uploaded to object storage" >&2
+  printf '%s\n' "$snapshot_logs" >&2
+  exit 1
+fi
+
+echo "[OK] smoke(vault): raft snapshot/upload completed"
+if [ "${SMOKE_KEEP_VAULT_JOB:-0}" != "1" ]; then
+  kubectl -n "$NAMESPACE" delete job "$SNAPSHOT_JOB" --ignore-not-found >/dev/null
+fi

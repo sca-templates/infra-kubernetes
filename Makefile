@@ -53,6 +53,7 @@ bootstrap: argocd-up ## Install ArgoCD and apply the Applications for ENV=$(ENV)
 	@[ -f "argocd/kafka-$(ENV).yaml" ] || { echo "argocd/kafka-$(ENV).yaml is missing"; exit 1; }
 	@[ -f "argocd/redis-$(ENV).yaml" ] || { echo "argocd/redis-$(ENV).yaml is missing"; exit 1; }
 	@[ -f "argocd/keycloak-$(ENV).yaml" ] || { echo "argocd/keycloak-$(ENV).yaml is missing"; exit 1; }
+	@[ -f "argocd/vault-backup-$(ENV).yaml" ] || { echo "argocd/vault-backup-$(ENV).yaml is missing"; exit 1; }
 	# The Makefile seeds the catalog wiring: argocd/apps-$(ENV).yaml (the platform
 	# ApplicationSet) and the dedicated Applications argocd/kong-$(ENV).yaml,
 	# argocd/linkerd-$(ENV).yaml, argocd/postgres-app-$(ENV).yaml,
@@ -64,7 +65,7 @@ bootstrap: argocd-up ## Install ArgoCD and apply the Applications for ENV=$(ENV)
 	# (argocd/services-$(ENV).yaml), never these, so there is a single owner.
 	@echo '── Preloading catalog images for ENV=$(ENV)'
 	bootstrap/preload-chart-images.sh --catalog "$(ENV)"
-	@echo '── Applying platform ApplicationSet + Kong + Linkerd + postgres-app + Kafka + Redis + Keycloak (GIT_REPO_URL=$(GIT_REPO_URL), GIT_TARGET_BRANCH=$(GIT_TARGET_BRANCH))'
+	@echo '── Applying platform ApplicationSet + Kong + Linkerd + postgres-app + Kafka + Redis + Keycloak + Vault backup (GIT_REPO_URL=$(GIT_REPO_URL), GIT_TARGET_BRANCH=$(GIT_TARGET_BRANCH))'
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/apps-$(ENV).yaml" | kubectl apply -f -
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/kong-$(ENV).yaml" | kubectl apply -f -
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/linkerd-$(ENV).yaml" | kubectl apply -f -
@@ -72,6 +73,7 @@ bootstrap: argocd-up ## Install ArgoCD and apply the Applications for ENV=$(ENV)
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/kafka-$(ENV).yaml" | kubectl apply -f -
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/redis-$(ENV).yaml" | kubectl apply -f -
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/keycloak-$(ENV).yaml" | kubectl apply -f -
+	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/vault-backup-$(ENV).yaml" | kubectl apply -f -
 	@if [ -f "argocd/root-app-$(ENV).yaml" ]; then \
 		echo '── Applying root Application (services registry owner)'; \
 		sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/root-app-$(ENV).yaml" | kubectl apply -f -; \

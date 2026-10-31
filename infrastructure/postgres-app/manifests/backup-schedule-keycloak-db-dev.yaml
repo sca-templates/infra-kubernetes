@@ -1,0 +1,18 @@
+# Scheduled CNPG base backup for keycloak-db — dev.
+#
+# CloudNativePG uses a six-field cron expression (seconds first). The schedule
+# is kept in the same sync wave as the Cluster so the Vault-dependent
+# credentials do not create an intermediate ArgoCD health gate.
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: keycloak-db-daily
+  namespace: data
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  schedule: "0 45 1 * * *"
+  backupOwnerReference: cluster
+  immediate: false
+  cluster:
+    name: keycloak-db

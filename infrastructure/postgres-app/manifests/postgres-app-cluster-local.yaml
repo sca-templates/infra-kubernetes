@@ -12,6 +12,30 @@ metadata:
 spec:
   instances: 1
   imageName: ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie
+  backup:
+    # Prefer a standby for base backups when the cluster has one; a single
+    # instance falls back to the primary. WAL archiving is always from the
+    # primary.
+    target: prefer-standby
+    barmanObjectStore:
+      destinationPath: s3://cnpg-backups/postgres-app
+      endpointURL: http://floci.cloud.svc.cluster.local:4566
+      s3Credentials:
+        accessKeyId:
+          name: cnpg-backup-credentials
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: cnpg-backup-credentials
+          key: ACCESS_SECRET_KEY
+        region:
+          name: cnpg-backup-credentials
+          key: AWS_REGION
+      wal:
+        compression: gzip
+        maxParallel: 2
+      data:
+        compression: gzip
+      retentionPolicy: "7d"
   bootstrap:
     initdb:
       database: app
@@ -33,6 +57,9 @@ spec:
       # soon as a `pg_stat_statements.*` parameter is present; setting the
       # library directly is rejected as a fixed parameter.
       pg_stat_statements.track: all
+      # Bound the WAL archive lag; the backup smoke waits for the WAL segment
+      # that contains its marker to reach object storage before running PITR.
+      archive_timeout: "60s"
   storage:
     size: 1Gi
   resources:
