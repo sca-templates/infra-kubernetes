@@ -18,6 +18,7 @@
 set -euo pipefail
 
 NAMESPACE="${POSTGRES_NAMESPACE:-data}"
+CNPG_OPERATOR_NAMESPACE="${CNPG_OPERATOR_NAMESPACE:-cloudnative-pg}"
 TIMEOUT="${SMOKE_TIMEOUT:-600s}"
 DEADLINE_SECONDS="${SMOKE_DEADLINE:-900}"
 ARCHIVE_TIMEOUT="${SMOKE_CNPG_ARCHIVE_TIMEOUT:-300}"
@@ -68,11 +69,50 @@ wait_externalsecret() {
   done
 }
 
+dump_continuous_archiving_diagnostics() {
+  local cluster="$1" primary user pass
+  echo "--- Cluster/${cluster} conditions" >&2
+  kubectl -n "$NAMESPACE" get cluster "$cluster" \
+    -o jsonpath='{range .status.conditions[*]}{.type}={.status} {.reason}: {.message}{"\n"}{end}' >&2 || true
+  echo "--- Cluster/${cluster} status" >&2
+  kubectl -n "$NAMESPACE" get cluster "$cluster" -o yaml >&2 || true
+  echo "--- pods for cluster/${cluster}" >&2
+  kubectl -n "$NAMESPACE" get pods -l "cnpg.io/cluster=${cluster}" -o wide >&2 || true
+  echo "--- backups" >&2
+  kubectl -n "$NAMESPACE" get backup.postgresql.cnpg.io -o wide >&2 || true
+
+  primary="$(primary_for "$cluster")"
+  if [ -n "$primary" ]; then
+    user="$(secret_value "${cluster}-credentials" username 2>/dev/null || true)"
+    pass="$(secret_value "${cluster}-credentials" password 2>/dev/null || true)"
+    if [ -n "$user" ] && [ -n "$pass" ]; then
+      echo "--- pg_stat_archiver on ${primary}" >&2
+      psql_in "$primary" "$user" "$pass" postgres \
+        "select last_archived_wal, last_archived_time, last_failed_wal, last_failed_time, failed_count from pg_stat_archiver" >&2 || true
+      echo "--- archive settings on ${primary}" >&2
+      psql_in "$primary" "$user" "$pass" postgres "show archive_mode; show archive_command;" >&2 || true
+    fi
+  fi
+
+  echo "--- CNPG instance logs (tail 200)" >&2
+  kubectl -n "$NAMESPACE" logs -l "cnpg.io/cluster=${cluster}" --all-containers --tail=200 >&2 || true
+  echo "--- CNPG operator logs matching archive/backup/S3 (tail 200)" >&2
+  kubectl -n "$CNPG_OPERATOR_NAMESPACE" logs deploy/cloudnative-pg --tail=2000 2>&1 \
+    | grep -iE 'error|warn|fail|archive|backup|barman|s3|object|wal' \
+    | tail -n 200 >&2 || true
+  echo "--- CNPG operator logs (tail 200, raw)" >&2
+  kubectl -n "$CNPG_OPERATOR_NAMESPACE" logs deploy/cloudnative-pg --tail=200 >&2 || true
+}
+
 wait_continuous_archiving() {
   local cluster="$1"
   echo "── smoke(postgres-app): ${cluster} ContinuousArchiving=True"
-  kubectl -n "$NAMESPACE" wait --for=condition=ContinuousArchiving \
-    "cluster/${cluster}" --timeout="$TIMEOUT" >/dev/null
+  if ! kubectl -n "$NAMESPACE" wait --for=condition=ContinuousArchiving \
+    "cluster/${cluster}" --timeout="$TIMEOUT" >/dev/null; then
+    echo "FAIL: ${NAMESPACE}/${cluster} did not report ContinuousArchiving=True" >&2
+    dump_continuous_archiving_diagnostics "$cluster"
+    exit 1
+  fi
 }
 
 primary_for() {

@@ -127,8 +127,11 @@ cleanup() {
 }
 trap cleanup EXIT
 
+DIAGNOSED=0
+
 diagnose() {
-  local app c pod ready
+  local app c pod ready cluster primary user pass
+  DIAGNOSED=1
   for c in "${APP_COMPONENTS[@]}"; do
     app="${c}-${APP_SUFFIX}"
     echo "── diagnose: Application/${app}"
@@ -171,6 +174,48 @@ diagnose() {
     echo "── diagnose: endpoint slices backing ${c} services"
     kubectl -n "${c}" get endpointslice -o wide 2>/dev/null || true
   done
+  if kubectl get namespace data >/dev/null 2>&1; then
+    echo "── diagnose: CNPG clusters/backups (ns data)"
+    {
+      kubectl -n data get cluster,backup,scheduledbackup -o wide 2>&1 || true
+      echo "--- Cluster conditions"
+      kubectl -n data get cluster -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{range .status.conditions[*]}  {.type}={.status} {.reason}: {.message}{"\n"}{end}{end}' 2>&1 || true
+      echo "--- Cluster and Backup manifests"
+      kubectl -n data get cluster,backup -o yaml 2>&1 || true
+      echo "--- cnpg-backup-credentials keys"
+      kubectl -n data get secret cnpg-backup-credentials -o go-template='{{range $k,$v := .data}}{{$k}}{{"\n"}}{{end}}' 2>&1 || true
+      echo "--- data namespace events (tail 100)"
+      kubectl -n data get events --sort-by=.lastTimestamp 2>&1 | tail -n 100 || true
+      for cluster in $(kubectl -n data get cluster -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null); do
+        primary="$(kubectl -n data get pod \
+          -l "cnpg.io/cluster=${cluster},cnpg.io/instanceRole=primary" \
+          -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+        [ -n "${primary}" ] || { echo "--- Cluster/${cluster} archiver: no primary pod"; continue; }
+        user="$(kubectl -n data get secret "${cluster}-credentials" \
+          -o jsonpath='{.data.username}' 2>/dev/null | base64 -d || true)"
+        pass="$(kubectl -n data get secret "${cluster}-credentials" \
+          -o jsonpath='{.data.password}' 2>/dev/null | base64 -d || true)"
+        if [ -n "${user}" ] && [ -n "${pass}" ]; then
+          echo "--- Cluster/${cluster} pg_stat_archiver (${primary})"
+          timeout 30 kubectl -n data exec "${primary}" -- env PGPASSWORD="${pass}" \
+            psql -h 127.0.0.1 -U "${user}" -d postgres -tAc \
+            "select last_archived_wal, last_archived_time, last_failed_wal, last_failed_time, failed_count from pg_stat_archiver" 2>&1 || true
+          echo "--- Cluster/${cluster} archive settings (${primary})"
+          timeout 30 kubectl -n data exec "${primary}" -- env PGPASSWORD="${pass}" \
+            psql -h 127.0.0.1 -U "${user}" -d postgres -tAc \
+            "show archive_mode; show archive_command;" 2>&1 || true
+        fi
+      done
+      echo "--- CNPG operator logs matching archive/backup/S3 (tail 200)"
+      kubectl -n "${CNPG_OPERATOR_NAMESPACE:-cloudnative-pg}" logs deploy/cloudnative-pg --tail=2000 2>&1 \
+        | grep -iE 'error|warn|fail|archive|backup|barman|s3|object|wal' \
+        | tail -n 200 2>&1 || true
+      echo "--- CNPG operator logs (tail 200, raw)"
+      kubectl -n "${CNPG_OPERATOR_NAMESPACE:-cloudnative-pg}" logs deploy/cloudnative-pg --tail=200 2>&1 || true
+      echo "--- CNPG instance logs (tail 200)"
+      kubectl -n data logs -l 'cnpg.io/cluster' --all-containers --tail=200 2>&1 || true
+    } | tee "${STATE_DIR}/cnpg-diagnose.txt" || true
+  fi
   echo "── diagnose: cloud emulator (ns ${CLOUD_NAMESPACE:-cloud})"
   kubectl -n "${CLOUD_NAMESPACE:-cloud}" get svc,endpointslice,pods -o wide 2>&1 \
     | tee "${STATE_DIR}/cloud-diagnose.txt" || true
@@ -182,6 +227,16 @@ diagnose() {
   kubectl --context "${FLOCI_EKS_CONTEXT:-floci-eks}" -n "${EKS_SMOKE_NS:-eks-smoke}" get job,pods -o wide 2>&1 \
     | tee -a "${STATE_DIR}/eks-diagnose.txt" || true
 }
+
+diagnose_on_error() {
+  local status=$?
+  if [ "${DIAGNOSED}" = "0" ]; then
+    echo "── smoke-ci: failure detected (status ${status}); collecting diagnostics"
+    diagnose || true
+  fi
+  exit "${status}"
+}
+trap diagnose_on_error ERR
 
 echo "== smoke-ci: components=${COMPONENTS[*]} ref=${ref} keep=${KEEP_CLUSTER} boot=${BOOT_CLUSTER} cloud=${CLOUD_ON}"
 
@@ -314,7 +369,10 @@ echo "[OK] full platform converged on the EKS substrate"
 for c in "${APP_COMPONENTS[@]}"; do
   [ "$c" = "vault" ] && continue
   echo "── run smoke: make smoke COMPONENT=${c}"
-  make smoke COMPONENT="${c}"
+  if ! make smoke COMPONENT="${c}"; then
+    diagnose
+    exit 1
+  fi
 done
 
 # EKS-specific: real Kubernetes API via IAM kubeconfig + ECR push/pull.

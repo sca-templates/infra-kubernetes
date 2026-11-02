@@ -28,6 +28,12 @@ are created by the `floci-buckets` Job in
 environment the Job probes the Floci endpoint, finds it unreachable, and exits
 successfully without changing anything.
 
+The local CNPG `Cluster`s set `AWS_REQUEST_CHECKSUM_CALCULATION` and
+`AWS_RESPONSE_CHECKSUM_VALIDATION` to `when_required` via `spec.env`. This is the
+CloudNativePG-recommended workaround for the boto3 flexible-checksum behaviour
+that otherwise breaks WAL archiving against S3-compatible stores such as Floci.
+The external-S3 environments keep the boto3 defaults.
+
 External buckets must exist before the first scheduled backup. Create them out
 of band and grant the credentials write, list, and delete permissions on their
 prefixes.

@@ -15,6 +15,11 @@ metadata:
 spec:
   instances: 1
   imageName: ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie
+  env:
+    - name: AWS_REQUEST_CHECKSUM_CALCULATION
+      value: when_required
+    - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+      value: when_required
   backup:
     # Prefer a standby for base backups when the cluster has one; a single
     # instance falls back to the primary. WAL archiving is always from the
