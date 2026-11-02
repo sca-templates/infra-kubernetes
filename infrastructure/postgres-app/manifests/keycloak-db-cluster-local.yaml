@@ -14,7 +14,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "10"
 spec:
   instances: 1
-  imageName: ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie
   env:
     - name: AWS_REQUEST_CHECKSUM_CALCULATION
       value: when_required

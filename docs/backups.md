@@ -28,11 +28,18 @@ are created by the `floci-buckets` Job in
 environment the Job probes the Floci endpoint, finds it unreachable, and exits
 successfully without changing anything.
 
-The local CNPG `Cluster`s set `AWS_REQUEST_CHECKSUM_CALCULATION` and
-`AWS_RESPONSE_CHECKSUM_VALIDATION` to `when_required` via `spec.env`. This is the
-CloudNativePG-recommended workaround for the boto3 flexible-checksum behaviour
-that otherwise breaks WAL archiving against S3-compatible stores such as Floci.
-The external-S3 environments keep the boto3 defaults.
+The CNPG `Cluster`s use `ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie`
+because the native `spec.backup.barmanObjectStore` path shells out to the
+`barman-cloud-*` binaries. CNPG's `minimal` and `standard` flavors do not ship
+them; the `system` flavor is `standard` plus the Barman Cloud package. The
+`system` images are deprecated and removed in CNPG 1.32, so migrating to the
+Barman Cloud Plugin is the follow-up before the operator upgrade.
+
+The local `Cluster`s also set `AWS_REQUEST_CHECKSUM_CALCULATION` and
+`AWS_RESPONSE_CHECKSUM_VALIDATION` to `when_required` via `spec.env` as a
+compatibility setting for Floci's S3 emulation; this is independent of the
+Barman binary requirement. The external-S3 environments keep the boto3 default
+checksum behaviour.
 
 External buckets must exist before the first scheduled backup. Create them out
 of band and grant the credentials write, list, and delete permissions on their
@@ -164,7 +171,7 @@ metadata:
   name: postgres-app-restore
 spec:
   instances: 1
-  imageName: ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie
   storage:
     size: 10Gi
   bootstrap:
@@ -195,7 +202,7 @@ metadata:
   name: postgres-app-pitr
 spec:
   instances: 1
-  imageName: ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie
   storage:
     size: 10Gi
   bootstrap:

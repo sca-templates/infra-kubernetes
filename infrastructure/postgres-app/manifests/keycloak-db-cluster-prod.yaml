@@ -14,7 +14,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "10"
 spec:
   instances: 3
-  imageName: ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie
   backup:
     # Prefer a standby for base backups when the cluster has one; a single
     # instance falls back to the primary. WAL archiving is always from the
