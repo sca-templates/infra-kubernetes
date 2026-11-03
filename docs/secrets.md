@@ -51,6 +51,8 @@ script adapts as components land).
 | `secret/keycloak/test-user/<env>` | Phase 13 seed | Keycloak realm import + smoke user via ESO |
 | `secret/grafana/admin` | Phase 14 | Grafana admin |
 | `secret/velero/credentials` | Phase 18 seed | Velero object-store credentials; `local` pins Floci's dummy `test/test` pair |
+| `secret/cnpg/<env>` | Phase B seed (`local`); out of band elsewhere | CNPG backup credentials (Barman S3 access key, secret key, region) |
+| `secret/vault-snapshot/<env>` | Phase B seed (`local`); out of band elsewhere | Vault Raft snapshot S3 credentials (access key, secret key, region) |
 | `secret/platform/alertmanager` | Phase 14 | Alertmanager routing config (`useExistingSecret`) |
 
 Nothing above is written by Vault itself yet — Vault arrives at Phase 2 and
@@ -103,12 +105,17 @@ same Vault path as the CNPG cluster) and `keycloak-test-user` (smoke user,
 resolved by the realm import). See [roadmap/keycloak.md](roadmap/keycloak.md).
 
 Velero diverges only in *target*: `local` uses Floci's S3 emulator, while
-`dev`/`qa`/`prod` will use external S3 with credentials injected via Vault/ESO.
+`dev`/`qa`/`prod` use external S3 with credentials injected via Vault/ESO.
 In `local`, `bootstrap/seed-vault.sh` writes the dummy `test/test` pair to
-`secret/velero/credentials`; the `floci-buckets` Job uses the same fixed pair
-directly, so it does not depend on ESO. CNPG backups and Vault raft snapshots
-are not wired in `local`.
-See [architecture.md](architecture.md) and [observability-radar.md](observability-radar.md).
+`secret/velero/credentials`, `secret/cnpg/local`, and
+`secret/vault-snapshot/local`; the `floci-buckets` Job uses the same fixed pair
+directly, so it does not depend on ESO. The same script creates the Vault policy
+and Kubernetes-auth role `vault-snapshot` (bound to ServiceAccount
+`vault-snapshot` in namespace `vault`). On `dev`/`qa`/`prod`, provision the CNPG
+and Vault snapshot paths and their external buckets out of band; the seed script
+never invents cloud credentials.
+See [backups.md](backups.md), [architecture.md](architecture.md) and
+[observability-radar.md](observability-radar.md).
 
 ## Repository secrets (GitHub Actions)
 

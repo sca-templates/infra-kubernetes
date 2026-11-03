@@ -16,7 +16,7 @@ Reading order depends on who you are:
 | --- | --- |
 | New developer / junior | [README](../README.md) → `kubernetes-basics.md` → `workflow.md` → `glossary.md` |
 | Someone new to Kubernetes | `kubernetes-basics.md` (concepts used by this repo, with official links) |
-| Platform operator | `architecture.md` → `ci-cd.md` → `security.md` → `versioning.md` → `secrets.md` → `observability-radar.md` |
+| Platform operator | `architecture.md` → `ci-cd.md` → `security.md` → `versioning.md` → `secrets.md` → `backups.md` → `observability-radar.md` |
 | Onboarding a service | `onboarding-new-service.md` |
 | AI agent answering questions | `architecture.md` + `status.md` (both are indexes of truth) |
 | Anyone checking current state | `status.md` |
@@ -43,6 +43,7 @@ here.
 | [versioning.md](versioning.md) | Semver pre-1.0 scheme, release-please flow, signed release tags, CHANGELOG rules | `.github/workflows/release.yml`, `.release-please-*.json`, `.github/release-bot-gpg.pub` |
 | [security.md](security.md) | Security controls wired into CI: gitleaks, checkov baseline, pinning guards, settings checklist, leaked-secret runbook | `.github/workflows/security.yml`, `codeql.yml` |
 | [secrets.md](secrets.md) | Vault + ESO design, KV path inventory, seed script, short-refresh rationale, per-component secret flow | `bootstrap/seed-vault.sh` |
+| [backups.md](backups.md) | Three backup layers (Velero, CNPG Barman/PITR, Vault Raft snapshots): schedules, retention, credentials, restore runbooks, troubleshooting | `envs/*/velero.yaml`, `infrastructure/postgres-app/manifests/`, `infrastructure/vault/backup/manifests/`, `argocd/vault-backup-*.yaml`, `bootstrap/smoke-*.sh` |
 | [labels.md](labels.md) | Label model: structural grouping lives in board fields (`Domain`/`Wave`/`Status`), labels stay flat and cross-cutting; the only labels that exist | Kubernetes Planning board; `.github/ISSUE_TEMPLATE/*.yml` |
 | [observability-radar.md](observability-radar.md) | Metrics pipeline and radar alerts as designed (planned until Phase 14) | roadmap in `roadmap.md` |
 | [onboarding-new-service.md](onboarding-new-service.md) | Step-by-step to add a new microservice (app-repo-as-source): dev/qa promote by ArgoCD syncs, prod by a version-tag pin bump | `charts/service-template`, `argocd/services-<env>.yaml` |

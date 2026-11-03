@@ -32,7 +32,9 @@ make status
 - `make prereqs` installs pinned, checksum-verified kubectl/helm into
   `~/.local/bin` (idempotent; docker is required for the Floci emulator).
 - `make eks-up` starts Floci in EKS mode — the emulated EKS substrate (a real
-  single-node k3s container + ECR), the only local cluster target.
+  single-node k3s container + ECR), the only local cluster target. It writes
+  throwaway IAM credentials to `.secrets/eks-admin.env`; the Makefile loads
+  them automatically so later targets can authenticate.
 - `make bootstrap` installs ArgoCD, seeds the platform catalog wiring
   (`argocd/apps-<env>.yaml` plus the dedicated `kong-<env>`, `linkerd-<env>`,
   `postgres-app-<env>`, `kafka-<env>`, `redis-<env>` and `keycloak-<env>`

@@ -48,3 +48,23 @@ M2 done when: unsealed; ESO consumes; TLS ok.
   - [ ] seed KV v2 path under `secret/<service>/<env>`
         Commits: `feat(vault): seed KV v2 secrets layout`
   Issue done when: `ClusterSecretStore vault` `Ready`.
+
+## Milestone M3 — Raft snapshots
+
+M3 done when: a real Raft snapshot is saved, inspected, uploaded, and a restore
+is documented.
+
+- [x] Issue · Raft snapshot CronJob + dedicated Application
+  Depends on: M1 (Vault), ESO (backup credentials)
+  - [x] `infrastructure/vault/manifests/vault-snapshot-script.yaml` (save,
+        inspect, upload, retention)
+  - [x] `vault-raft-snapshot-<env>` CronJobs and
+        `secret/vault-snapshot/<env>` credential projections
+  - [x] `vault-backup-<env>` dedicated Application annotated wave 90 (the
+        standalone app is applied directly, so the annotation documents rather
+        than enforces order)
+  - [x] `seed-vault.sh`: `vault-snapshot` policy + Kubernetes-auth role
+  - [x] `bootstrap/smoke-vault.sh`: trigger a real Job and assert
+        `VAULT_SNAPSHOT_OK` + `VAULT_SNAPSHOT_UPLOADED`
+  - [x] runbook: save/restore in [backups.md](../backups.md#vault-raft-snapshot)
+  Issue done when: live snapshot + restore validation passes.

@@ -1,6 +1,11 @@
 # velero — base values
 # Official chart: vmware-tanzu/velero
 # Chart pin (targetRevision) is set in argocd/apps-<env>.yaml
+#
+# This file is the cloud-neutral baseline. The local overlay points the backup
+# storage location at the Floci S3 emulator; dev/qa/prod overlays select their
+# own bucket and, when the cluster has a CSI snapshot driver, keep the AWS
+# volume snapshot location enabled.
 
 image:
   repository: velero/velero
@@ -20,12 +25,18 @@ configuration:
   backupStorageLocation:
     - name: default
       provider: aws
-      bucket: velero
+      # Every environment overlay sets its own bucket. This fallback keeps the
+      # base renderable without silently pointing at a real account.
+      bucket: sca-velero
       config:
         region: us-east-1
-        s3ForcePathStyle: "true"
-        s3Url: http://floci.cloud.svc.cluster.local:4566
-  volumeSnapshotLocation: []
+  # EBS CSI snapshots are only available on AWS-backed clusters. The local
+  # overlay clears this list; see envs/local/velero.yaml.
+  volumeSnapshotLocation:
+    - name: default
+      provider: aws
+      config:
+        region: us-east-1
   defaultVolumesToFsBackup: false
 
 credentials:
@@ -35,8 +46,22 @@ credentials:
 # Deploy node agent for filesystem backups if needed
 deployNodeAgent: false
 
-# Schedules for critical namespaces
-schedules: {}
+# Schedules for critical namespaces. PV data is covered by the datastore-native
+# backups (CNPG + Vault raft snapshots); Velero backs up the Kubernetes objects
+# and, where a CSI driver exists, the volumes.
+schedules:
+  critical-namespaces:
+    disabled: false
+    schedule: "0 2 * * *"
+    template:
+      includedNamespaces:
+        - data
+        - vault
+        - keycloak
+        - kong
+        - cert-manager
+      ttl: 720h0m0s
+      snapshotVolumes: true
 
 resources:
   requests:

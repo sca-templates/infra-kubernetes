@@ -61,6 +61,13 @@ spec:
             targetRevision: 0.34.1
             wave: "0"
             path: vault/manifests
+          - name: velero
+            namespace: velero
+            chartRepo: https://vmware-tanzu.github.io/helm-charts
+            chart: velero
+            targetRevision: 10.1.2
+            wave: "80"
+            path: velero/manifests
   template:
     metadata:
       name: '{{.name}}-prod'

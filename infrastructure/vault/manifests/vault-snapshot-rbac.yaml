@@ -1,0 +1,9 @@
+# ServiceAccount used by the Vault raft snapshot CronJob. Vault's Kubernetes
+# auth validates this token; the workload needs no Kubernetes RBAC, only the
+# Vault policy/role created by bootstrap/seed-vault.sh.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vault-snapshot
+  namespace: vault
+automountServiceAccountToken: false

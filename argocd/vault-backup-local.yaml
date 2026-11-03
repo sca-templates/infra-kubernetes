@@ -1,0 +1,42 @@
+# vault-backup-local — Vault raft snapshots, DEDICATED Application.
+#
+# The snapshot CronJob and its ExternalSecret are raw Kubernetes/ESO objects, so
+# they cannot go through the platform ApplicationSet (which renders Helm charts).
+# The shared ServiceAccount and upload script live in the Vault Application
+# (`infrastructure/vault/manifests/`); this Application only owns the
+# environment-specific CronJob and S3 credentials. Wave 90 keeps it after Vault
+# (0) and the ESO/Vault chain, and it depends on the Vault Kubernetes-auth role
+# seeded by `bootstrap/seed-vault.sh`. It does not add a second health gate
+# before the Vault rollout.
+#
+# The manifests live in per-environment files under
+# `infrastructure/vault/backup/manifests/`; `directory.include` selects only the
+# file for this environment.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vault-backup-local
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "90"
+spec:
+  project: default
+  source:
+    repoURL: "{{GIT_REPO_URL}}"
+    targetRevision: "{{GIT_TARGET_BRANCH}}"
+    path: infrastructure/vault/backup/manifests
+    directory:
+      recurse: true
+      include: "*-local.yaml"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vault
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true

@@ -1,1 +1,24 @@
 # velero — dev overlay
+#
+# External S3: create the bucket out of band and seed
+# `secret/velero/credentials` in this environment's Vault. EBS CSI snapshots
+# require the AWS EBS CSI driver and a VolumeSnapshotClass labelled
+# `velero.io/csi-volumesnapshot-class: "true"`.
+configuration:
+  backupStorageLocation:
+    - name: default
+      provider: aws
+      bucket: sca-dev-velero
+      config:
+        region: us-east-1
+  volumeSnapshotLocation:
+    - name: default
+      provider: aws
+      config:
+        region: us-east-1
+
+schedules:
+  critical-namespaces:
+    template:
+      ttl: 720h0m0s
+      snapshotVolumes: true

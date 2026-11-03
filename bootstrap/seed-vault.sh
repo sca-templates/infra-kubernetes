@@ -227,6 +227,21 @@ vault_exec write auth/kubernetes/role/external-secrets \
   policies=external-secrets \
   ttl=1h >/dev/null
 
+kubectl -n "$NAMESPACE" exec -i "$POD" -- env \
+  VAULT_ADDR="$VAULT_HTTPS" \
+  VAULT_CACERT=/vault/userconfig/vault-tls/ca.crt \
+  VAULT_TOKEN="$VAULT_TOKEN" vault policy write vault-snapshot - >/dev/null <<'POLICY'
+path "sys/storage/raft/snapshot" {
+  capabilities = ["read"]
+}
+POLICY
+
+vault_exec write auth/kubernetes/role/vault-snapshot \
+  bound_service_account_names=vault-snapshot \
+  bound_service_account_namespaces=vault \
+  policies=vault-snapshot \
+  ttl=1h >/dev/null
+
 echo "── Seeding local platform values (idempotent; SEED_ROTATE=1 to rotate)"
 kv_seed secret/keycloak/admin username=admin password="$(openssl rand -hex 24)"
 kv_seed "secret/keycloak/test-user/${ENV}" username=smoke password="$(openssl rand -hex 24)"
@@ -244,6 +259,20 @@ kv_seed secret/unleash/db username=unleash password="$(openssl rand -hex 24)"
 vault_exec kv put secret/velero/credentials \
   access_key=test secret_key=test >/dev/null
 echo "  (seeded) secret/velero/credentials"
+
+# Object-store credentials for the datastore/vault backup jobs. Local uses
+# Floci's fixed dummy pair; dev/qa/prod provision real credentials at the same
+# Vault paths out of band (the bootstrap must never invent cloud credentials).
+if [ "$ENV" = "local" ]; then
+  vault_exec kv put "secret/cnpg/${ENV}" \
+    access_key=test secret_key=test region=us-east-1 >/dev/null
+  echo "  (seeded) secret/cnpg/${ENV}"
+  vault_exec kv put "secret/vault-snapshot/${ENV}" \
+    access_key=test secret_key=test region=us-east-1 >/dev/null
+  echo "  (seeded) secret/vault-snapshot/${ENV}"
+else
+  echo "  (expected) secret/cnpg/${ENV} and secret/vault-snapshot/${ENV} are provisioned out of band"
+fi
 
 # Alertmanager config seed only runs once its source lands (Phase 14); until
 # then it is skipped so the script stays idempotent and phase-agnostic.

@@ -10,7 +10,8 @@ Milestones and Issues.
 
 ## Current state
 
-**Phase 13 — Keycloak deployed; Phase 18 — Velero (local, Floci S3).**
+**Phase 13 — Keycloak deployed; Phase B — backup layer landed (Velero,
+CloudNativePG PITR, Vault Raft snapshots), live restore validation pending.**
 Phase 0 delivered the scaffold
 (Makefile, `bootstrap/`, `argocd/` with the app-of-apps pattern, the CI
 workflows, the service template, this docs set) and brought the local Floci
@@ -66,7 +67,10 @@ no `linkerd-viz` (headless mesh). **Phase 10** lands the PostgreSQL
 datastores: two CNPG `Cluster`s in `data` at wave 40 across **all four**
 environments — `postgres-app` (`app`/`app`) and `keycloak-db`
 (`keycloak`/`keycloak`) on official
-`ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie`. They are raw CRs, so
+`ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie` (the `system` flavor
+carries the Barman Cloud binaries required by the native `barmanObjectStore`;
+the operator-side migration to the Barman Cloud Plugin is a Phase B follow-up).
+They are raw CRs, so
 they ship through a **dedicated `Application` per environment**
 (`argocd/postgres-app-<env>.yaml`, `directory.include: "*-<env>.yaml"`) rather
 than the Helm `ApplicationSet`; `local`/`dev` run 1 instance, `qa`/`prod` run 3
@@ -128,7 +132,7 @@ password-grant token accepted by userinfo (`make smoke COMPONENT=keycloak`).
 | Fact | Value |
 | --- | --- |
 | Repository | `infra-kubernetes` (local, fully-local git serve; published to GitHub before promotion) |
-| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6), redis-operator (Phase 7), Kong (Phase 8), Linkerd control plane (Phase 9), postgres-app/keycloak-db (Phase 10), Kafka (Phase 11), Redis (Phase 12), Keycloak (Phase 13), Velero (Phase 18, local) |
+| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6), redis-operator (Phase 7), Kong (Phase 8), Linkerd control plane (Phase 9), postgres-app/keycloak-db (Phase 10), Kafka (Phase 11), Redis (Phase 12), Keycloak (Phase 13), Velero (Phase 18; backup layer expanded in Phase B, live validation pending) |
 | `platform-root-local` | not used — `local` runs no services, so there is no root Application; `make bootstrap ENV=local` seeds the catalog wiring (`apps-local` + `kong-local` + `linkerd-local` + `postgres-app-local` + `kafka-local` + `redis-local` + `keycloak-local`) host-side |
 | `platform-local` ApplicationSet | present, eight elements (`cert-manager` wave -20, `external-secrets` + `linkerd-crds` + `cloudnative-pg` + `strimzi` + `redis-operator` wave -10, `vault` wave 0, `velero` wave 80) |
 | cert-manager app | `cert-manager-local` `Synced` + `Healthy`; `sca-ca` ClusterIssuer `Ready`; leaf Certificate smoke green |
@@ -140,7 +144,7 @@ password-grant token accepted by userinfo (`make smoke COMPONENT=keycloak`).
 | redis-operator app | `redis-operator-local` `Synced` + `Healthy` in namespace `data`; operator Deployment `redis-operator` Ready (chart 0.26.1 / operator 0.26.0); watches all namespaces (no `WATCH_NAMESPACE` env); 4 `redis.redis.opstreelabs.in` CRDs present + `Established`; `make smoke COMPONENT=redis-operator` → throwaway `Redis` CR honored (StatefulSet ready + `PING` → `PONG`) |
 | kong app | `kong-local` `Synced` + `Healthy` in namespace `kong` (dedicated Application, **no SSA**); chart 3.4.1, gateway Deployment `kong` Ready (containers `ingress-controller` KIC 3.5.5 + `proxy` kong 3.9.4), DB-less (`KONG_DATABASE=off`); IngressClass `kong`; `configuration.konghq.com` CRDs `Established`; `Certificate/kong-proxy` Ready (leaf off `sca-ca`); declarative `Ingress kong-demo` + `KongPlugin demo-termination`; `make smoke COMPONENT=kong` → `GET https://kong.local/demo` → 200 |
 | linkerd app | `linkerd-local` `Synced` + `Healthy` (dedicated Application); chart `linkerd/linkerd-control-plane` 1.16.11 (`stable-2.14.10`); control-plane Deployments `linkerd-identity`/`linkerd-destination`/`linkerd-proxy-injector` Ready; identity PKI in-cluster (ConfigMap `linkerd-identity-trust-roots` + cert-manager-issued Secret `linkerd-identity-issuer`, chain to `root.linkerd.cluster.local` verified); 3 admission webhooks wired; `make smoke COMPONENT=linkerd` green, including **data plane end-to-end**: preflight of the control-plane identity-leaf TTL, an injected `nginx-unprivileged`+`curl` workload (both pods carry `linkerd-proxy`), HTTP 200 through the mesh, live identity leaves and inbound+outbound success metrics; `local` raises `identity.issuer.issuanceLifetime` to `168h0m0s` (emulator clock skew; dev/qa/prod keep 24h) |
-| postgres-app app | `postgres-app-local` `Synced` + `Healthy` (dedicated Application, raw CRs); CNPG `Cluster postgres-app` Ready (1 instance local; image `18.4-standard-trixie`), `keycloak-db` Ready (1 instance local); ESO `postgres-app-credentials` + `keycloak-db-credentials` `SecretSynced`; `pg_stat_statements` + `vector` + `wal_level=logical` verified through `app@app`; `make smoke COMPONENT=postgres-app` green |
+| postgres-app app | `postgres-app-local` `Synced` + `Healthy` (dedicated Application, raw CRs); CNPG `Cluster postgres-app` Ready (1 instance local; image `18.4-system-trixie`), `keycloak-db` Ready (1 instance local); ESO `postgres-app-credentials` + `keycloak-db-credentials` `SecretSynced`; `pg_stat_statements` + `vector` + `wal_level=logical` verified through `app@app`; `make smoke COMPONENT=postgres-app` green |
 | kafka app | `kafka-local` `Synced` + `Healthy` (dedicated Application, raw CRs); Strimzi `Kafka/kafka` Ready (Kafka `4.2.0`), `KafkaNodePool/kafka` 1 dual-role node local; `KafkaUser/scram-admin` Ready; ESO `kafka-scram-admin` `SecretSynced` from `secret/kafka/local`; internal listener TLS + SCRAM-SHA-512; `make smoke COMPONENT=kafka` → topic create + produce/consume green |
 | redis app | `redis-local` `Synced` + `Healthy` (dedicated Application, raw CRs); `RedisReplication/redis` (1 replica local/dev) with embedded Sentinel only in qa/prod (3/3, mymaster); password from ESO `redis-password` via `secret/redis/<env>`; AOF on PVC, `redisExporter` enabled; `make smoke COMPONENT=redis` → PING/SET/GET and AOF verified; Sentinel checked in qa/prod |
 | keycloak app | `keycloak-local` `Synced` + `Healthy` (dedicated multi-source Application); chart `codecentric/keycloakx` 7.4.0 / Keycloak 26.8.1; StatefulSet `keycloak` Ready; `ExternalSecret/keycloak-admin` + `keycloak-db-credentials` + `keycloak-test-user` `SecretSynced`; realm `sca` imported from `ConfigMap/keycloak-realm-sca`; `Certificate/keycloak-tls` Ready; Kong Ingress `keycloak.local`; `make smoke COMPONENT=keycloak` → discovery issuer, `login_required` redirect, password-grant token + userinfo green |
@@ -161,6 +165,7 @@ password-grant token accepted by userinfo (`make smoke COMPONENT=keycloak`).
 | 2 | **dev / qa / prod clusters pending** | Not provisioned (terraform/ansible outside this repo) | Provision per env; promote via `promote-test` (see [workflow.md](workflow.md)) |
 | 3 | **OpenSSF Best Practices badge — silver blocked** | All silver criteria are met except `contributors_unassociated` and `bus_factor` (≥2): the project has a single maintainer (`CODEOWNERS` = `@Santiago1010`) | Achieved once a second **unassociated** contributor joins and is reflected in `CODEOWNERS` + `.github/GOVERNANCE.md`; passing badge is already achievable (see [.github/GOVERNANCE.md](../.github/GOVERNANCE.md), [docs/ci-cd.md](ci-cd.md)) |
 | 4 | **OpenSSF Best Practices badge — gold blocked** | Beyond the silver gaps, gold requires `two_person_review` (≥50% of changes reviewed by someone other than the author), which is unrealisable while there is a single maintainer; all other gold criteria are Met or N/A (see [.github/SECURITY.md](../.github/SECURITY.md) security review, SPDX + copyright headers per source file) | Unblocked together with silver once a second, **unassociated** reviewer/maintainer exists; `two_person_review` then requires an explicit second reviewer on gold PRs |
+| 5 | **Backup restore not live-validated** | Velero restore, CNPG PITR/latest restore, and the Vault Raft snapshot Job are implemented and pass static checks; the live restore run on the Floci EKS substrate is pending | Run `make smoke` for `velero`, `postgres-app`, and `vault` on a bootstrapped EKS substrate, then flip the Phase B status in [backups.md](backups.md) and this file |
 
 ## Intentional exclusions
 
@@ -194,16 +199,16 @@ password-grant token accepted by userinfo (`make smoke COMPONENT=keycloak`).
 | Keycloak → Zitadel | **Planned** | Complete replacement. Inventory in progress. |
 | Kafka/Strimzi → NATS JetStream | **Planned** | Togglable design. No current consumers. |
 | Linkerd → CNI-native mTLS | **Planned** | PoC required in Floci first. |
-| Velero + Backups | **High Priority** | Velero is deployed in `local` (Phase 18) against Floci's S3 emulator. CNPG scheduled backups and Vault raft snapshots are deferred until restore validation is designed and tested. |
-| CNPG RDS replacement | **In Progress** | Needs backup validation. |
+| Velero + Backups | **High Priority** | The three layers are implemented in git: Velero scheduled backups, CNPG Barman base backups + WAL/PITR, and Vault Raft snapshot CronJob. `local` uses Floci S3; `dev`/`qa`/`prod` expect external buckets and Vault-provisioned credentials. Live restore validation on the Floci EKS substrate is pending. See [backups.md](backups.md). |
+| CNPG RDS replacement | **In Progress** | The PITR + latest-backup smoke (`bootstrap/smoke-postgres-app.sh`) lands with Phase B; it still needs a live green run before the RDS replacement gate closes. |
 
-## Phase B additions (in progress)
+## Phase B additions (backup layer)
 
 | Component | Namespace | Status | Notes |
 | --- | --- | --- | --- |
-| velero | velero | deployed (Phase 18, local) | Cluster backups to Floci S3; the `floci-buckets` Job creates the bucket and the backup smoke creates and deletes a real `Backup` |
+| velero | velero | landed (live restore validation pending) | Scheduled Kubernetes-object backup configs in all four envs; `local` uses Floci S3, external environments use their own bucket. The `floci-buckets` Job creates the local buckets. `bootstrap/smoke-velero.sh` performs a backup → delete namespace → restore round-trip. |
+| CNPG backups + PITR | data | landed (live validation pending) | Both `Cluster`s are configured to write Barman base backups + WAL to object storage; daily `ScheduledBackup`s; credentials via `secret/cnpg/<env>`. `bootstrap/smoke-postgres-app.sh` exercises PITR on `postgres-app` and latest-backup restore on `keycloak-db`. |
+| Vault Raft snapshots | vault | landed (live validation pending) | `CronJob/vault-raft-snapshot` is configured to save/validate/upload a Raft snapshot and apply retention; credentials via `secret/vault-snapshot/<env>`. `bootstrap/smoke-vault.sh` triggers a real Job and asserts `VAULT_SNAPSHOT_OK` + `VAULT_SNAPSHOT_UPLOADED`. |
 
-Velero is covered by `bootstrap/smoke-velero.sh`, which waits for the
-`BackupStorageLocation` to be `Available` and a `Backup` to reach `Completed`.
-Restore, CNPG backups and the Vault raft snapshot payload are tracked as Phase B
-follow-ups.
+The backup operations, schedules, retention values, and restore runbooks live in
+[backups.md](backups.md). Live restore validation is the remaining Phase B gate.

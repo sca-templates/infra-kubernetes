@@ -20,6 +20,21 @@ No natural phases → issues directly under the project.
         Commits: `docs(cloudnative-pg): mark deployed`
   Issue done when: operator pod `Running` + CRDs present.
 
+## Backup + PITR (Phase B)
+
+The operator milestone is complete. The data-protection layer is a separate
+Phase B deliverable, tracked in [backups.md](../backups.md) and the global Work
+Log.
+
+- [x] `barmanObjectStore` + continuous WAL archiving on `postgres-app` and
+      `keycloak-db` (all four envs)
+- [x] daily `ScheduledBackup`s with environment retention (local `7d`,
+      dev/qa `30d`, prod `90d`)
+- [x] backup credentials projected by ESO from `secret/cnpg/<env>`
+- [x] `bootstrap/smoke-postgres-app.sh`: PITR restore on `postgres-app` and
+      latest-backup restore on `keycloak-db`
+- [ ] live green run of the restore smoke on the Floci EKS substrate
+
 Rollout note (local, one-off cluster hygiene): the orphaned `postgresql.cnpg.io`
 CRDs left by the 2026-09-02 pre-restart bulk install were removed from `local`
 before the chart app converged — the same leftover-CRD condition that wedged
