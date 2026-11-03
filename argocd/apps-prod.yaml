@@ -106,6 +106,12 @@ spec:
         server: https://kubernetes.default.svc
         namespace: '{{.namespace}}'
       syncPolicy:
+        retry:
+          limit: 10
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 3m
         syncOptions:
           - CreateNamespace=true
           - ApplyOutOfSyncOnly=true
