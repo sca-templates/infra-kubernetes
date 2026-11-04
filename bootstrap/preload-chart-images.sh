@@ -26,15 +26,19 @@
 #   2. load the cached image tarball when present (actions/cache in CI)
 #   3. pull the refs still missing with the host Docker — fail-closed, printing
 #      the registry's own error
-#   4. save a tarball for the next run (only when something was pulled)
-#   5. import everything into the k3s node (docker save | k3s ctr images import)
+#   4. save a tarball for the next run when free space allows (only when
+#      something was pulled or the tarball is missing)
+#   5. import everything into the k3s node (docker save | ctr images import)
+#   6. drop the host-side copy: the node owns its own in containerd, and the
+#      runner's ephemeral storage must not hold the catalog twice
 #
 # Env:
-#   PRELOAD_CACHE_DIR  docker-save cache directory (default ~/.cache/sca/preload)
-#   PRELOAD_LIST_ONLY  set to 1 to resolve and print the images, then exit
-#   PRELOAD_SKIP       set to 1 to skip the preload entirely
-#   K3S_CONTAINER      k3s node container (default: discovered with `docker ps`)
-#   FLOCI_EKS_CLUSTER  emulated cluster name used for container discovery
+#   PRELOAD_CACHE_DIR      docker-save cache directory (default ~/.cache/sca/preload)
+#   PRELOAD_MIN_FREE_GIB   skip saving the cache tarball below this many GiB (default 10)
+#   PRELOAD_LIST_ONLY      set to 1 to resolve and print the images, then exit
+#   PRELOAD_SKIP           set to 1 to skip the preload entirely
+#   K3S_CONTAINER          k3s node container (default: discovered with `docker ps`)
+#   FLOCI_EKS_CLUSTER      emulated cluster name used for container discovery
 #
 # CI/dev tooling only — never a platform component (docs/ci-cd.md). Fail-closed
 # on a pull/import error, so a throttled registry stops the run in seconds with
@@ -58,18 +62,30 @@ echo_image_list() {
 
 warn() { printf '── preload: %s\n' "$*" >&2; }
 
+# GiB available on the filesystem that holds a path (0 when df cannot read it).
+free_gib() {
+  df -Pk "$1" 2>/dev/null | awk 'NR==2 {printf "%d", $4/1024/1024}'
+}
+
 # ── k3s node discovery ──────────────────────────────────────────────────────
-# Floci runs one `rancher/k3s` container per cluster on the emulator's Docker
-# network. Its name embeds the cluster name; the image is the reliable marker.
+# Floci runs one node container per cluster on the emulator's Docker network.
+# Its name embeds the cluster (`floci-aws-eks-<cluster>`), while the image can
+# be a pinned digest without "k3s" in the reference; match the name first and
+# the image second so CI and local discovery agree.
 find_k3s_container() {
   if [ -n "${K3S_CONTAINER:-}" ]; then
     docker inspect "${K3S_CONTAINER}" >/dev/null 2>&1 && printf '%s' "${K3S_CONTAINER}"
     return 0
   fi
   docker ps --format '{{.Names}}	{{.Image}}' 2>/dev/null | awk -F'\t' -v c="${FLOCI_EKS_CLUSTER}" '
-    index($2, "k3s") && index($1, c) { print $1; found = 1; exit }
-    index($2, "k3s") && !fallback { fallback = $1 }
-    END { if (!found && fallback) print fallback }'
+    c != "" && index($1, c) { print $1; found = 1; exit }
+    index($1, "floci-aws-eks-") && !by_name { by_name = $1 }
+    index($2, "k3s") && !by_image { by_image = $1 }
+    END {
+      if (found) exit
+      if (by_name) print by_name
+      else if (by_image) print by_image
+    }'
 }
 
 # ── image resolution ────────────────────────────────────────────────────────
@@ -231,6 +247,9 @@ CACHE_TAR="${CACHE_DIR}/chart-images.tar"
 if [ -f "${CACHE_TAR}" ]; then
   if docker load -i "${CACHE_TAR}" >/dev/null 2>&1; then
     echo "  cache: loaded ${CACHE_TAR}"
+    # The images now live in the host Docker store; drop the tarball so the
+    # runner does not hold two copies (it is re-saved below when space allows).
+    rm -f "${CACHE_TAR}"
   else
     warn "cache: ${CACHE_TAR} is unreadable (ignoring)"
   fi
@@ -265,7 +284,12 @@ done
 # (a layer-cached Docker still has the images, so we can still warm the cache).
 if [ "${pulled}" = "1" ] || [ ! -f "${CACHE_TAR}" ]; then
   mkdir -p "${CACHE_DIR}"
-  if docker save -o "${CACHE_TAR}.tmp" "${image_list[@]}" >/dev/null 2>&1; then
+  free_now="$(free_gib "${CACHE_DIR}")"
+  free_now="${free_now:-0}"
+  min_free="${PRELOAD_MIN_FREE_GIB:-10}"
+  if [ "${free_now}" -lt "${min_free}" ]; then
+    warn "cache: only ${free_now} GiB free on ${CACHE_DIR}; not saving ${CACHE_TAR} (the node keeps the images)"
+  elif docker save -o "${CACHE_TAR}.tmp" "${image_list[@]}" >/dev/null 2>&1; then
     mv "${CACHE_TAR}.tmp" "${CACHE_TAR}"
     echo "  cache: saved ${CACHE_TAR}"
   else
@@ -275,9 +299,17 @@ if [ "${pulled}" = "1" ] || [ ! -f "${CACHE_TAR}" ]; then
 fi
 
 # ── import into the k3s node's containerd ───────────────────────────────────
-echo "── preload: importing into '${node}' (k3s ctr images import)"
-if ! docker save "${image_list[@]}" | docker exec -i "${node}" k3s ctr images import - >/dev/null; then
+ctr_cmd=(/bin/ctr --address /run/k3s/containerd/containerd.sock --namespace k8s.io)
+if ! docker exec "${node}" "${ctr_cmd[@]}" version >/dev/null; then
+  echo "ERROR: ctr is not usable inside node '${node}' (containerd socket not ready?)" >&2
+  exit 1
+fi
+echo "── preload: importing into '${node}' (ctr images import)"
+if ! docker save "${image_list[@]}" | docker exec -i "${node}" "${ctr_cmd[@]}" images import - >/dev/null; then
   echo "ERROR: importing the preloaded images into '${node}' failed" >&2
   exit 1
 fi
+# The node now owns its copy in containerd; drop the host-side copy so the
+# runner's ephemeral storage does not hold the catalog twice.
+docker rmi "${image_list[@]}" >/dev/null 2>&1 || true
 echo "── preload: done"

@@ -90,6 +90,13 @@ for attempt in {1..60}; do
   }
   sleep 2
 done
+# The store validates on its own refreshInterval; force a reconcile now that the
+# Vault k8s-auth role exists (the ESO store controller validates on any update),
+# so the ExternalSecret below does not race the store's refresh timer.
+kubectl annotate clustersecretstore vault \
+  force-sync="$(date +%s)" --overwrite >/dev/null 2>&1 || true
+kubectl wait --for=condition=Ready clustersecretstore/vault --timeout="$TIMEOUT" >/dev/null
+
 kubectl -n "$NAMESPACE" annotate externalsecret vault-snapshot-credentials \
   force-sync="$(date +%s)" --overwrite >/dev/null 2>&1 || true
 kubectl -n "$NAMESPACE" wait --for=condition=Ready externalsecret/vault-snapshot-credentials --timeout="$SNAPSHOT_TIMEOUT" >/dev/null
