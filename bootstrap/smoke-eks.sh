@@ -45,6 +45,10 @@ ENDPOINT="http://127.0.0.1:${FLOCI_PORT}"
 ECR_REPO="${FLOCI_EKS_ECR_REPO:-sca-smoke}"
 SCRATCH_NS="${EKS_SMOKE_NS:-eks-smoke}"
 JOB_NAME="eks-smoke-ecr"
+# Host-side seeding uses loopback: it resolves on Linux, macOS and WSL2, and
+# Docker treats 127.0.0.0/8 as insecure. The in-cluster reference keeps the ECR
+# hostname so the node registry mirror Floci injects at cluster creation applies.
+HOST_REGISTRY="127.0.0.1:${FLOCI_PORT}"
 REGISTRY="${EKS_ACCOUNT}.dkr.ecr.${EKS_REGION}.localhost:${FLOCI_PORT}"
 TIMEOUT="${SMOKE_TIMEOUT:-300}"
 POLL="${SMOKE_POLL:-5}"
@@ -82,12 +86,12 @@ aws_cli ecr create-repository --repository-name "${ECR_REPO}" >/dev/null 2>&1 ||
 aws_cli ecr describe-repositories --repository-names "${ECR_REPO}" \
   --query 'repositories[0].repositoryUri' --output text
 
-echo "── smoke(eks): pushing ${AWS_CLI_IMAGE} to ${REGISTRY}/${ECR_REPO}:${image_tag}"
+echo "── smoke(eks): pushing ${AWS_CLI_IMAGE} to ${HOST_REGISTRY}/${ECR_REPO}:${image_tag} (in-cluster ref ${REGISTRY}/${ECR_REPO}:${image_tag})"
 aws_cli ecr get-login-password --region "${EKS_REGION}" \
-  | docker login --username AWS --password-stdin "${REGISTRY}" >/dev/null
+  | docker login --username AWS --password-stdin "${HOST_REGISTRY}" >/dev/null
 docker pull "${AWS_CLI_IMAGE}" >/dev/null
-docker tag "${AWS_CLI_IMAGE}" "${REGISTRY}/${ECR_REPO}:${image_tag}"
-docker push "${REGISTRY}/${ECR_REPO}:${image_tag}" >/dev/null
+docker tag "${AWS_CLI_IMAGE}" "${HOST_REGISTRY}/${ECR_REPO}:${image_tag}"
+docker push "${HOST_REGISTRY}/${ECR_REPO}:${image_tag}" >/dev/null
 aws_cli ecr describe-images --repository-name "${ECR_REPO}" \
   --query "imageDetails[?contains(imageTags, '${image_tag}')].imageTags[0]" --output text \
   | grep -q "${image_tag}" || { echo "FAIL: pushed image not found in ECR" >&2; exit 1; }
