@@ -115,6 +115,30 @@ APPSET_NAME="platform-local"
 
 mkdir -p "${STATE_DIR}"
 
+# Ephemeral-storage guard: kubelet evicts the whole platform when the Docker
+# root filesystem crosses its eviction threshold (~10% by default). Fail fast
+# with the numbers instead of timing out after 20 minutes on a mass eviction.
+# SMOKE_MIN_FREE_GIB=0 disables the gate (e.g. a deliberately tight local run).
+disk_guard() {
+  local target free_kib free_gib min_gib
+  target="$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || true)"
+  [ -n "${target}" ] && [ -d "${target}" ] || target=/
+  free_kib="$(df -Pk "${target}" 2>/dev/null | awk 'NR==2 {print $4}')"
+  free_kib="${free_kib:-0}"
+  free_gib=$(( free_kib / 1024 / 1024 ))
+  min_gib="${SMOKE_MIN_FREE_GIB:-15}"
+  echo "── disk: ${free_gib} GiB free on ${target} (min ${min_gib} GiB)"
+  df -h "${target}" 2>/dev/null || true
+  docker system df 2>/dev/null || true
+  if [ "${min_gib}" -gt 0 ] && [ "${free_gib}" -lt "${min_gib}" ]; then
+    echo "ERROR: only ${free_gib} GiB free on ${target}; the full platform needs >= ${min_gib} GiB." >&2
+    echo "       kubelet evicts every pod at its ephemeral-storage threshold (~10%)." >&2
+    echo "       Free space (e.g. docker system prune -af) or set SMOKE_MIN_FREE_GIB=0 to override." >&2
+    exit 1
+  fi
+}
+disk_guard
+
 cleanup() {
   if [ "${KEEP_CLUSTER}" = "1" ]; then
     echo "── smoke-ci: keeping the EKS substrate (--keep) — remove with: make eks-down"
