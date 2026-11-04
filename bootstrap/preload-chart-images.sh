@@ -28,7 +28,7 @@
 #      the registry's own error
 #   4. save a tarball for the next run when free space allows (only when
 #      something was pulled or the tarball is missing)
-#   5. import everything into the k3s node (docker save | k3s ctr images import)
+#   5. import everything into the k3s node (docker save | ctr images import)
 #   6. drop the host-side copy: the node owns its own in containerd, and the
 #      runner's ephemeral storage must not hold the catalog twice
 #
@@ -299,8 +299,13 @@ if [ "${pulled}" = "1" ] || [ ! -f "${CACHE_TAR}" ]; then
 fi
 
 # ── import into the k3s node's containerd ───────────────────────────────────
-echo "── preload: importing into '${node}' (k3s ctr images import)"
-if ! docker save "${image_list[@]}" | docker exec -i "${node}" k3s ctr images import - >/dev/null; then
+ctr_cmd=(/bin/ctr --address /run/k3s/containerd/containerd.sock --namespace k8s.io)
+if ! docker exec "${node}" "${ctr_cmd[@]}" version >/dev/null; then
+  echo "ERROR: ctr is not usable inside node '${node}' (containerd socket not ready?)" >&2
+  exit 1
+fi
+echo "── preload: importing into '${node}' (ctr images import)"
+if ! docker save "${image_list[@]}" | docker exec -i "${node}" "${ctr_cmd[@]}" images import - >/dev/null; then
   echo "ERROR: importing the preloaded images into '${node}' failed" >&2
   exit 1
 fi
