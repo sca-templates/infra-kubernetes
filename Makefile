@@ -103,7 +103,7 @@ validate-static: ## Static suite only: markdownlint, yamllint, YAML parse, bash 
 	@echo '=== markdownlint ==='
 	npx --yes markdownlint-cli2 "**/*.md"
 	@echo '=== YAML parse ==='
-	@find . -path ./.git -prune -o -type f \( -name '*.yaml' -o -name '*.yml' \) -print | sort | while read -r f; do \
+	@find . \( -path ./.git -o -path ./.generated \) -prune -o -type f \( -name '*.yaml' -o -name '*.yml' \) -print | sort | while read -r f; do \
 		case "$$f" in */templates/*) continue ;; esac; \
 		npx --yes js-yaml@4.1.0 "$$f" >/dev/null && echo "[OK] $$f" || { echo "[FAIL] $$f"; exit 1; }; \
 	done
