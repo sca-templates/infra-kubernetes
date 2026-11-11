@@ -35,6 +35,10 @@ make status
   single-node k3s container + ECR), the only local cluster target. It writes
   throwaway IAM credentials to `.secrets/eks-admin.env`; the Makefile loads
   them automatically so later targets can authenticate.
+- On WSL2, `*.localhost` does not resolve: run `make eks-hosts` once per WSL
+  restart (it maps the emulated ECR hostname to `127.0.0.1` in `/etc/hosts` and
+  needs sudo). Linux/macOS/CI resolve it natively, and a real ECR registry uses
+  DNS — no hosts entry is needed there.
 - `make bootstrap` installs ArgoCD, seeds the platform catalog wiring
   (`argocd/apps-<env>.yaml` plus the dedicated `kong-<env>`, `linkerd-<env>`,
   `postgres-app-<env>`, `kafka-<env>`, `redis-<env>` and `keycloak-<env>`
@@ -114,6 +118,7 @@ intentionally excluded.
 | `make doctor` | Read-only platform health check (toolchain, cluster, ArgoCD apps, seam) |
 | `make install-cli` | Symlink `bootstrap/sca.sh` → `~/.local/bin/sca` |
 | `make eks-up` | Start Floci in EKS mode: create the emulated EKS cluster and point kubectl at it |
+| `make eks-hosts` | WSL2 only: map the emulated ECR hostname to `127.0.0.1` in `/etc/hosts` |
 | `make eks-status` | Report the emulated EKS cluster status and its nodes |
 | `make eks-down` | Delete the emulated EKS cluster, IAM user and kubeconfig context |
 | `make bootstrap` | Install ArgoCD, seed the catalog wiring and apply the root Application |

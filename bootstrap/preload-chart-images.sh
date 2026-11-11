@@ -23,18 +23,22 @@
 #
 # Flow (both modes):
 #   1. resolve the image refs from `helm template` (never drifts from manifests)
-#   2. load the cached image tarball when present (actions/cache in CI)
-#   3. pull the refs still missing with the host Docker — fail-closed, printing
-#      the registry's own error
+#   2. inventory the k3s node's containerd and exit early when nothing is missing
+#   3. load the cached image tarball when the host still lacks a missing ref
+#      (actions/cache in CI), then pull the rest — fail-closed, printing the
+#      registry's own error
 #   4. save a tarball for the next run when free space allows (only when
-#      something was pulled or the tarball is missing)
-#   5. import everything into the k3s node (docker save | ctr images import)
+#      something was pulled or the cache is missing/unreadable)
+#   5. import only the missing refs into the node (docker save | ctr images import)
+#      with a heartbeat and a hard timeout
 #   6. drop the host-side copy: the node owns its own in containerd, and the
 #      runner's ephemeral storage must not hold the catalog twice
 #
 # Env:
 #   PRELOAD_CACHE_DIR      docker-save cache directory (default ~/.cache/sca/preload)
 #   PRELOAD_MIN_FREE_GIB   skip saving the cache tarball below this many GiB (default 10)
+#   PRELOAD_SAVE_TIMEOUT   seconds allowed for `docker save` (default 600)
+#   PRELOAD_IMPORT_TIMEOUT seconds allowed for `ctr images import` (default 900)
 #   PRELOAD_LIST_ONLY      set to 1 to resolve and print the images, then exit
 #   PRELOAD_SKIP           set to 1 to skip the preload entirely
 #   K3S_CONTAINER          k3s node container (default: discovered with `docker ps`)
@@ -61,6 +65,57 @@ echo_image_list() {
 }
 
 warn() { printf '── preload: %s\n' "$*" >&2; }
+
+# Normalize a Docker ref to the name containerd stores (`docker.io/...`), so a
+# ref rendered as `redis:tag` matches `docker.io/library/redis:tag` on the node.
+normalize_image_ref() {
+  local ref="$1" first rest
+  case "$ref" in
+    *@sha256:*) printf '%s\n' "$ref"; return 0 ;;
+  esac
+  case "$ref" in
+    docker.io/*) rest="${ref#docker.io/}" ;;
+    index.docker.io/*) rest="${ref#index.docker.io/}" ;;
+    */*)
+      first="${ref%%/*}"
+      case "$first" in
+        *.* | *:* | localhost) printf '%s\n' "$ref"; return 0 ;;
+        *) rest="$ref" ;;
+      esac ;;
+    *) rest="$ref" ;;
+  esac
+  case "$rest" in
+    */*) printf 'docker.io/%s\n' "$rest" ;;
+    *) printf 'docker.io/library/%s\n' "$rest" ;;
+  esac
+}
+
+# node_images is populated once from `ctr images ls -q`; compare both the raw
+# ref and its normalized form, and match digests by their digest suffix.
+node_has_image() {
+  local ref="$1" cand digest
+  case "$ref" in
+    *@sha256:*)
+      digest="${ref##*@}"
+      printf '%s\n' "${node_images}" | grep -Fq "@${digest}" && return 0 ;;
+  esac
+  cand="$(normalize_image_ref "$ref")"
+  printf '%s\n' "${node_images}" | grep -Fxq "${cand}" && return 0
+  printf '%s\n' "${node_images}" | grep -Fxq "${ref}" && return 0
+  return 1
+}
+
+# GNU timeout is not installed on macOS by default; keep the heartbeat and just
+# run the command unbounded there. Linux/CI get the hard ceiling.
+with_timeout() {
+  local secs="$1"
+  shift
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "${secs}" "$@"
+  else
+    "$@"
+  fi
+}
 
 # GiB available on the filesystem that holds a path (0 when df cannot read it).
 free_gib() {
@@ -241,22 +296,53 @@ fi
 count="$(printf '%s\n' "${images}" | sed '/^$/d' | wc -l | tr -d ' ')"
 echo "── preload: ${count} image(s) for node '${node}'"
 
+# ── node inventory: skip the whole preload when the node already has them ───
+# Re-importing 4.5 GiB on every run was the local 30-minute stall; the node is
+# the authority on what it needs, so check it before touching the host cache.
+ctr_cmd=(/bin/ctr --address /run/k3s/containerd/containerd.sock --namespace k8s.io)
+if ! docker exec "${node}" "${ctr_cmd[@]}" version >/dev/null; then
+  echo "ERROR: ctr is not usable inside node '${node}' (containerd socket not ready?)" >&2
+  exit 1
+fi
+node_images="$(docker exec "${node}" "${ctr_cmd[@]}" images ls -q 2>/dev/null)" || {
+  echo "ERROR: cannot list images inside node '${node}'" >&2
+  exit 1
+}
+mapfile -t image_list < <(printf '%s\n' "${images}" | sed '/^$/d')
+missing=()
+for image in "${image_list[@]}"; do
+  node_has_image "${image}" || missing+=("${image}")
+done
+if [ "${#missing[@]}" -eq 0 ]; then
+  echo "  all ${count} image(s) already present in '${node}' (skip import)"
+  echo "── preload: done"
+  exit 0
+fi
+echo "  ${#missing[@]}/${count} image(s) missing from '${node}'"
+
 # ── cache: docker image tarball from a previous run ─────────────────────────
 CACHE_DIR="${PRELOAD_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/sca/preload}"
 CACHE_TAR="${CACHE_DIR}/chart-images.tar"
+cache_valid=0
 if [ -f "${CACHE_TAR}" ]; then
-  if docker load -i "${CACHE_TAR}" >/dev/null 2>&1; then
+  need_load=0
+  for image in "${missing[@]}"; do
+    docker image inspect "${image}" >/dev/null 2>&1 || { need_load=1; break; }
+  done
+  if [ "${need_load}" = "0" ]; then
+    echo "  cache: missing images already in host Docker (skip load)"
+    cache_valid=1
+  elif docker load -i "${CACHE_TAR}" >/dev/null 2>&1; then
     echo "  cache: loaded ${CACHE_TAR}"
-    # The images now live in the host Docker store; drop the tarball so the
-    # runner does not hold two copies (it is re-saved below when space allows).
-    rm -f "${CACHE_TAR}"
+    # Keep the tarball: actions/cache restores it next run, and deleting it here
+    # made every run re-save 4.5 GiB even when nothing was pulled.
+    cache_valid=1
   else
     warn "cache: ${CACHE_TAR} is unreadable (ignoring)"
   fi
 fi
 
 # ── pull what is still missing (fail-closed) ────────────────────────────────
-mapfile -t image_list < <(printf '%s\n' "${images}" | sed '/^$/d')
 pulled=0
 for image in "${image_list[@]}"; do
   if docker image inspect "${image}" >/dev/null 2>&1; then
@@ -280,9 +366,10 @@ for image in "${image_list[@]}"; do
   pulled=1
 done
 
-# Refresh the cache tarball whenever we pulled something, or when it is missing
-# (a layer-cached Docker still has the images, so we can still warm the cache).
-if [ "${pulled}" = "1" ] || [ ! -f "${CACHE_TAR}" ]; then
+# Refresh the cache tarball only when something was pulled or the cache was
+# missing/unreadable (a layer-cached Docker still has the images, so we can
+# still warm the cache). A valid cache is kept as-is.
+if [ "${pulled}" = "1" ] || [ "${cache_valid}" = "0" ]; then
   mkdir -p "${CACHE_DIR}"
   free_now="$(free_gib "${CACHE_DIR}")"
   free_now="${free_now:-0}"
@@ -298,15 +385,33 @@ if [ "${pulled}" = "1" ] || [ ! -f "${CACHE_TAR}" ]; then
   fi
 fi
 
-# ── import into the k3s node's containerd ───────────────────────────────────
-ctr_cmd=(/bin/ctr --address /run/k3s/containerd/containerd.sock --namespace k8s.io)
-if ! docker exec "${node}" "${ctr_cmd[@]}" version >/dev/null; then
-  echo "ERROR: ctr is not usable inside node '${node}' (containerd socket not ready?)" >&2
-  exit 1
-fi
-echo "── preload: importing into '${node}' (ctr images import)"
-if ! docker save "${image_list[@]}" | docker exec -i "${node}" "${ctr_cmd[@]}" images import - >/dev/null; then
-  echo "ERROR: importing the preloaded images into '${node}' failed" >&2
+# ── import the missing images into the k3s node's containerd ────────────────
+# Stream only the missing refs and keep a heartbeat: the previous all-images
+# pipeline wrote no output for the whole import, which looked like a hang.
+echo "── preload: importing ${#missing[@]} image(s) into '${node}' (ctr images import)"
+save_timeout="${PRELOAD_SAVE_TIMEOUT:-600}"
+import_timeout="${PRELOAD_IMPORT_TIMEOUT:-900}"
+(
+  set -o pipefail
+  with_timeout "${save_timeout}" docker save "${missing[@]}" \
+    | with_timeout "${import_timeout}" docker exec -i "${node}" "${ctr_cmd[@]}" images import -
+) &
+import_pid=$!
+elapsed=0
+while kill -0 "${import_pid}" 2>/dev/null; do
+  sleep 15
+  if kill -0 "${import_pid}" 2>/dev/null; then
+    elapsed=$((elapsed + 15))
+    echo "  ... import still running (${elapsed}s)" >&2
+  fi
+done
+import_status=0
+wait "${import_pid}" || import_status=$?
+if [ "${import_status}" -ne 0 ]; then
+  case "${import_status}" in
+    124) echo "ERROR: importing the preloaded images timed out after ${import_timeout}s" >&2 ;;
+    *) echo "ERROR: importing the preloaded images into '${node}' failed (status ${import_status})" >&2 ;;
+  esac
   exit 1
 fi
 # The node now owns its copy in containerd; drop the host-side copy so the

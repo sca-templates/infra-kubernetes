@@ -139,6 +139,10 @@ cloud-status: ## Report cloud-emulator reachability (host edge + in-cluster Serv
 eks-up: ## Start Floci in EKS mode: create the emulated EKS cluster and point kubectl at it
 	bootstrap/eks-emulator.sh up
 
+.PHONY: eks-hosts
+eks-hosts: ## WSL2 only: map the emulated ECR hostname to 127.0.0.1 in /etc/hosts
+	bootstrap/eks-emulator.sh hosts
+
 .PHONY: eks-down
 eks-down: ## Delete the emulated EKS cluster, IAM user and kubeconfig context
 	bootstrap/eks-emulator.sh down

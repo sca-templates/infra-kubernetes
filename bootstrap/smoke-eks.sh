@@ -87,7 +87,7 @@ aws_cli ecr describe-repositories --repository-names "${ECR_REPO}" \
 # *.localhost; WSL2 does not, hence the explicit hint below.
 if command -v getent >/dev/null 2>&1 && ! getent hosts "${REGISTRY%:*}" >/dev/null 2>&1; then
   echo "FAIL: ${REGISTRY%:*} does not resolve." >&2
-  echo "On WSL2 add to /etc/hosts: 127.0.0.1 ${REGISTRY%:*}" >&2
+  echo "On WSL2 run: make eks-hosts   (or add manually: 127.0.0.1 ${REGISTRY%:*})" >&2
   exit 1
 fi
 
