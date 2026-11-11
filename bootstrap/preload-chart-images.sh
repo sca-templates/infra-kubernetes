@@ -30,13 +30,18 @@
 #   4. save a tarball for the next run when free space allows (only when
 #      something was pulled or the cache is missing/unreadable)
 #   5. import only the missing refs into the node (docker save | ctr images import)
-#      with a heartbeat and a hard timeout
+#      with a heartbeat and a hard timeout. The import is pinned to the host
+#      platform: Docker's OCI archive can reference attestation manifests it
+#      does not include, and an unfiltered import fails with
+#      "content digest ...: not found" (containerd#11344)
 #   6. drop the host-side copy: the node owns its own in containerd, and the
 #      runner's ephemeral storage must not hold the catalog twice
 #
 # Env:
 #   PRELOAD_CACHE_DIR      docker-save cache directory (default ~/.cache/sca/preload)
+#   PRELOAD_CACHE_FILE     explicit cache tarball (default <mode>-<name>-images.tar)
 #   PRELOAD_MIN_FREE_GIB   skip saving the cache tarball below this many GiB (default 10)
+#   PRELOAD_PLATFORM       platform imported into containerd (default: host arch)
 #   PRELOAD_SAVE_TIMEOUT   seconds allowed for `docker save` (default 600)
 #   PRELOAD_IMPORT_TIMEOUT seconds allowed for `ctr images import` (default 900)
 #   PRELOAD_LIST_ONLY      set to 1 to resolve and print the images, then exit
@@ -321,8 +326,17 @@ fi
 echo "  ${#missing[@]}/${count} image(s) missing from '${node}'"
 
 # ── cache: docker image tarball from a previous run ─────────────────────────
+# One tarball per mode/name: `argocd-up` (chart) and `bootstrap` (catalog) run
+# back-to-back against the same node, and a shared tarball let the 2-image
+# ArgoCD preload replace the 25-image catalog cache before bootstrap loaded it.
 CACHE_DIR="${PRELOAD_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME}/.cache}/sca/preload}"
-CACHE_TAR="${CACHE_DIR}/chart-images.tar"
+if [ "${mode}" = "catalog" ]; then
+  cache_name="catalog-${catalog_env}-images.tar"
+else
+  cache_name="chart-${chart}-images.tar"
+fi
+cache_name="$(printf '%s' "${cache_name}" | tr '/:' '__')"
+CACHE_TAR="${PRELOAD_CACHE_FILE:-${CACHE_DIR}/${cache_name}}"
 cache_valid=0
 if [ -f "${CACHE_TAR}" ]; then
   need_load=0
@@ -370,12 +384,13 @@ done
 # missing/unreadable (a layer-cached Docker still has the images, so we can
 # still warm the cache). A valid cache is kept as-is.
 if [ "${pulled}" = "1" ] || [ "${cache_valid}" = "0" ]; then
-  mkdir -p "${CACHE_DIR}"
-  free_now="$(free_gib "${CACHE_DIR}")"
+  cache_dir="$(dirname "${CACHE_TAR}")"
+  mkdir -p "${cache_dir}"
+  free_now="$(free_gib "${cache_dir}")"
   free_now="${free_now:-0}"
   min_free="${PRELOAD_MIN_FREE_GIB:-10}"
   if [ "${free_now}" -lt "${min_free}" ]; then
-    warn "cache: only ${free_now} GiB free on ${CACHE_DIR}; not saving ${CACHE_TAR} (the node keeps the images)"
+    warn "cache: only ${free_now} GiB free on ${cache_dir}; not saving ${CACHE_TAR} (the node keeps the images)"
   elif docker save -o "${CACHE_TAR}.tmp" "${image_list[@]}" >/dev/null 2>&1; then
     mv "${CACHE_TAR}.tmp" "${CACHE_TAR}"
     echo "  cache: saved ${CACHE_TAR}"
@@ -388,13 +403,24 @@ fi
 # ── import the missing images into the k3s node's containerd ────────────────
 # Stream only the missing refs and keep a heartbeat: the previous all-images
 # pipeline wrote no output for the whole import, which looked like a hang.
-echo "── preload: importing ${#missing[@]} image(s) into '${node}' (ctr images import)"
+# `--platform` keeps containerd from chasing attestation or foreign-platform
+# manifests that `docker save` did not include (containerd#11344). Do not use
+# `docker save --platform`: it drops or unnames digest-pinned refs.
+node_arch="$(docker version --format '{{.Server.Arch}}' 2>/dev/null || true)"
+[ -n "${node_arch}" ] && [ "${node_arch}" != "<no value>" ] || node_arch="$(uname -m)"
+case "${node_arch}" in
+  amd64 | x86_64) node_platform=linux/amd64 ;;
+  arm64 | aarch64) node_platform=linux/arm64 ;;
+  *) node_platform="linux/${node_arch}" ;;
+esac
+node_platform="${PRELOAD_PLATFORM:-${node_platform}}"
+echo "── preload: importing ${#missing[@]} image(s) into '${node}' for ${node_platform} (ctr images import)"
 save_timeout="${PRELOAD_SAVE_TIMEOUT:-600}"
 import_timeout="${PRELOAD_IMPORT_TIMEOUT:-900}"
 (
   set -o pipefail
   with_timeout "${save_timeout}" docker save "${missing[@]}" \
-    | with_timeout "${import_timeout}" docker exec -i "${node}" "${ctr_cmd[@]}" images import -
+    | with_timeout "${import_timeout}" docker exec -i "${node}" "${ctr_cmd[@]}" images import --platform "${node_platform}" -
 ) &
 import_pid=$!
 elapsed=0

@@ -202,9 +202,14 @@ the renderer), so a throttled public registry is never on the critical path. Thi
 is dev/CI tooling, not a platform component. The preload inventories the node's
 containerd first and imports only the refs it is missing; when everything is
 already present it exits without touching the cache. The cache tarball is kept
-(it is not deleted after loading), and save/import are bounded by
-`PRELOAD_SAVE_TIMEOUT`/`PRELOAD_IMPORT_TIMEOUT` with a heartbeat, so a rerun
-cannot hang silently. If `argocd-up`
+(it is not deleted after loading) and is scoped per mode
+(`chart-<chart>-images.tar`, `catalog-<env>-images.tar`), so `argocd-up`
+cannot replace the catalog cache before `bootstrap` loads it. Save/import are
+bounded by `PRELOAD_SAVE_TIMEOUT`/`PRELOAD_IMPORT_TIMEOUT` with a heartbeat, so
+a rerun cannot hang silently. The import is pinned to the host platform
+(`--platform linux/<arch>`): Docker's OCI archive can reference attestation
+manifests it does not include, and an unfiltered `ctr images import` fails with
+`content digest ...: not found` (containerd#11344). If `argocd-up`
 still fails, `bootstrap/collect-argocd-diagnostics.sh` dumps the ArgoCD install
 state (pods, describe, events) into `.generated/` — the framework's `diagnose`
 runs only *after* ArgoCD is up, so an install-time failure would otherwise carry
