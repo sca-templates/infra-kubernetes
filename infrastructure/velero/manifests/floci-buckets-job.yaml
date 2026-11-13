@@ -70,9 +70,12 @@ spec:
             capabilities:
               drop:
                 - ALL
-          # Best-effort: this bootstrap Job must schedule even when the
-          # single-node local profile has exhausted its request budget.
+          # Minimal requests: kube-linter requires them, and keeping them
+          # tiny leaves headroom on the single-node local profile.
           resources:
+            requests:
+              cpu: 1m
+              memory: 32Mi
             limits:
               cpu: 200m
               memory: 128Mi
