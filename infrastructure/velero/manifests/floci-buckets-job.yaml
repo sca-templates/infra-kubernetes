@@ -21,6 +21,8 @@ metadata:
   annotations:
     argocd.argoproj.io/hook: PreSync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    ignore-check.kube-linter.io/unset-cpu-requirements: "bootstrap must schedule when the local node request budget is full"
+    ignore-check.kube-linter.io/unset-memory-requirements: "bootstrap must schedule when the local node request budget is full"
 spec:
   backoffLimit: 3
   ttlSecondsAfterFinished: 600
@@ -70,12 +72,9 @@ spec:
             capabilities:
               drop:
                 - ALL
-          # Minimal requests: kube-linter requires them, and keeping them
-          # tiny leaves headroom on the single-node local profile.
+          # Best-effort: the local node can have its request budget fully
+          # allocated, so any request would leave this bootstrap Job Pending.
           resources:
-            requests:
-              cpu: 1m
-              memory: 32Mi
             limits:
               cpu: 200m
               memory: 128Mi
