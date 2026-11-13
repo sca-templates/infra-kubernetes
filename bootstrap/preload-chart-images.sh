@@ -29,10 +29,11 @@
 #      registry's own error
 #   4. save a tarball for the next run when free space allows (only when
 #      something was pulled or the cache is missing/unreadable)
-#   5. import only the missing refs into the node (docker save | ctr images import)
-#      with a heartbeat and a hard timeout. The import is pinned to the host
-#      platform: Docker's OCI archive can reference attestation manifests it
-#      does not include, and an unfiltered import fails with
+#   5. import only the missing refs into the node, one image at a time (docker
+#      save | ctr images import) with a heartbeat and a hard timeout; refs still
+#      missing afterwards are pulled directly by the node. The import is pinned
+#      to the host platform: Docker's OCI archive can reference attestation
+#      manifests it does not include, and an unfiltered import fails with
 #      "content digest ...: not found" (containerd#11344)
 #   6. drop the host-side copy: the node owns its own in containerd, and the
 #      runner's ephemeral storage must not hold the catalog twice
@@ -42,8 +43,8 @@
 #   PRELOAD_CACHE_FILE     explicit cache tarball (default <mode>-<name>-images.tar)
 #   PRELOAD_MIN_FREE_GIB   skip saving the cache tarball below this many GiB (default 10)
 #   PRELOAD_PLATFORM       platform imported into containerd (default: host arch)
-#   PRELOAD_SAVE_TIMEOUT   seconds allowed for `docker save` (default 600)
-#   PRELOAD_IMPORT_TIMEOUT seconds allowed for `ctr images import` (default 900)
+#   PRELOAD_SAVE_TIMEOUT   seconds allowed for each `docker save` (default 600)
+#   PRELOAD_IMPORT_TIMEOUT seconds allowed for each `ctr images import`/`pull` (default 900)
 #   PRELOAD_LIST_ONLY      set to 1 to resolve and print the images, then exit
 #   PRELOAD_SKIP           set to 1 to skip the preload entirely
 #   K3S_CONTAINER          k3s node container (default: discovered with `docker ps`)
@@ -401,8 +402,10 @@ if [ "${pulled}" = "1" ] || [ "${cache_valid}" = "0" ]; then
 fi
 
 # ── import the missing images into the k3s node's containerd ────────────────
-# Stream only the missing refs and keep a heartbeat: the previous all-images
-# pipeline wrote no output for the whole import, which looked like a hang.
+# Import one image at a time: the CI runner's Docker (containerd image store)
+# can write a multi-image archive that references a config blob it does not
+# include, making the whole import fail. Per-image archives isolate the bad
+# image; any ref still missing afterwards is pulled directly by the node.
 # `--platform` keeps containerd from chasing attestation or foreign-platform
 # manifests that `docker save` did not include (containerd#11344). Do not use
 # `docker save --platform`: it drops or unnames digest-pinned refs.
@@ -417,28 +420,60 @@ node_platform="${PRELOAD_PLATFORM:-${node_platform}}"
 echo "── preload: importing ${#missing[@]} image(s) into '${node}' for ${node_platform} (ctr images import)"
 save_timeout="${PRELOAD_SAVE_TIMEOUT:-600}"
 import_timeout="${PRELOAD_IMPORT_TIMEOUT:-900}"
-(
-  set -o pipefail
-  with_timeout "${save_timeout}" docker save "${missing[@]}" \
-    | with_timeout "${import_timeout}" docker exec -i "${node}" "${ctr_cmd[@]}" images import --platform "${node_platform}" -
-) &
-import_pid=$!
-elapsed=0
-while kill -0 "${import_pid}" 2>/dev/null; do
-  sleep 15
-  if kill -0 "${import_pid}" 2>/dev/null; then
-    elapsed=$((elapsed + 15))
-    echo "  ... import still running (${elapsed}s)" >&2
+
+import_one() {
+  local ref="$1"
+  (
+    set -o pipefail
+    with_timeout "${save_timeout}" docker save "${ref}" \
+      | with_timeout "${import_timeout}" docker exec -i "${node}" "${ctr_cmd[@]}" images import --platform "${node_platform}" -
+  )
+}
+
+for ref in "${missing[@]}"; do
+  if import_one "${ref}"; then
+    echo "  imported ${ref}"
+  else
+    status=$?
+    case "${status}" in
+      124) warn "import timed out for ${ref} (${import_timeout}s); falling back to ctr pull" ;;
+      *) warn "import failed for ${ref} (status ${status}); falling back to ctr pull" ;;
+    esac
   fi
 done
-import_status=0
-wait "${import_pid}" || import_status=$?
-if [ "${import_status}" -ne 0 ]; then
-  case "${import_status}" in
-    124) echo "ERROR: importing the preloaded images timed out after ${import_timeout}s" >&2 ;;
-    *) echo "ERROR: importing the preloaded images into '${node}' failed (status ${import_status})" >&2 ;;
-  esac
+
+# Re-inventory: a per-image archive can import cleanly yet still leave a ref
+# unnamed (e.g. a digest-pinned ref), and ctr may have skipped it. Anything
+# still absent is pulled directly into the node's containerd.
+node_images="$(docker exec "${node}" "${ctr_cmd[@]}" images ls -q 2>/dev/null)" || {
+  echo "ERROR: cannot list images inside node '${node}' after import" >&2
   exit 1
+}
+still_missing=()
+for ref in "${missing[@]}"; do
+  node_has_image "${ref}" || still_missing+=("${ref}")
+done
+if [ "${#still_missing[@]}" -gt 0 ]; then
+  echo "── preload: falling back to ctr images pull for ${#still_missing[@]} image(s)"
+  pull_failed=0
+  for ref in "${still_missing[@]}"; do
+    ok=0
+    for attempt in 1 2 3; do
+      if with_timeout "${import_timeout}" docker exec "${node}" "${ctr_cmd[@]}" images pull --platform "${node_platform}" "${ref}"; then
+        ok=1
+        break
+      fi
+      echo "  pull failed (attempt ${attempt}/3) for ${ref}" >&2
+      sleep $((attempt * 5))
+    done
+    if [ "${ok}" = "1" ]; then
+      echo "  pulled ${ref}"
+    else
+      echo "ERROR: could not preload ${ref} (import failed and ctr pull failed)" >&2
+      pull_failed=1
+    fi
+  done
+  [ "${pull_failed}" = "0" ] || exit 1
 fi
 # The node now owns its copy in containerd; drop the host-side copy so the
 # runner's ephemeral storage does not hold the catalog twice.

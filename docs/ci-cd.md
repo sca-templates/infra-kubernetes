@@ -204,9 +204,13 @@ containerd first and imports only the refs it is missing; when everything is
 already present it exits without touching the cache. The cache tarball is kept
 (it is not deleted after loading) and is scoped per mode
 (`chart-<chart>-images.tar`, `catalog-<env>-images.tar`), so `argocd-up`
-cannot replace the catalog cache before `bootstrap` loads it. Save/import are
-bounded by `PRELOAD_SAVE_TIMEOUT`/`PRELOAD_IMPORT_TIMEOUT` with a heartbeat, so
-a rerun cannot hang silently. The import is pinned to the host platform
+cannot replace the catalog cache before `bootstrap` loads it. Each save/import
+is bounded by `PRELOAD_SAVE_TIMEOUT`/`PRELOAD_IMPORT_TIMEOUT` with a heartbeat,
+so a rerun cannot hang silently. Images are imported one at a time — the
+runner's containerd image store can write a multi-image `docker save` archive
+that references a config blob it does not include, which fails the whole import
+— and any ref still missing after the import is pulled directly into the node
+with `ctr images pull`. The import is pinned to the host platform
 (`--platform linux/<arch>`): Docker's OCI archive can reference attestation
 manifests it does not include, and an unfiltered `ctr images import` fails with
 `content digest ...: not found` (containerd#11344). If `argocd-up`
