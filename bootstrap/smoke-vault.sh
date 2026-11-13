@@ -101,6 +101,29 @@ kubectl -n "$NAMESPACE" annotate externalsecret vault-snapshot-credentials \
   force-sync="$(date +%s)" --overwrite >/dev/null 2>&1 || true
 kubectl -n "$NAMESPACE" wait --for=condition=Ready externalsecret/vault-snapshot-credentials --timeout="$SNAPSHOT_TIMEOUT" >/dev/null
 
+# The dedicated vault-backup Application can be ready before Velero's PreSync
+# `floci-buckets` Job has created the local Floci buckets. Order the snapshot
+# after that bootstrap so the upload does not race bucket creation.
+local_cloud=0
+if kubectl -n cloud get service floci >/dev/null 2>&1; then
+  local_cloud=1
+fi
+if kubectl -n velero get job floci-buckets >/dev/null 2>&1; then
+  echo "── smoke(vault): wait for local S3 bucket bootstrap (velero/floci-buckets)"
+  if ! kubectl -n velero wait --for=condition=complete job/floci-buckets --timeout="$SNAPSHOT_TIMEOUT" >/dev/null; then
+    echo "FAIL: local S3 bucket bootstrap job did not complete" >&2
+    kubectl -n velero describe job/floci-buckets >&2 2>/dev/null || true
+    kubectl -n velero logs job/floci-buckets --all-containers=true >&2 2>/dev/null || true
+    exit 1
+  fi
+  bucket_logs="$(kubectl -n velero logs job/floci-buckets --all-containers=true 2>/dev/null || true)"
+  if [ "$local_cloud" = "1" ] && ! grep -q 'FLOCI_BUCKET_OK bucket=vault-snapshots' <<<"$bucket_logs"; then
+    echo "FAIL: floci-buckets did not create the vault-snapshots bucket" >&2
+    printf '%s\n' "$bucket_logs" >&2
+    exit 1
+  fi
+fi
+
 kubectl -n "$NAMESPACE" delete job "$SNAPSHOT_JOB" --ignore-not-found >/dev/null
 kubectl -n "$NAMESPACE" create job --from=cronjob/vault-raft-snapshot "$SNAPSHOT_JOB" >/dev/null
 

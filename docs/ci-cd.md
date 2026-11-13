@@ -154,8 +154,10 @@ monitored. See the [roadmap](roadmap.md) for the Phase 1 gate and its smoke.
   its Raft snapshot CronJob and asserts the saved/inspected/uploaded markers.
   The `floci-buckets` Job creates `velero`, `cnpg-backups`, and
   `vault-snapshots` using Floci's fixed dummy credentials and therefore does
-  not add a Vault dependency to the sync. The schedules, retention and restore
-  runbooks live in [backups.md](backups.md).
+  not add a Vault dependency to the sync. `smoke-vault.sh` waits for that Job
+  before triggering the Raft snapshot, so the upload cannot race bucket
+  creation. The schedules, retention and restore runbooks live in
+  [backups.md](backups.md).
 - **`workflow_dispatch`** (manual) — one-off smoke of a component/ref
   (`component` + `ref` inputs, defaults `cert-manager`/`main`) for testing
   without opening a PR. Nothing else triggers the workflow; there is no
