@@ -72,9 +72,13 @@ spec:
             capabilities:
               drop:
                 - ALL
-          # Best-effort: the local node can have its request budget fully
-          # allocated, so any request would leave this bootstrap Job Pending.
+          # Explicit zero requests: if requests are omitted, Kubernetes
+          # defaults them to the limits and this bootstrap Job stays Pending
+          # on the fully-requested local node. Limits still cap usage.
           resources:
+            requests:
+              cpu: 0
+              memory: 0
             limits:
               cpu: 200m
               memory: 128Mi
