@@ -75,24 +75,25 @@ warn() { printf '── preload: %s\n' "$*" >&2; }
 # Normalize a Docker ref to the name containerd stores (`docker.io/...`), so a
 # ref rendered as `redis:tag` matches `docker.io/library/redis:tag` on the node.
 normalize_image_ref() {
-  local ref="$1" first rest
+  local ref="$1" name digest first rest
   case "$ref" in
-    *@sha256:*) printf '%s\n' "$ref"; return 0 ;;
+    *@sha256:*) digest="@${ref##*@}"; name="${ref%@sha256:*}" ;;
+    *) digest=""; name="$ref" ;;
   esac
-  case "$ref" in
-    docker.io/*) rest="${ref#docker.io/}" ;;
-    index.docker.io/*) rest="${ref#index.docker.io/}" ;;
+  case "$name" in
+    docker.io/*) rest="${name#docker.io/}" ;;
+    index.docker.io/*) rest="${name#index.docker.io/}" ;;
     */*)
-      first="${ref%%/*}"
+      first="${name%%/*}"
       case "$first" in
-        *.* | *:* | localhost) printf '%s\n' "$ref"; return 0 ;;
-        *) rest="$ref" ;;
+        *.* | *:* | localhost) printf '%s%s\n' "$name" "$digest"; return 0 ;;
+        *) rest="$name" ;;
       esac ;;
-    *) rest="$ref" ;;
+    *) rest="$name" ;;
   esac
   case "$rest" in
-    */*) printf 'docker.io/%s\n' "$rest" ;;
-    *) printf 'docker.io/library/%s\n' "$rest" ;;
+    */*) printf 'docker.io/%s%s\n' "$rest" "$digest" ;;
+    *) printf 'docker.io/library/%s%s\n' "$rest" "$digest" ;;
   esac
 }
 
@@ -458,18 +459,19 @@ if [ "${#still_missing[@]}" -gt 0 ]; then
   pull_failed=0
   for ref in "${still_missing[@]}"; do
     ok=0
+    pull_ref="$(normalize_image_ref "$ref")"
     for attempt in 1 2 3; do
-      if with_timeout "${import_timeout}" docker exec "${node}" "${ctr_cmd[@]}" images pull --platform "${node_platform}" "${ref}"; then
+      if with_timeout "${import_timeout}" docker exec "${node}" "${ctr_cmd[@]}" images pull --platform "${node_platform}" "${pull_ref}"; then
         ok=1
         break
       fi
-      echo "  pull failed (attempt ${attempt}/3) for ${ref}" >&2
+      echo "  pull failed (attempt ${attempt}/3) for ${pull_ref}" >&2
       sleep $((attempt * 5))
     done
     if [ "${ok}" = "1" ]; then
-      echo "  pulled ${ref}"
+      echo "  pulled ${pull_ref}"
     else
-      echo "ERROR: could not preload ${ref} (import failed and ctr pull failed)" >&2
+      echo "ERROR: could not preload ${ref} (import failed and ctr pull failed for ${pull_ref})" >&2
       pull_failed=1
     fi
   done
