@@ -171,7 +171,7 @@ and keeps a single-component run working unchanged: the cluster boots once, the
 cloud emulator comes up once, each component's `<name>-smoke` Application is
 applied/waited/smoked in turn, the cloud smoke runs once, every Application is
 re-checked `Synced/Healthy` post-smoke, and teardown runs once. Wait steps
-default to a 1200s timeout (`SMOKE_TIMEOUT`, overridable). Layered on top, the
+default to a 600s timeout (`SMOKE_TIMEOUT`, overridable). Layered on top, the
 framework also stands up and checks the cloud emulator (**on by default**;
 `--no-cloud` / `SMOKE_CLOUD=0` opts out) — see *Cloud integration smoke* below.
 

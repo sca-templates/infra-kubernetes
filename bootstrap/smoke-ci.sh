@@ -108,7 +108,7 @@ for d in infrastructure/*/; do
 done
 
 STATE_DIR=".generated"
-TIMEOUT="${SMOKE_TIMEOUT:-1200}"
+TIMEOUT="${SMOKE_TIMEOUT:-600}"
 POLL="${SMOKE_POLL:-10}"
 APP_SUFFIX="local"
 APPSET_NAME="platform-local"
@@ -175,12 +175,18 @@ diagnose() {
   kubectl get pods -A --no-headers 2>/dev/null | grep -vE 'Running|Completed' || true
   echo "── diagnose: recent events (all namespaces, last 100)"
   kubectl get events -A --sort-by=.lastTimestamp 2>/dev/null | tail -n 100 | tee "${STATE_DIR}/events.txt" || true
-  echo "── diagnose: node conditions / pressure"
+  echo "── diagnose: node conditions / allocated resources"
   kubectl get nodes -o wide 2>/dev/null || true
-  kubectl describe nodes 2>/dev/null \
-    | grep -A6 -E '^  (Ready|MemoryPressure|DiskPressure|PIDPressure)' \
-    | tee "${STATE_DIR}/node-conditions.txt" || true
+  kubectl describe nodes 2>/dev/null | tee "${STATE_DIR}/node-conditions.txt" || true
   kubectl top nodes 2>/dev/null | tee -a "${STATE_DIR}/node-conditions.txt" || true
+  echo "── diagnose: non-Ready pods (all namespaces, describe + tailed logs)"
+  while IFS= read -r ns pod _; do
+    [ -n "${ns}" ] && [ -n "${pod}" ] || continue
+    echo "--- describe pod/${ns}/${pod}"
+    kubectl -n "${ns}" describe pod "${pod}" 2>/dev/null || true
+    echo "--- logs pod/${ns}/${pod} (tail 50)"
+    kubectl -n "${ns}" logs "pod/${pod}" --tail=50 2>/dev/null || true
+  done < <(kubectl get pods -A --no-headers 2>/dev/null | grep -vE 'Running|Completed' || true)
   for c in "${APP_COMPONENTS[@]}"; do
     echo "── diagnose: ${c} namespace (if any)"
     kubectl -n "${c}" get pods -o wide 2>/dev/null || true

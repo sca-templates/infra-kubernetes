@@ -39,6 +39,13 @@ spec:
         fsGroup: 10001
         seccompProfile:
           type: RuntimeDefault
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
       containers:
         - name: aws
           image: amazon/aws-cli:2.38.1@sha256:733d5be1015825e4038c6016f3fa9954868ddee1f611b73be795a9cc2e706bfd
@@ -63,10 +70,9 @@ spec:
             capabilities:
               drop:
                 - ALL
+          # Best-effort: this bootstrap Job must schedule even when the
+          # single-node local profile has exhausted its request budget.
           resources:
-            requests:
-              cpu: 10m
-              memory: 64Mi
             limits:
               cpu: 200m
               memory: 128Mi
