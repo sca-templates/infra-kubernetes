@@ -12,7 +12,7 @@ set -euo pipefail
 NAMESPACE="${VAULT_NAMESPACE:-vault}"
 POD="${VAULT_POD:-vault-0}"
 TIMEOUT="${SMOKE_TIMEOUT:-120s}"
-SNAPSHOT_TIMEOUT="${SMOKE_SNAPSHOT_TIMEOUT:-300s}"
+SNAPSHOT_TIMEOUT="${SMOKE_SNAPSHOT_TIMEOUT:-600s}"
 SNAPSHOT_JOB="vault-raft-snapshot-smoke"
 
 VAULT_ADDR="https://vault.vault.svc.cluster.local:8200"

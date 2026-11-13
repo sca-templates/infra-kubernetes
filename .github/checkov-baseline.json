@@ -29,6 +29,18 @@
                     ]
                 }
             ]
+        },
+        {
+            "file": "/infrastructure/velero/manifests/floci-buckets-job.yaml",
+            "findings": [
+                {
+                    "resource": "Job.velero.floci-buckets",
+                    "check_ids": [
+                        "CKV_K8S_10",
+                        "CKV_K8S_12"
+                    ]
+                }
+            ]
         }
     ]
 }

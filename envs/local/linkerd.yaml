@@ -12,6 +12,12 @@ enablePodAntiAffinity: false
 enablePodDisruptionBudget: false
 highAvailability: false
 
+# The emulated EKS k3s node (CI runner kernel) does not load the legacy
+# ip_tables modules: Linkerd's default `legacy` mode leaves linkerd-init in
+# CrashLoopBackOff. k3s routes through nftables, so use nft mode locally.
+proxyInit:
+  iptablesMode: nft
+
 # The emulated EKS node's clock can advance past the identity leaf lifetime
 # (chart default 24h), leaving new proxies with `Expired` certificates on a
 # cluster left running for days. A 7-day leaf (local only; dev/qa/prod keep the

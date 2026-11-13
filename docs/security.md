@@ -15,7 +15,7 @@ the CI workflow map see [ci-cd.md](ci-cd.md).
 | gitleaks | security.yml (via shared template) | Secrets/password scan on push and PR; blocks on findings |
 | checkov (static IaC) | security.yml (via shared template) | IaC misconfiguration scan of YAML manifests |
 | osv-scanner (SCA) | security.yml (via shared template) | Open-source dependency vulnerability scan on push + PR; honours `.github/osv-scanner.toml` ignores |
-| checkov baseline | security.yml (via shared template) | `.github/checkov-baseline.json` gates **new** findings since Phase 1 — the pod on `bootstrap/local-git-server.yaml` is documented (local-only tooling); anything else fails the PR as it would without the baseline |
+| checkov baseline | security.yml (via shared template) | `.github/checkov-baseline.json` gates **new** findings since Phase 1 — the pod on `bootstrap/local-git-server.yaml` (local-only tooling) and the zero-request `floci-buckets` Job (bootstrap-only scheduling) are documented; anything else fails the PR as it would without the baseline |
 | CodeQL | codeql.yml (shared template) | Static analysis on push + PR + weekly schedule |
 | Pin guards | security.yml (local job) | Fails any chart reference or image tag that is `latest` or floating. Trees: `infrastructure`/`charts`/`argocd` **and `bootstrap`** — the smoke framework carries script-inline manifests and the image-pin SSOT (`bootstrap/versions.sh`), so the guards also reject a floating tag on a non-comment shell line there |
 | Release tag signing | release.yml (shared template) | Every release tag is re-signed with the dedicated **release-bot** GPG key (private key in repo secret `RELEASE_GPG_PRIVATE_KEY`) |
@@ -238,7 +238,8 @@ the entries are gone rather than re-justified.
 
 The checkov baseline (`.github/checkov-baseline.json`) gates new findings from
 Phase 1: entries are documented, intentional manifests whose findings are
-accepted and recorded. The baseline is **re-evaluated** post Phase 18 from a
+accepted and recorded (currently the local git-server Pod and the zero-request
+`floci-buckets` Job). The baseline is **re-evaluated** post Phase 18 from a
 green platform and its entries annotated with owners. Until then the only way a
 new entry appears is a reviewed PR that regenerates the baseline — new findings
 never pass silently.
