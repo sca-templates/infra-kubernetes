@@ -87,6 +87,43 @@ jobs:
           echo '── disk after'
           df -h /
 
+      # Cheap diagnostic: the smoke's ECR push runs on the host Docker daemon,
+      # so the runner image and its image store are part of the critical path.
+      - name: Diagnose Docker registry path
+        run: |
+          set -euo pipefail
+          . bootstrap/versions.sh
+          registry="${FLOCI_AWS_ACCOUNT}.dkr.ecr.${FLOCI_AWS_REGION}.localhost:${FLOCI_PORT:-4566}"
+          docker version
+          docker info --format '{{.Driver}} | {{json .DriverStatus}}'
+          docker info | sed -n '/Insecure Registries/,+4p'
+          cat /etc/docker/daemon.json 2>/dev/null || true
+          getent hosts "${registry%:*}" || true
+          getent ahosts "${registry%:*}" || true
+
+      # Docker Engine 29 (fresh installs such as ubuntu-26.04) defaults to the
+      # containerd image store. Its push path does not treat a *.localhost name
+      # as an insecure registry (containerd's IsLocalhost only matches
+      # "localhost" or a loopback IP), so docker push tries HTTPS against the
+      # emulator's HTTP-only ECR endpoint. Mark the registry explicitly insecure
+      # so the daemon uses HTTP; local Docker on overlay2 is unaffected.
+      - name: Allow the emulated ECR registry over HTTP
+        run: |
+          set -euo pipefail
+          . bootstrap/versions.sh
+          registry="${FLOCI_AWS_ACCOUNT}.dkr.ecr.${FLOCI_AWS_REGION}.localhost:${FLOCI_PORT:-4566}"
+          cfg=/etc/docker/daemon.json
+          sudo mkdir -p /etc/docker
+          current='{}'
+          if [ -s "$cfg" ]; then current="$(sudo cat "$cfg")"; fi
+          printf '%s' "$current" \
+            | jq --arg r "$registry" \
+                '. + {"insecure-registries": (((.["insecure-registries"] // []) + [$r]) | unique)}' \
+            | sudo tee "$cfg" >/dev/null
+          sudo systemctl restart docker
+          for _ in $(seq 1 60); do docker info >/dev/null 2>&1 && break; sleep 1; done
+          docker info | sed -n '/Insecure Registries/,+4p'
+
       # Cache the pinned toolchain (~/.local/bin). The key hashes versions.sh,
       # so bumping a pin invalidates the cache; `make prereqs` stays idempotent
       # (a partial restore is completed, a full restore is a no-op).
