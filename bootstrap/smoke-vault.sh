@@ -12,7 +12,7 @@ set -euo pipefail
 NAMESPACE="${VAULT_NAMESPACE:-vault}"
 POD="${VAULT_POD:-vault-0}"
 TIMEOUT="${SMOKE_TIMEOUT:-120s}"
-SNAPSHOT_TIMEOUT="${SMOKE_SNAPSHOT_TIMEOUT:-300s}"
+SNAPSHOT_TIMEOUT="${SMOKE_SNAPSHOT_TIMEOUT:-600s}"
 SNAPSHOT_JOB="vault-raft-snapshot-smoke"
 
 VAULT_ADDR="https://vault.vault.svc.cluster.local:8200"
@@ -90,9 +90,39 @@ for attempt in {1..60}; do
   }
   sleep 2
 done
+# The store validates on its own refreshInterval; force a reconcile now that the
+# Vault k8s-auth role exists (the ESO store controller validates on any update),
+# so the ExternalSecret below does not race the store's refresh timer.
+kubectl annotate clustersecretstore vault \
+  force-sync="$(date +%s)" --overwrite >/dev/null 2>&1 || true
+kubectl wait --for=condition=Ready clustersecretstore/vault --timeout="$TIMEOUT" >/dev/null
+
 kubectl -n "$NAMESPACE" annotate externalsecret vault-snapshot-credentials \
   force-sync="$(date +%s)" --overwrite >/dev/null 2>&1 || true
 kubectl -n "$NAMESPACE" wait --for=condition=Ready externalsecret/vault-snapshot-credentials --timeout="$SNAPSHOT_TIMEOUT" >/dev/null
+
+# The dedicated vault-backup Application can be ready before Velero's PreSync
+# `floci-buckets` Job has created the local Floci buckets. Order the snapshot
+# after that bootstrap so the upload does not race bucket creation.
+local_cloud=0
+if kubectl -n cloud get service floci >/dev/null 2>&1; then
+  local_cloud=1
+fi
+if kubectl -n velero get job floci-buckets >/dev/null 2>&1; then
+  echo "── smoke(vault): wait for local S3 bucket bootstrap (velero/floci-buckets)"
+  if ! kubectl -n velero wait --for=condition=complete job/floci-buckets --timeout="$SNAPSHOT_TIMEOUT" >/dev/null; then
+    echo "FAIL: local S3 bucket bootstrap job did not complete" >&2
+    kubectl -n velero describe job/floci-buckets >&2 2>/dev/null || true
+    kubectl -n velero logs job/floci-buckets --all-containers=true >&2 2>/dev/null || true
+    exit 1
+  fi
+  bucket_logs="$(kubectl -n velero logs job/floci-buckets --all-containers=true 2>/dev/null || true)"
+  if [ "$local_cloud" = "1" ] && ! grep -q 'FLOCI_BUCKET_OK bucket=vault-snapshots' <<<"$bucket_logs"; then
+    echo "FAIL: floci-buckets did not create the vault-snapshots bucket" >&2
+    printf '%s\n' "$bucket_logs" >&2
+    exit 1
+  fi
+fi
 
 kubectl -n "$NAMESPACE" delete job "$SNAPSHOT_JOB" --ignore-not-found >/dev/null
 kubectl -n "$NAMESPACE" create job --from=cronjob/vault-raft-snapshot "$SNAPSHOT_JOB" >/dev/null

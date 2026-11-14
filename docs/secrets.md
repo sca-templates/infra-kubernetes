@@ -29,7 +29,9 @@ graph LR
 - **ESO**: one `ClusterSecretStore` back to Vault plus one `ExternalSecret`
   per consumed secret. `refreshInterval` is short (~5 min) in `local`.
 - **`.secrets/`**: gitignored, disk only — used by `seed-vault.sh` inputs and
-  never committed.
+  never committed. `init-keys.json`/`root-token` belong to one Vault instance:
+  `seed-vault.sh` archives stale keys when the live Vault is uninitialized, and
+  `make eks-down`/cluster recreation archives them under `.secrets/archive/`.
 
 ## KV path inventory
 

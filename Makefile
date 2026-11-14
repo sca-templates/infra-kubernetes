@@ -103,7 +103,7 @@ validate-static: ## Static suite only: markdownlint, yamllint, YAML parse, bash 
 	@echo '=== markdownlint ==='
 	npx --yes markdownlint-cli2 "**/*.md"
 	@echo '=== YAML parse ==='
-	@find . -path ./.git -prune -o -type f \( -name '*.yaml' -o -name '*.yml' \) -print | sort | while read -r f; do \
+	@find . \( -path ./.git -o -path ./.generated \) -prune -o -type f \( -name '*.yaml' -o -name '*.yml' \) -print | sort | while read -r f; do \
 		case "$$f" in */templates/*) continue ;; esac; \
 		npx --yes js-yaml@4.1.0 "$$f" >/dev/null && echo "[OK] $$f" || { echo "[FAIL] $$f"; exit 1; }; \
 	done
@@ -138,6 +138,10 @@ cloud-status: ## Report cloud-emulator reachability (host edge + in-cluster Serv
 .PHONY: eks-up
 eks-up: ## Start Floci in EKS mode: create the emulated EKS cluster and point kubectl at it
 	bootstrap/eks-emulator.sh up
+
+.PHONY: eks-hosts
+eks-hosts: ## WSL2 only: map the emulated ECR hostname to 127.0.0.1 in /etc/hosts
+	bootstrap/eks-emulator.sh hosts
 
 .PHONY: eks-down
 eks-down: ## Delete the emulated EKS cluster, IAM user and kubeconfig context

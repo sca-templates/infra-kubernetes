@@ -154,8 +154,10 @@ monitored. See the [roadmap](roadmap.md) for the Phase 1 gate and its smoke.
   its Raft snapshot CronJob and asserts the saved/inspected/uploaded markers.
   The `floci-buckets` Job creates `velero`, `cnpg-backups`, and
   `vault-snapshots` using Floci's fixed dummy credentials and therefore does
-  not add a Vault dependency to the sync. The schedules, retention and restore
-  runbooks live in [backups.md](backups.md).
+  not add a Vault dependency to the sync. `smoke-vault.sh` waits for that Job
+  before triggering the Raft snapshot, so the upload cannot race bucket
+  creation. The schedules, retention and restore runbooks live in
+  [backups.md](backups.md).
 - **`workflow_dispatch`** (manual) — one-off smoke of a component/ref
   (`component` + `ref` inputs, defaults `cert-manager`/`main`) for testing
   without opening a PR. Nothing else triggers the workflow; there is no
@@ -169,7 +171,7 @@ and keeps a single-component run working unchanged: the cluster boots once, the
 cloud emulator comes up once, each component's `<name>-smoke` Application is
 applied/waited/smoked in turn, the cloud smoke runs once, every Application is
 re-checked `Synced/Healthy` post-smoke, and teardown runs once. Wait steps
-default to a 1200s timeout (`SMOKE_TIMEOUT`, overridable). Layered on top, the
+default to a 600s timeout (`SMOKE_TIMEOUT`, overridable). Layered on top, the
 framework also stands up and checks the cloud emulator (**on by default**;
 `--no-cloud` / `SMOKE_CLOUD=0` opts out) — see *Cloud integration smoke* below.
 
@@ -199,7 +201,21 @@ critical path. The pulled images are cached between runs as a docker-image
 tarball under `~/.cache/sca/preload` (`PRELOAD_CACHE_DIR`), which the workflow
 restores/saves with `actions/cache` (keyed on the pins, the catalog manifests and
 the renderer), so a throttled public registry is never on the critical path. This
-is dev/CI tooling, not a platform component. If `argocd-up`
+is dev/CI tooling, not a platform component. The preload inventories the node's
+containerd first and imports only the refs it is missing; when everything is
+already present it exits without touching the cache. The cache tarball is kept
+(it is not deleted after loading) and is scoped per mode
+(`chart-<chart>-images.tar`, `catalog-<env>-images.tar`), so `argocd-up`
+cannot replace the catalog cache before `bootstrap` loads it. Each save/import
+is bounded by `PRELOAD_SAVE_TIMEOUT`/`PRELOAD_IMPORT_TIMEOUT` with a heartbeat,
+so a rerun cannot hang silently. Images are imported one at a time — the
+runner's containerd image store can write a multi-image `docker save` archive
+that references a config blob it does not include, which fails the whole import
+— and any ref still missing after the import is pulled directly into the node
+with `ctr images pull`. The import is pinned to the host platform
+(`--platform linux/<arch>`): Docker's OCI archive can reference attestation
+manifests it does not include, and an unfiltered `ctr images import` fails with
+`content digest ...: not found` (containerd#11344). If `argocd-up`
 still fails, `bootstrap/collect-argocd-diagnostics.sh` dumps the ArgoCD install
 state (pods, describe, events) into `.generated/` — the framework's `diagnose`
 runs only *after* ArgoCD is up, so an install-time failure would otherwise carry
@@ -337,7 +353,10 @@ Floci's EKS backing, not ArgoCD-managed).
   pinned `AWS_CLI_IMAGE` to `${account}.dkr.ecr.${region}.localhost:4566` via
   `ecr get-login-password` + `docker login`, then runs an in-cluster `Job` that
   pulls the image through the node's ECR registry mirror and prints
-  `EKS_ECR_PULL_OK`.
+  `EKS_ECR_PULL_OK`. On WSL2 the emulated ECR hostname does not resolve
+  (`*.localhost` is not special there): run `make eks-hosts` (sudo, once per
+  WSL restart) before `make eks-up`; Linux/macOS/CI resolve it natively, and
+  real ECR uses DNS. `make eks-up` fails fast with that hint.
 - **Full platform** — the EKS run boots the whole catalog by seeding the
   app-of-apps wiring host-side (`make bootstrap ENV=local`, which resolves the
   ArgoCD manifests' `repoURL`/`targetRevision` to the PR head via the `sed` seam),
@@ -367,7 +386,11 @@ Floci's EKS backing, not ArgoCD-managed).
   (including `--no-cluster`) can all authenticate through `aws eks get-token`.
   The emulator state is ephemeral: after it is recreated outside a clean
   `make eks-down`, remove the stale `.secrets/eks-admin.env` before
-  `make eks-up` so a fresh IAM key is minted.
+  `make eks-up` so a fresh IAM key is minted. Vault init material
+  (`.secrets/init-keys.json`, `.secrets/root-token`) is per cluster:
+  `make eks-down` and a cluster recreate archive it under `.secrets/archive/`,
+  and `seed-vault.sh` also archives it when it finds an uninitialized Vault (a
+  fresh substrate) still paired with old keys.
 - **Pins** — Floci, the AWS CLI and the EKS/ECR coordinates (`FLOCI_EKS_*`,
   `FLOCI_AWS_*`) are pinned in `bootstrap/versions.sh`, covered by the pin guards
   ([security.md](security.md)), and overridable via `.env`.

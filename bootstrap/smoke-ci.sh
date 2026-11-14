@@ -108,12 +108,36 @@ for d in infrastructure/*/; do
 done
 
 STATE_DIR=".generated"
-TIMEOUT="${SMOKE_TIMEOUT:-1200}"
+TIMEOUT="${SMOKE_TIMEOUT:-600}"
 POLL="${SMOKE_POLL:-10}"
 APP_SUFFIX="local"
 APPSET_NAME="platform-local"
 
 mkdir -p "${STATE_DIR}"
+
+# Ephemeral-storage guard: kubelet evicts the whole platform when the Docker
+# root filesystem crosses its eviction threshold (~10% by default). Fail fast
+# with the numbers instead of timing out after 20 minutes on a mass eviction.
+# SMOKE_MIN_FREE_GIB=0 disables the gate (e.g. a deliberately tight local run).
+disk_guard() {
+  local target free_kib free_gib min_gib
+  target="$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || true)"
+  [ -n "${target}" ] && [ -d "${target}" ] || target=/
+  free_kib="$(df -Pk "${target}" 2>/dev/null | awk 'NR==2 {print $4}')"
+  free_kib="${free_kib:-0}"
+  free_gib=$(( free_kib / 1024 / 1024 ))
+  min_gib="${SMOKE_MIN_FREE_GIB:-15}"
+  echo "── disk: ${free_gib} GiB free on ${target} (min ${min_gib} GiB)"
+  df -h "${target}" 2>/dev/null || true
+  docker system df 2>/dev/null || true
+  if [ "${min_gib}" -gt 0 ] && [ "${free_gib}" -lt "${min_gib}" ]; then
+    echo "ERROR: only ${free_gib} GiB free on ${target}; the full platform needs >= ${min_gib} GiB." >&2
+    echo "       kubelet evicts every pod at its ephemeral-storage threshold (~10%)." >&2
+    echo "       Free space (e.g. docker system prune -af) or set SMOKE_MIN_FREE_GIB=0 to override." >&2
+    exit 1
+  fi
+}
+disk_guard
 
 cleanup() {
   if [ "${KEEP_CLUSTER}" = "1" ]; then
@@ -151,12 +175,18 @@ diagnose() {
   kubectl get pods -A --no-headers 2>/dev/null | grep -vE 'Running|Completed' || true
   echo "── diagnose: recent events (all namespaces, last 100)"
   kubectl get events -A --sort-by=.lastTimestamp 2>/dev/null | tail -n 100 | tee "${STATE_DIR}/events.txt" || true
-  echo "── diagnose: node conditions / pressure"
+  echo "── diagnose: node conditions / allocated resources"
   kubectl get nodes -o wide 2>/dev/null || true
-  kubectl describe nodes 2>/dev/null \
-    | grep -A6 -E '^  (Ready|MemoryPressure|DiskPressure|PIDPressure)' \
-    | tee "${STATE_DIR}/node-conditions.txt" || true
+  kubectl describe nodes 2>/dev/null | tee "${STATE_DIR}/node-conditions.txt" || true
   kubectl top nodes 2>/dev/null | tee -a "${STATE_DIR}/node-conditions.txt" || true
+  echo "── diagnose: non-Ready pods (all namespaces, describe + tailed logs)"
+  while IFS= read -r ns pod _; do
+    [ -n "${ns}" ] && [ -n "${pod}" ] || continue
+    echo "--- describe pod/${ns}/${pod}"
+    kubectl -n "${ns}" describe pod "${pod}" 2>/dev/null || true
+    echo "--- logs pod/${ns}/${pod} (tail 50)"
+    kubectl -n "${ns}" logs "pod/${pod}" --tail=50 2>/dev/null || true
+  done < <(kubectl get pods -A --no-headers 2>/dev/null | grep -vE 'Running|Completed' || true)
   for c in "${APP_COMPONENTS[@]}"; do
     echo "── diagnose: ${c} namespace (if any)"
     kubectl -n "${c}" get pods -o wide 2>/dev/null || true

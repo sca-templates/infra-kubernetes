@@ -82,6 +82,15 @@ aws_cli ecr create-repository --repository-name "${ECR_REPO}" >/dev/null 2>&1 ||
 aws_cli ecr describe-repositories --repository-names "${ECR_REPO}" \
   --query 'repositories[0].repositoryUri' --output text
 
+# Floci routes the ECR registry by Host header, so the push must use the ECR
+# hostname (127.0.0.1 returns 404 on /v2/). Linux, macOS and CI resolve
+# *.localhost; WSL2 does not, hence the explicit hint below.
+if command -v getent >/dev/null 2>&1 && ! getent hosts "${REGISTRY%:*}" >/dev/null 2>&1; then
+  echo "FAIL: ${REGISTRY%:*} does not resolve." >&2
+  echo "On WSL2 run: make eks-hosts   (or add manually: 127.0.0.1 ${REGISTRY%:*})" >&2
+  exit 1
+fi
+
 echo "── smoke(eks): pushing ${AWS_CLI_IMAGE} to ${REGISTRY}/${ECR_REPO}:${image_tag}"
 aws_cli ecr get-login-password --region "${EKS_REGION}" \
   | docker login --username AWS --password-stdin "${REGISTRY}" >/dev/null

@@ -134,6 +134,7 @@ guards ([docs/security.md](docs/security.md)).
 | `make cloud-down` | Stop the cloud emulator and unpublish it from the cluster |
 | `make cloud-status` | Report cloud-emulator reachability (host edge + in-cluster Service) |
 | `make eks-up` | Start Floci in EKS mode: create the emulated EKS cluster (k3s) and point kubectl at it — the only local cluster substrate (dev/CI tooling, not a component) |
+| `make eks-hosts` | WSL2 only: map the emulated ECR hostname to `127.0.0.1` in `/etc/hosts` (sudo; re-run after a WSL restart) |
 | `make eks-down` | Delete the emulated EKS cluster, IAM user and kubeconfig context |
 | `make eks-status` | Report the emulated EKS cluster status and its nodes |
 | `make port-forward APP=<name>` | Reach a platform UI/API locally (argocd, vault, keycloak, grafana, prometheus, …) |
@@ -193,6 +194,7 @@ Base URL: `https://raw.githubusercontent.com/sca-templates/sca-docs/main/<path>`
 | ExternalSecret `SecretSyncedError` | Vault path missing or k8s-auth role wrong | Check `ClusterSecretStore vault` Ready; verify path under `secret/<service>/<env>`; re-run `bootstrap/seed-vault.sh` (local) |
 | Pods CrashLoopBackOff after a wave bump | Dependency started before its datastore/operator | Re-check wave assignment; consumers must be ≥10 above their dependency |
 | EKS node OOM | Host RAM exhausted | Stop the Compose stack before bootstrapping; 1-replica local profile |
+| EKS smoke: ECR hostname does not resolve | WSL2 does not resolve `*.localhost` | `make eks-hosts` (sudo; re-run after a WSL restart); Linux/macOS/CI resolve it natively |
 | `ImagePullBackOff` | Bad pin or unreachable registry | Verify the pinned tag exists upstream; check node images; never float `latest` |
 | ESO wedge (local) | Old long-refresh pattern | Do not restart ESO by hand; short refresh (~5 min) prevents recurrence |
 | Cloud smoke fails / no endpoint | Emulator not up, or wrong Docker network | `make cloud-status`; `make cloud-up` (needs the cluster up); check `Service/floci` + EndpointSlice in ns `cloud` |
