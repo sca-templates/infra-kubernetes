@@ -15,7 +15,7 @@ the CI workflow map see [ci-cd.md](ci-cd.md).
 | gitleaks | security.yml (via shared template) | Secrets/password scan on push and PR; blocks on findings |
 | checkov (static IaC) | security.yml (via shared template) | IaC misconfiguration scan of YAML manifests |
 | osv-scanner (SCA) | security.yml (via shared template) | Open-source dependency vulnerability scan on push + PR; honours `.github/osv-scanner.toml` ignores |
-| checkov baseline | security.yml (via shared template) | `.github/checkov-baseline.json` gates **new** findings since Phase 1 — the pod on `bootstrap/local-git-server.yaml` is documented (local-only tooling); anything else fails the PR as it would without the baseline |
+| checkov baseline | security.yml (via shared template) | `.github/checkov-baseline.json` gates **new** findings since Phase 1 — the pod on `bootstrap/local-git-server.yaml` (local-only tooling) and the zero-request `floci-buckets` Job (bootstrap-only scheduling) are documented; anything else fails the PR as it would without the baseline |
 | CodeQL | codeql.yml (shared template) | Static analysis on push + PR + weekly schedule |
 | Pin guards | security.yml (local job) | Fails any chart reference or image tag that is `latest` or floating. Trees: `infrastructure`/`charts`/`argocd` **and `bootstrap`** — the smoke framework carries script-inline manifests and the image-pin SSOT (`bootstrap/versions.sh`), so the guards also reject a floating tag on a non-comment shell line there |
 | Release tag signing | release.yml (shared template) | Every release tag is re-signed with the dedicated **release-bot** GPG key (private key in repo secret `RELEASE_GPG_PRIVATE_KEY`) |
@@ -64,7 +64,7 @@ verified against a SHA-256 digest (checkov is the one install that also needs
 Lockfiles are generated, not hand-edited. To regenerate after a tool bump:
 
 ```bash
-printf 'checkov==<version>\n' | uv pip compile --generate-hashes --python-version 3.11 -o .github/requirements.txt -
+printf 'checkov==<version>\n' | uv pip compile --generate-hashes --python-version 3.11.5 -o .github/requirements.txt -
 printf 'yamllint==<version>\n' | uv pip compile --generate-hashes --python-version 3.11 -o .github/requirements-yamllint.txt -
 ```
 
@@ -90,19 +90,22 @@ requirements file:
   `--no-deps --require-hashes`.
 
 ```bash
-printf 'checkov==3.3.16\n' | uv pip compile --generate-hashes --python-version 3.11 \
-  --exclude-newer 2026-10-21T00:00:00Z \
+printf 'checkov==3.3.16\n' | uv pip compile --generate-hashes --python-version 3.11.5 \
+  --exclude-newer 2026-11-05T00:00:00Z \
   --overrides .github/asteval-override.txt \
-  --overrides .github/beartype-override.txt -o .github/requirements.txt -
+  --overrides .github/beartype-override.txt \
+  --upgrade-package soupsieve -o .github/requirements.txt -
 ```
 
-Forcing a version via `--overrides` (rather than naming the package with
-`--upgrade-package`) is what keeps each bump to a single entry: `--upgrade-package`
-re-resolves the *whole* closure to "latest" and drags ~20 unrelated packages with
-it. The cutoff must be late enough to admit every forced/fixed version, or uv
-cannot see it at all — it is raised only when one postdates the current cutoff
+Compiling **in place** (so the existing output file supplies version
+preferences) with `--upgrade-package <pkg>` — or forcing a version via
+`--overrides` — keeps a bump to a single entry. A fresh output file, or a global
+`--upgrade`, re-resolves the whole closure to "latest" and drags ~20 unrelated
+packages with it. The cutoff must be late enough to admit every forced/fixed
+version, or uv cannot see it at all — it is raised only when one postdates the
+current cutoff
 (beartype 0.23.1 and later certifi 2026.10.19 moved it to
-`2026-10-21T00:00:00Z`).
+`2026-10-21T00:00:00Z`; soupsieve 4.0.1 moved it to `2026-11-05T00:00:00Z`).
 
 The cutoff is also what makes a fix installable, and `--upgrade-package` is
 required either way: `uv pip compile` treats the versions already in the output
@@ -123,10 +126,16 @@ moves:
   `multidict==6.9.1` shipped 2026-09-21, after that cutoff, so the bump moved it
   again to `2026-09-22T00:00:00Z`. Either way a two-hunk diff: the cutoff in the
   header plus the single package entry.
+- **The fixed version also raises the Python floor** — `soupsieve==4.0.1`
+  (GHSA-mmhr-3c5m-f64f) shipped 2026-11-04 and requires Python `>=3.11.5`, so
+  the lockfile was recompiled with `--python-version 3.11.5
+  --exclude-newer 2026-11-05T00:00:00Z --upgrade-package soupsieve`. Because the
+  recompile targets the existing output file, the other pins stay preferences
+  and the diff remains the single `soupsieve` entry.
 
 ```bash
-printf 'checkov==3.3.16\n' | uv pip compile --generate-hashes --python-version 3.11 \
-  --exclude-newer 2026-10-21T00:00:00Z \
+printf 'checkov==3.3.16\n' | uv pip compile --generate-hashes --python-version 3.11.5 \
+  --exclude-newer 2026-11-05T00:00:00Z \
   --overrides .github/asteval-override.txt \
   --overrides .github/beartype-override.txt \
   --upgrade-package <pkg> -o .github/requirements.txt -
@@ -139,7 +148,7 @@ lockfile that diffs to nothing.
 
 ### The Python-version drift (root cause, owed upstream)
 
-The lockfile is compiled `--python-version 3.11`, but the shared security
+The lockfile is compiled `--python-version 3.11.5`, but the shared security
 template (`.github/workflows/security.yml` → `CI-CD-Templates`'s
 `shared-security-scan.yml`) installs it under `python-version: "3.x"`, which
 tracks whichever interpreter the runner image advertises — 3.15.0 on the runs
@@ -147,7 +156,7 @@ that failed. The two do not have to agree, so a dependency that imports a symbol
 CPython later removed (beartype's `no_type_check_decorator` on 3.15) breaks the
 gate with no change on our side, intermittently, as the toolcache drifts. The
 beartype override patches the one such symbol reachable today; the durable fix
-is to pin `python-version` in the shared template to match the lockfile. Until
+is to pin `python-version` in the shared template to match the lockfile (3.11.5). Until
 that lands, treat any `ImportError` in the checkov job as this drift before
 suspecting the lockfile.
 
@@ -229,7 +238,8 @@ the entries are gone rather than re-justified.
 
 The checkov baseline (`.github/checkov-baseline.json`) gates new findings from
 Phase 1: entries are documented, intentional manifests whose findings are
-accepted and recorded. The baseline is **re-evaluated** post Phase 18 from a
+accepted and recorded (currently the local git-server Pod and the zero-request
+`floci-buckets` Job). The baseline is **re-evaluated** post Phase 18 from a
 green platform and its entries annotated with owners. Until then the only way a
 new entry appears is a reviewed PR that regenerates the baseline — new findings
 never pass silently.

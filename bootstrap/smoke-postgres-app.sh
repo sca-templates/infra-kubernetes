@@ -128,7 +128,7 @@ secret_value() {
 psql_in() {
   local pod="$1" user="$2" pass="$3" db="$4" sql="$5"
   kubectl -n "$NAMESPACE" exec "$pod" -- env PGPASSWORD="$pass" \
-    psql -h 127.0.0.1 -U "$user" -d "$db" -tAc "$sql"
+    psql -q -h 127.0.0.1 -U "$user" -d "$db" -tAc "$sql"
 }
 
 psql_retry() {
@@ -283,8 +283,8 @@ create_restore_cluster() {
     exit 1
   }
   if [ -n "$target_time" ]; then
-    target_yaml="        recoveryTarget:
-          targetTime: \"${target_time}\""
+    target_yaml="      recoveryTarget:
+        targetTime: \"${target_time}\""
   fi
 
   RESTORE_CLUSTER="$name"

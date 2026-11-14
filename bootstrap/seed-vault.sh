@@ -57,6 +57,16 @@ vault_pod_exec() {
     VAULT_TOKEN="$VAULT_TOKEN" vault "$@"
 }
 
+# Keep stale init material out of the way without deleting it: the emulated
+# cluster is throwaway, but the file may still be useful for post-mortem.
+archive_secret_file() {
+  local f="$1" ts
+  [ -e "$f" ] || return 0
+  ts="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+  mv "$f" "${f}.stale.${ts}"
+  echo "  archived ${f} -> ${f}.stale.${ts}"
+}
+
 # Seed a KV path only when it does not exist yet. Re-running bootstrap must not
 # rotate credentials that already have consumers (ExternalSecrets, CNPG, Kafka,
 # Redis, ...), so an existing path is left untouched unless SEED_ROTATE=1.
@@ -139,6 +149,22 @@ for attempt in {1..150}; do
   sleep 2
 done
 
+# Init material is per Vault instance. A fresh cluster (initialized=false) with
+# a leftover init-keys.json from a previous cluster would otherwise skip
+# `operator init` and try to unseal with the wrong key, leaving Vault sealed and
+# every ExternalSecret unsynced. Detect the mismatch and archive the stale file.
+live_initialized="$(printf '%s' "${status_json:-}" | jq -r 'if .initialized == true then "true" else "false" end' 2>/dev/null || echo false)"
+if [ "${live_initialized}" != "true" ] && [ -e "$INIT_FILE" ]; then
+  echo "WARNING: the live Vault is uninitialized but ${INIT_FILE} exists (stale material from a previous cluster); archiving it"
+  archive_secret_file "$INIT_FILE"
+  archive_secret_file "$ROOT_FILE"
+fi
+if [ "${live_initialized}" = "true" ] && [ ! -s "$INIT_FILE" ]; then
+  echo "ERROR: the live Vault is initialized but ${INIT_FILE} is missing; cannot unseal it." >&2
+  echo "       Restore the init material or recreate the substrate: make eks-down && make eks-up" >&2
+  exit 1
+fi
+
 if [ ! -s "$INIT_FILE" ]; then
   echo "── Initializing Vault (on ${POD})"
   vault_pod_exec "$POD" operator init -key-shares=1 -key-threshold=1 -format=json > "$INIT_FILE"
@@ -179,7 +205,12 @@ for ordinal in $(seq 0 $((VAULT_REPLICAS - 1))); do
     sealed_json="$(vault_pod_exec "$replica" status -format=json 2>/dev/null || true)"
   done
   echo "── Unsealing Vault (${replica})"
-  vault_pod_exec "$replica" operator unseal "$UNSEAL_KEY" >/dev/null
+  if ! unseal_err="$(vault_pod_exec "$replica" operator unseal "$UNSEAL_KEY" 2>&1)"; then
+    printf '%s\n' "${unseal_err}" | tail -n 5 | sed 's/^/  /' >&2
+    echo "ERROR: failed to unseal ${replica} with ${INIT_FILE}; the material likely belongs to a different Vault." >&2
+    echo "       Recreate the substrate (make eks-down && make eks-up) or restore the correct init material." >&2
+    exit 1
+  fi
 done
 
 for attempt in {1..60}; do

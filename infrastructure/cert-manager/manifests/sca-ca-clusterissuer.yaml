@@ -6,7 +6,9 @@ metadata:
   name: sca-ca
   annotations:
     # Within the cert-manager Application (app-wide wave -20), apply after the
-    # chart's CRDs and controller land (default wave 0).
-    argocd.argoproj.io/sync-wave: "0"
+    # chart's CRDs, controller and webhook land and are healthy (wave 0), so the
+    # CRD RESTMapper is populated and the admission webhook is reachable.
+    argocd.argoproj.io/sync-wave: "10"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   selfSigned: {}

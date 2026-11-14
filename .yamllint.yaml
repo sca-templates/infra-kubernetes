@@ -16,3 +16,4 @@ rules:
 ignore: |
   charts/**/templates/**
   .github/checkov-baseline.json
+  .generated/

@@ -25,6 +25,7 @@
 #   eks-emulator.sh up       # Floci (EKS mode) + cluster + kubeconfig + publish
 #   eks-emulator.sh down     # delete cluster/IAM/kubeconfig + emulator
 #   eks-emulator.sh status
+#   eks-emulator.sh hosts    # WSL2 only: map the emulated ECR hostname to loopback
 #
 # Env: pins + emulator coordinates come from bootstrap/versions.sh and `.env`.
 set -euo pipefail
@@ -60,6 +61,13 @@ FLOCI_NAME="${FLOCI_NAME:-floci}"
 FLOCI_PORT="${FLOCI_PORT:-4566}"
 ENDPOINT="http://127.0.0.1:${FLOCI_PORT}"
 EKS_ADMIN_FILE=".secrets/eks-admin.env"
+# Docker resolves the emulated ECR registry by hostname (Floci routes on the
+# Host header); the port is only needed for the push URL.
+ECR_HOST="${EKS_ACCOUNT}.dkr.ecr.${EKS_REGION}.localhost"
+# Vault init material belongs to one cluster: recreating the substrate creates a
+# brand-new (uninitialized) Vault, so the old keys must never be reused.
+VAULT_INIT_FILE=".secrets/init-keys.json"
+VAULT_ROOT_FILE=".secrets/root-token"
 NODE_TIMEOUT="${SMOKE_TIMEOUT:-900}"
 # A short window to see the first Node object after the cluster reports ACTIVE.
 # Floci records the cluster row before the k3s node is up, and a create whose
@@ -68,7 +76,7 @@ NODE_TIMEOUT="${SMOKE_TIMEOUT:-900}"
 NODE_APPEAR_TIMEOUT="${NODE_APPEAR_TIMEOUT:-90}"
 DIAGNOSE_DIR="${SMOKE_DIAGNOSE_DIR:-.generated}"
 
-[ -n "$ACTION" ] || { echo "usage: $0 up|down|status" >&2; exit 2; }
+[ -n "$ACTION" ] || { echo "usage: $0 up|down|status|hosts" >&2; exit 2; }
 
 # ── AWS CLI via the pinned image ─────────────────────────────────────────────
 # The repo pins AWS_CLI_IMAGE and never installs an unpinned aws binary on the
@@ -198,6 +206,86 @@ ensure_iam_admin() {
   printf 'AWS_ACCESS_KEY_ID=%s\nAWS_SECRET_ACCESS_KEY=%s\n' \
     "${AWS_ACCESS_KEY_ID}" "${AWS_SECRET_ACCESS_KEY}" > "${EKS_ADMIN_FILE}"
   export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+}
+
+is_wsl() {
+  # WSL2 exposes its name to the shell; /proc/version is the fallback for a
+  # non-login shell that does not inherit WSL_DISTRO_NAME.
+  [ -n "${WSL_DISTRO_NAME:-}" ] || grep -qi microsoft /proc/version 2>/dev/null
+}
+
+ecr_host_resolves() {
+  if command -v getent >/dev/null 2>&1; then
+    getent hosts "${ECR_HOST}" >/dev/null 2>&1
+  else
+    # macOS has no getent; its resolver (and the Docker daemon) handle
+    # *.localhost, so do not block there. The smoke push fails loudly if not.
+    return 0
+  fi
+}
+
+hosts_has_ecr() {
+  [ -f /etc/hosts ] || return 1
+  awk -v host="${ECR_HOST}" '
+    $1 ~ /^#/ { next }
+    { for (i = 1; i <= NF; i++) if ($i == host) { found = 1; exit } }
+    END { exit(found ? 0 : 1) }
+  ' /etc/hosts
+}
+
+require_ecr_host() {
+  # The host Docker daemon resolves the registry name for `docker push`; the
+  # in-cluster pull uses Floci's containerd mirror and needs no host DNS.
+  ecr_host_resolves && return 0
+  if is_wsl; then
+    echo "ERROR: WSL2 does not resolve ${ECR_HOST} (needed by the host ECR push)." >&2
+    echo "       Run: make eks-hosts   (one-time per WSL restart; needs sudo)" >&2
+  else
+    echo "ERROR: ${ECR_HOST} does not resolve; check the host DNS before the EKS smoke." >&2
+  fi
+  return 1
+}
+
+eks_hosts() {
+  if ecr_host_resolves; then
+    echo "[OK] ${ECR_HOST} resolves"
+    return 0
+  fi
+  if ! is_wsl; then
+    echo "[skip] ${ECR_HOST} does not resolve and this is not WSL2; nothing to add." >&2
+    echo "       Linux/macOS/CI resolve *.localhost; real ECR uses DNS." >&2
+    return 1
+  fi
+  if hosts_has_ecr; then
+    echo "ERROR: /etc/hosts already lists ${ECR_HOST} but it does not resolve; check /etc/nsswitch.conf and DNS." >&2
+    return 1
+  fi
+  echo "── eks: WSL2 does not resolve *.localhost; adding ${ECR_HOST} -> 127.0.0.1 to /etc/hosts"
+  if ! printf '127.0.0.1 %s\n' "${ECR_HOST}" | sudo tee -a /etc/hosts >/dev/null; then
+    echo "ERROR: could not update /etc/hosts; add manually: 127.0.0.1 ${ECR_HOST}" >&2
+    return 1
+  fi
+  ecr_host_resolves || {
+    echo "ERROR: /etc/hosts was updated but ${ECR_HOST} still does not resolve" >&2
+    return 1
+  }
+  echo "[OK] ${ECR_HOST} resolves"
+}
+
+archive_vault_init_material() {
+  # The emulated EKS cluster is throwaway; its Vault is born uninitialized. Keys
+  # saved for a previous cluster would make seed-vault.sh skip `operator init`
+  # and try to unseal the fresh Vault with the wrong key, so archive them before
+  # a cluster is created (or the substrate is torn down).
+  local f ts
+  ts="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+  for f in "${VAULT_INIT_FILE}" "${VAULT_ROOT_FILE}"; do
+    [ -e "$f" ] || continue
+    mkdir -p ".secrets/archive"
+    chmod 700 ".secrets/archive" 2>/dev/null || true
+    mv "$f" ".secrets/archive/${ts}-$(basename "$f")"
+    echo "  archived $f -> .secrets/archive/${ts}-$(basename "$f")"
+  done
 }
 
 diagnose_kubectl() {
@@ -367,6 +455,11 @@ fetch_kubeconfig() {
 }
 
 eks_up() {
+  # Fail before booting anything if the host cannot resolve the ECR registry
+  # name: `docker push` runs on the host daemon (the in-cluster pull uses the
+  # node's containerd mirror), and a late failure would leave a booted cluster.
+  require_ecr_host
+
   echo "── eks: starting cloud emulator on network '${CLOUD_NETWORK}' (EKS mode)"
   CLOUD_NETWORK="${CLOUD_NETWORK}" "${SELF_DIR}/cloud-emulator.sh" start "${CLOUD_PROVIDER:-aws}"
   wait_for_api
@@ -378,6 +471,10 @@ eks_up() {
   if [ "${status}" = "ACTIVE" ]; then
     echo "[skip] EKS cluster '${EKS_CLUSTER}' already ACTIVE"
   elif [ "${status}" = "ABSENT" ] || [ "${status}" = "UNKNOWN" ]; then
+    if [ "${status}" = "ABSENT" ]; then
+      # A definite ABSENT means the next Vault is a fresh, uninitialized one.
+      archive_vault_init_material
+    fi
     create_cluster
     wait_for_cluster_active
   else
@@ -400,6 +497,7 @@ eks_up() {
     fi
     echo "  cluster ACTIVE but no node appeared within ${NODE_APPEAR_TIMEOUT}s; recreating once" >&2
     diagnose_node_failure
+    archive_vault_init_material
     delete_cluster
     create_cluster
     wait_for_cluster_active
@@ -441,6 +539,7 @@ eks_down() {
   echo "── eks: tearing down cloud emulator"
   CLOUD_NETWORK="${CLOUD_NETWORK}" "${SELF_DIR}/cloud-emulator.sh" down "${CLOUD_PROVIDER:-aws}" || true
   docker network rm "${CLOUD_NETWORK}" >/dev/null 2>&1 || true
+  archive_vault_init_material
   echo "[OK] EKS substrate removed"
 }
 
@@ -473,5 +572,6 @@ case "$ACTION" in
   up) eks_up ;;
   down) eks_down ;;
   status) eks_status ;;
-  *) echo "usage: $0 up|down|status" >&2; exit 2 ;;
+  hosts) eks_hosts ;;
+  *) echo "usage: $0 up|down|status|hosts" >&2; exit 2 ;;
 esac

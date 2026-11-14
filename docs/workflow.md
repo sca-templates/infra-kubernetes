@@ -205,3 +205,4 @@ a deliberate, documented deviation (the [Deviations log](architecture.md#deviati
 | Service `OutOfSync` in dev/qa semantics | `main` head moved past what was promoted | Inspect the service `Application` (`kubectl -n argocd get application <svc>-<env>`); ensure the `main` merge only happens after qa |
 | Service not updating in prod | Prod `version` pin not bumped (or the tag missing) | Check `argocd/services-prod.yaml` → `version` and that the tag exists in the service repo; the `chore(services)` bump PR is the go/no-go |
 | EKS node OOM | Host RAM exhausted | Stop sibling Compose stacks before bootstrapping; use the 1-replica local profile |
+| EKS smoke: `*.dkr.ecr.*.localhost` does not resolve | WSL2 does not resolve `*.localhost` | `make eks-hosts` (needs sudo; re-run after a WSL restart); Linux/macOS/CI resolve it natively |
