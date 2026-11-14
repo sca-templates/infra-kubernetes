@@ -21,6 +21,8 @@ metadata:
   annotations:
     argocd.argoproj.io/hook: PreSync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    ignore-check.kube-linter.io/unset-cpu-requirements: "bootstrap must schedule when the local node request budget is full"
+    ignore-check.kube-linter.io/unset-memory-requirements: "bootstrap must schedule when the local node request budget is full"
 spec:
   backoffLimit: 3
   ttlSecondsAfterFinished: 600
@@ -39,6 +41,13 @@ spec:
         fsGroup: 10001
         seccompProfile:
           type: RuntimeDefault
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
       containers:
         - name: aws
           image: amazon/aws-cli:2.38.1@sha256:733d5be1015825e4038c6016f3fa9954868ddee1f611b73be795a9cc2e706bfd
@@ -63,10 +72,13 @@ spec:
             capabilities:
               drop:
                 - ALL
+          # Explicit zero requests: if requests are omitted, Kubernetes
+          # defaults them to the limits and this bootstrap Job stays Pending
+          # on the fully-requested local node. Limits still cap usage.
           resources:
             requests:
-              cpu: 10m
-              memory: 64Mi
+              cpu: 0
+              memory: 0
             limits:
               cpu: 200m
               memory: 128Mi
