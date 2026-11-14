@@ -10,8 +10,9 @@ Milestones and Issues.
 
 ## Current state
 
-**Phase 13 — Keycloak deployed; Phase B — backup layer landed (Velero,
-CloudNativePG PITR, Vault Raft snapshots), live restore validation pending.**
+**Phase 13 — Keycloak deployed; Phase B — backup layer landed and live
+restore-validated on 2026-11-14 (Velero, CloudNativePG PITR, Vault Raft
+snapshots).**
 Phase 0 delivered the scaffold
 (Makefile, `bootstrap/`, `argocd/` with the app-of-apps pattern, the CI
 workflows, the service template, this docs set) and brought the local Floci
@@ -132,7 +133,7 @@ password-grant token accepted by userinfo (`make smoke COMPONENT=keycloak`).
 | Fact | Value |
 | --- | --- |
 | Repository | `infra-kubernetes` (local, fully-local git serve; published to GitHub before promotion) |
-| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6), redis-operator (Phase 7), Kong (Phase 8), Linkerd control plane (Phase 9), postgres-app/keycloak-db (Phase 10), Kafka (Phase 11), Redis (Phase 12), Keycloak (Phase 13), Velero (Phase 18; backup layer expanded in Phase B, live validation pending) |
+| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6), redis-operator (Phase 7), Kong (Phase 8), Linkerd control plane (Phase 9), postgres-app/keycloak-db (Phase 10), Kafka (Phase 11), Redis (Phase 12), Keycloak (Phase 13), Velero (Phase 18; backup layer expanded in Phase B, live restore-validated 2026-11-14) |
 | `platform-root-local` | not used — `local` runs no services, so there is no root Application; `make bootstrap ENV=local` seeds the catalog wiring (`apps-local` + `kong-local` + `linkerd-local` + `postgres-app-local` + `kafka-local` + `redis-local` + `keycloak-local`) host-side |
 | `platform-local` ApplicationSet | present, eight elements (`cert-manager` wave -20, `external-secrets` + `linkerd-crds` + `cloudnative-pg` + `strimzi` + `redis-operator` wave -10, `vault` wave 0, `velero` wave 80) |
 | cert-manager app | `cert-manager-local` `Synced` + `Healthy`; `sca-ca` ClusterIssuer `Ready`; leaf Certificate smoke green |
@@ -165,7 +166,6 @@ password-grant token accepted by userinfo (`make smoke COMPONENT=keycloak`).
 | 2 | **dev / qa / prod clusters pending** | Not provisioned (terraform/ansible outside this repo) | Provision per env; promote via `promote-test` (see [workflow.md](workflow.md)) |
 | 3 | **OpenSSF Best Practices badge — silver blocked** | All silver criteria are met except `contributors_unassociated` and `bus_factor` (≥2): the project has a single maintainer (`CODEOWNERS` = `@Santiago1010`) | Achieved once a second **unassociated** contributor joins and is reflected in `CODEOWNERS` + `.github/GOVERNANCE.md`; passing badge is already achievable (see [.github/GOVERNANCE.md](../.github/GOVERNANCE.md), [docs/ci-cd.md](ci-cd.md)) |
 | 4 | **OpenSSF Best Practices badge — gold blocked** | Beyond the silver gaps, gold requires `two_person_review` (≥50% of changes reviewed by someone other than the author), which is unrealisable while there is a single maintainer; all other gold criteria are Met or N/A (see [.github/SECURITY.md](../.github/SECURITY.md) security review, SPDX + copyright headers per source file) | Unblocked together with silver once a second, **unassociated** reviewer/maintainer exists; `two_person_review` then requires an explicit second reviewer on gold PRs |
-| 5 | **Backup restore not live-validated** | Velero restore, CNPG PITR/latest restore, and the Vault Raft snapshot Job are implemented and pass static checks; the live restore run on the Floci EKS substrate is pending | Run `make smoke` for `velero`, `postgres-app`, and `vault` on a bootstrapped EKS substrate, then flip the Phase B status in [backups.md](backups.md) and this file |
 
 ## Intentional exclusions
 
@@ -199,16 +199,17 @@ password-grant token accepted by userinfo (`make smoke COMPONENT=keycloak`).
 | Keycloak → Zitadel | **Planned** | Complete replacement. Inventory in progress. |
 | Kafka/Strimzi → NATS JetStream | **Planned** | Togglable design. No current consumers. |
 | Linkerd → CNI-native mTLS | **Planned** | PoC required in Floci first. |
-| Velero + Backups | **High Priority** | The three layers are implemented in git: Velero scheduled backups, CNPG Barman base backups + WAL/PITR, and Vault Raft snapshot CronJob. `local` uses Floci S3; `dev`/`qa`/`prod` expect external buckets and Vault-provisioned credentials. Live restore validation on the Floci EKS substrate is pending. See [backups.md](backups.md). |
-| CNPG RDS replacement | **In Progress** | The PITR + latest-backup smoke (`bootstrap/smoke-postgres-app.sh`) lands with Phase B; it still needs a live green run before the RDS replacement gate closes. |
+| Velero + Backups | **Done** | The three layers are implemented and live restore-validated on 2026-11-14: Velero scheduled backups, CNPG Barman base backups + WAL/PITR, and Vault Raft snapshot CronJob. `local` uses Floci S3; `dev`/`qa`/`prod` expect external buckets and Vault-provisioned credentials. See [backups.md](backups.md#validation-status). |
+| CNPG RDS replacement | **Done** | The PITR + latest-backup restore smoke (`bootstrap/smoke-postgres-app.sh`) passed live on 2026-11-14, closing the RDS replacement gate. |
 
 ## Phase B additions (backup layer)
 
 | Component | Namespace | Status | Notes |
 | --- | --- | --- | --- |
-| velero | velero | landed (live restore validation pending) | Scheduled Kubernetes-object backup configs in all four envs; `local` uses Floci S3, external environments use their own bucket. The `floci-buckets` Job creates the local buckets. `bootstrap/smoke-velero.sh` performs a backup → delete namespace → restore round-trip. |
-| CNPG backups + PITR | data | landed (live validation pending) | Both `Cluster`s are configured to write Barman base backups + WAL to object storage; daily `ScheduledBackup`s; credentials via `secret/cnpg/<env>`. `bootstrap/smoke-postgres-app.sh` exercises PITR on `postgres-app` and latest-backup restore on `keycloak-db`. |
-| Vault Raft snapshots | vault | landed (live validation pending) | `CronJob/vault-raft-snapshot` is configured to save/validate/upload a Raft snapshot and apply retention; credentials via `secret/vault-snapshot/<env>`. `bootstrap/smoke-vault.sh` triggers a real Job and asserts `VAULT_SNAPSHOT_OK` + `VAULT_SNAPSHOT_UPLOADED`. |
+| velero | velero | deployed (schedule + restore live-validated 2026-11-14) | Scheduled Kubernetes-object backup configs in all four envs; `local` uses Floci S3, external environments use their own bucket. The `floci-buckets` Job creates the local buckets. The schedule template re-ran to `Completed` (639 items; `velero-critical-namespaces-manual-20261114154830`) after the Floci bucket was recreated, and `bootstrap/smoke-velero.sh` performs a backup → delete namespace → restore round-trip. |
+| CNPG backups + PITR | data | deployed (live restore validated 2026-11-14) | Both `Cluster`s are configured to write Barman base backups + WAL to object storage; daily `ScheduledBackup`s; credentials via `secret/cnpg/<env>`. `bootstrap/smoke-postgres-app.sh` exercises PITR on `postgres-app` and latest-backup restore on `keycloak-db`. |
+| Vault Raft snapshots | vault | deployed (restore drill validated 2026-11-14) | `CronJob/vault-raft-snapshot` is configured to save/validate/upload a Raft snapshot and apply retention; credentials via `secret/vault-snapshot/<env>`. `bootstrap/smoke-vault.sh` triggers a real Job and asserts `VAULT_SNAPSHOT_OK` + `VAULT_SNAPSHOT_UPLOADED`; the manual Raft restore drill recovered a canary KV. |
 
 The backup operations, schedules, retention values, and restore runbooks live in
-[backups.md](backups.md). Live restore validation is the remaining Phase B gate.
+[backups.md](backups.md). Live restore validation completed on 2026-11-14 (see
+[Validation status](backups.md#validation-status)).

@@ -68,3 +68,5 @@ is documented.
         `VAULT_SNAPSHOT_OK` + `VAULT_SNAPSHOT_UPLOADED`
   - [x] runbook: save/restore in [backups.md](../backups.md#vault-raft-snapshot)
   Issue done when: live snapshot + restore validation passes.
+  Verified by: `make smoke COMPONENT=vault` plus the manual Raft restore drill
+  on 2026-11-14.
