@@ -33,7 +33,7 @@ Log.
 - [x] backup credentials projected by ESO from `secret/cnpg/<env>`
 - [x] `bootstrap/smoke-postgres-app.sh`: PITR restore on `postgres-app` and
       latest-backup restore on `keycloak-db`
-- [ ] live green run of the restore smoke on the Floci EKS substrate
+- [x] live green run of the restore smoke on the Floci EKS substrate (2026-11-14)
 
 Rollout note (local, one-off cluster hygiene): the orphaned `postgresql.cnpg.io`
 CRDs left by the 2026-09-02 pre-restart bulk install were removed from `local`

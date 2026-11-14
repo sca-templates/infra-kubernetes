@@ -279,11 +279,15 @@ A Raft restore overwrites the cluster's data and is a full-cluster operation.
 Use a maintenance window, take a fresh snapshot first, and verify the target
 bucket/object before copying it into a pod.
 
-1. Confirm the target Vault pod is initialized, unsealed, and `active`.
-2. Download the chosen snapshot and copy it to the active pod:
-   `kubectl cp ./vault-<timestamp>.snap vault/vault-0:/tmp/vault.snap`.
+1. Confirm the target Vault pod is initialized, unsealed, and `active`
+   (`kubectl -n vault get pods -l vault-active=true`).
+2. Download the chosen snapshot, copy it to the active pod, and compare the
+   checksum on the host and in the pod before restoring:
+   `kubectl cp ./vault-<timestamp>.snap vault/<active-pod>:/tmp/vault.snap`.
+   Prefer `kubectl cp` over `kubectl exec -i … cat`; streamed copies can
+   truncate large snapshots.
 3. Run the restore with a privileged token:
-   `kubectl -n vault exec -it vault-0 -- env VAULT_ADDR=... VAULT_CACERT=... vault operator raft snapshot restore -force /tmp/vault.snap`.
+   `kubectl -n vault exec -it <active-pod> -- env VAULT_ADDR=... VAULT_CACERT=... vault operator raft snapshot restore -force /tmp/vault.snap`.
 4. Wait for the server logs to report `post-unseal setup complete` and
    `vault is unsealed`; the command returns before the background restore
    finishes.
@@ -315,6 +319,22 @@ markers. Set `SMOKE_KEEP_VAULT_JOB=1` to keep the Job for inspection.
 
 ## Validation status
 
-The manifests and smoke scripts are in git. A full live restore validation on
-the Floci emulated EKS substrate is still required before these procedures are
-treated as production-proven; `docs/status.md` records the current state.
+Live restore validation passed on the Floci emulated EKS substrate on
+2026-11-14:
+
+| Layer | Command | Result |
+| --- | --- | --- |
+| Velero | `make smoke COMPONENT=velero` | `Backup` and `Restore` `Completed`; the deleted namespace and its marker were recovered |
+| Velero schedule template | `Backup` from `Schedule/velero-critical-namespaces` | `Completed` (639 items, 0 errors) on 2026-11-14; backup `velero-critical-namespaces-manual-20261114154830` |
+| CNPG | `make smoke COMPONENT=postgres-app` | PITR with A/B markers on `postgres-app` and latest-backup restore on `keycloak-db` |
+| Vault snapshot | `make smoke COMPONENT=vault` | `VAULT_SNAPSHOT_OK` + `VAULT_SNAPSHOT_UPLOADED` |
+| Vault restore drill | manual, per the runbook above | Canary KV written, snapshot taken, canary deleted, Raft snapshot restored on the active node; the canary was recovered and ExternalSecrets stayed `SecretSynced` |
+
+The schedule-created backup `velero-critical-namespaces-20261114195950` failed
+only at the final S3 upload (`NoSuchBucket`) after the Floci restart; the bucket
+was recreated and the same template re-ran to `Completed` (639 items). The
+`Schedule` retains that failed reference as `status.lastBackup` until its next
+real run.
+
+`dev`/`qa`/`prod` still require their own external buckets and credentials
+before the same procedures can be exercised there.

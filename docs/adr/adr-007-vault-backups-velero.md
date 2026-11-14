@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (implementation landed; live restore validation pending)
+Accepted (implementation landed; live restore validated 2026-11-14)
 
 ## Context
 
@@ -35,4 +35,4 @@ Implement a three-layer backup strategy:
 - Backup credentials are projected by ESO (`secret/cnpg/<env>`,
   `secret/vault-snapshot/<env>`, `secret/velero/credentials`).
 - Runbooks and environment retention live in [backups.md](../backups.md).
-- Live restore validation on the Floci EKS substrate is the remaining gate.
+- Live restore validation on the Floci EKS substrate passed on 2026-11-14.
