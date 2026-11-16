@@ -116,6 +116,11 @@ spec:
             - .spec.conversion
             - .spec.names.listKind
             - .spec.preserveUnknownFields
+        - group: apps
+          kind: StatefulSet
+          jqPathExpressions:
+            - .spec.volumeClaimTemplates[].apiVersion
+            - .spec.volumeClaimTemplates[].kind
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{.namespace}}'
