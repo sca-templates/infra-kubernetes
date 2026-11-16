@@ -1,0 +1,38 @@
+# Project: Implement NACK
+
+Area: Data · Wave 50 · Environments: local→dev→qa→prod
+Depends on: nats (#105) — the controller connects to the server at startup.
+Project done when: the six JetStream CRDs are `Established`, the controller
+Deployment is `Ready` and watches all namespaces.
+
+## Milestone M1 — JetStream controller
+
+M1 done when: the controller reconciles cluster-wide and the CRDs are present in
+every environment.
+
+- [x] Issue #105 · NACK controller + CRDs
+  Depends on: nats (#105)
+  - [x] `infrastructure/nack/` values
+        - [x] chart `nats/nack` `0.35.0` / controller `0.24.0`
+        - [x] six `*.jetstream.nats.io` CRDs from the chart `crds/` bundle
+              (applied with `--include-crds`)
+        - [x] Deployment `nack` in namespace `nats`, `-s` points at
+              `nats://nats.data.svc.cluster.local:4222`
+  - [x] `ApplicationSet` element (name `nack`, namespace `nats`, wave 50)
+        - [x] no `Stream`/`Consumer` CRs in git yet
+  - [x] smoke: CRDs `Established` + cluster-wide watch
+        - [x] `bootstrap/smoke-nack.sh` (`make smoke COMPONENT=nack`)
+  - [x] docs: Work Log row + catalog Status → deployed
+
+Notes:
+
+- NACK runs **after** the NATS server (wave 50 vs 40) because it connects at
+  startup. The platform Applications are not children of a root app, so
+  cross-Application waves are best-effort; the controller retries until the
+  server answers, which is why the wave order is the logical order rather than
+  a hard guarantee.
+- The chart installs the CRDs; the controller watches all namespaces so a
+  consumer can declare its `Stream`/`Consumer` in its own repo without extra
+  wiring.
+- NACK and NATS use the upstream charts, so both are `ApplicationSet` elements
+  (no dedicated app files). Kafka/Strimzi stay until the removal commit.

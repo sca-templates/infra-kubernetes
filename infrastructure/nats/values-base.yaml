@@ -1,0 +1,74 @@
+# nats — base values (shared across environments; per-env tier overrides live
+# in envs/<env>/nats.yaml).
+# Official chart: nats/nats, served by the maintainers from
+# https://nats-io.github.io/k8s/helm/charts. The chart pin (targetRevision) is
+# set in argocd/apps-<env>.yaml; the images are pinned here to the same versions
+# the chart ships, never `latest`.
+#
+# NATS (wave 40) is the JetStream event backbone that replaces Kafka/Strimzi
+# (ADR-005). It is deployed "ready but idle": the server runs with JetStream
+# enabled and its CRDs are installed, but no `Stream`/`Consumer` CR ships — the
+# declarative JetStream resources arrive per consumer, managed by the NACK
+# controller (wave 50, its own `nack` element in the catalog). The server is a
+# single StatefulSet node in the base tier (local/dev); qa/prod switch on the
+# JetStream cluster (3 replicas) in their overlays.
+#
+# The base tier runs a single node: no NATS cluster, so no JetStream R3 — the
+# `local`/`dev` profile favours footprint over redundancy, exactly like the
+# other datastores in this repo.
+
+config:
+  cluster:
+    # Single node in the base tier. qa/prod enable the cluster (3 replicas).
+    enabled: false
+  jetstream:
+    # The event backbone is JetStream, not core NATS: streams/consumers need it.
+    enabled: true
+    fileStore:
+      # JetStream file storage on a PVC (R1 single node in the base tier).
+      pvc:
+        size: 1Gi
+  monitor:
+    # Serves the /healthz endpoints the chart's probes use; also exposes the
+    # :8222 monitoring API. Not published as a Service port (service.monitor
+    # stays off) — reachable in-cluster only.
+    enabled: true
+
+container:
+  image:
+    repository: nats
+    # Pinned to the chart appVersion (2.15.2), never `latest`.
+    tag: 2.15.2-alpine
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+# The config-reloader sidecar hot-reloads nats.conf on ConfigMap changes; pin its
+# image to the chart default rather than relying on the chart's tag.
+reloader:
+  enabled: true
+  image:
+    repository: natsio/nats-server-config-reloader
+    tag: 0.24.0
+    pullPolicy: IfNotPresent
+
+# nats-box ships the `nats` CLI in a throwaway pod. It is the tool the smoke
+# execs into to prove JetStream is enabled and idle (`nats stream ls`), so it
+# stays on in every tier. Tiny footprint.
+natsBox:
+  enabled: true
+  container:
+    image:
+      repository: natsio/nats-box
+      tag: 0.20.0
+      pullPolicy: IfNotPresent
+
+# A single-replica base tier must not have a PDB: it would block node drains.
+# qa/prod (3 replicas) switch it on in their overlays (chart default is on).
+podDisruptionBudget:
+  enabled: false

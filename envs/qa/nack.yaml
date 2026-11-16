@@ -1,0 +1,13 @@
+# nack — qa profile. The controller is a singleton (the chart hardcodes one
+# replica and exposes no `replicas` value), so there is no anti-affinity to
+# spread; the qa tier only widens the resource envelope. No PDB: the chart
+# ships none and a singleton with leader election needs none — see the
+# deviations log in docs/architecture.md.
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi

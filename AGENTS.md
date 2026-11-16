@@ -52,10 +52,11 @@ and qa ([docs/workflow.md](docs/workflow.md#services-app-repo-as-source)).
 
 ## 3. Component catalog
 
-**18 components + ArgoCD.** Status column is the source of truth
-(`planned (Phase N)` until the phase lands; `deployed` from then on). Chart
-and image pins are set inside each phase and live under
-`infrastructure/<component>/` + `envs/<env>/`.
+**20 components + ArgoCD** during the NATS migration (NATS and NACK are deployed
+alongside Kafka/Strimzi until the removal commit; the target state is 18).
+Status column is the source of truth (`planned (Phase N)` until the phase lands;
+`deployed` from then on). Chart and image pins are set inside each phase and
+live under `infrastructure/<component>/` + `envs/<env>/`.
 
 | Component | Namespace | Upstream chart | Role | Provenance | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -70,6 +71,8 @@ and image pins are set inside each phase and live under
 | Linkerd control plane | `linkerd` | linkerd/linkerd-control-plane | mTLS identity, golden signals | [infra-linkerd](https://github.com/sca-templates/infra-linkerd) | **deployed** (Phase 9) |
 | postgres-app (+ keycloak-db) | `data` | CNPG `Cluster` CRs (raw) | App + Keycloak databases; all 4 envs | [infra-postgres](https://github.com/sca-templates/infra-postgres) | **deployed** (Phase 10) |
 | Kafka | `data` | `Kafka`/`KafkaNodePool` CRs | Event backbone, TLS + SCRAM | [infra-kafka](https://github.com/sca-templates/infra-kafka) | **deployed** (Phase 11) |
+| NATS JetStream | `data` | nats/nats (JetStream) | Event backbone (idle; no Stream/Consumer CRs) | — | **deployed** (NATS migration C1) |
+| NACK | `nats` | nats/nack | JetStream controller (Stream/Consumer CRDs) | — | **deployed** (NATS migration C1) |
 | Redis | `data` | `RedisReplication` CR | Cache | [infra-redis](https://github.com/sca-templates/infra-redis) | **deployed** (Phase 12) |
 | Keycloak | `keycloak` | codecentric/keycloakx | OIDC IdP, realm `sca` | [infra-keycloak](https://github.com/sca-templates/infra-keycloak) | **deployed** (Phase 13) |
 | kube-prometheus-stack | `observability` | prometheus-community/kube-prometheus-stack | Metrics + Grafana + Alertmanager | [infra-prometheus](https://github.com/sca-templates/infra-prometheus) | planned (Phase 14) |
@@ -105,13 +108,16 @@ before CRs; Vault before ESO syncs; datastores before consumers.
 | 10 | Vault seeded by `bootstrap/seed-vault.sh` after pod `Running` (CI/manual, not an ArgoCD hook) |
 | 20 | Kong |
 | 30 | Linkerd control plane (dedicated `linkerd-<env>` Application) |
-| 40 | Datastores: postgres-app, keycloak-db (CNPG), kafka, redis CRs |
-| 50 | Consumers: keycloak |
+| 40 | Datastores: postgres-app, keycloak-db (CNPG), kafka, nats (JetStream), redis CRs |
+| 50 | Consumers: keycloak; nack (JetStream controller, after `nats` at 40) |
 | 60 | Observability: kube-prometheus-stack, loki, alloy, tempo |
 | 60 | Service apps (registry `services-<env>.yaml`) — consumers of the catalog, wave set per service |
 | 80 | Velero (local: Floci S3) |
 
-The normative map with rationale lives in `docs/architecture.md`.
+Platform Applications are not children of a root app, so `sync-wave` orders
+resources **inside one Application**; cross-Application waves are best-effort and
+the components must tolerate retries. The normative map with rationale lives in
+`docs/architecture.md`.
 
 ## 5. Image policy (strict)
 

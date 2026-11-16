@@ -1,0 +1,41 @@
+# nats — prod profile (HA: JetStream cluster, 3 replicas, PDB, soft
+# anti-affinity, manual sync tier). Mirrors the qa footprint; the difference is
+# the manual sync policy (ADR-003), not the replica count.
+
+config:
+  cluster:
+    enabled: true
+    replicas: 3
+  jetstream:
+    fileStore:
+      pvc:
+        size: 20Gi
+
+container:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+podDisruptionBudget:
+  enabled: true
+
+podTemplate:
+  # The chart has no top-level `podTemplate.affinity` value (it is silently
+  # ignored); `merge` merges into the StatefulSet pod template, so the affinity
+  # has to sit under `spec`.
+  merge:
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: topology.kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: nats
+                    app.kubernetes.io/instance: nats

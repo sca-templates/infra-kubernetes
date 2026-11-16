@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted (2026-11-15)
 
 ## Context
 
@@ -26,6 +26,11 @@ Replace Kafka/Strimzi with NATS JetStream. NATS must be configurable/togglable t
 
 ## Implementation
 
-- Deploy NATS JetStream with toggle in values
-- Remove Strimzi operator and Kafka CRs
-- Document toggle procedure
+- Deploy NATS JetStream and NACK as `ApplicationSet` elements: NATS at wave 40
+  (server, JetStream, file store) and NACK at wave 50 (controller + CRDs). The
+  tier ships **idle** — no `Stream`/`Consumer` CRs. Landed in C1.
+- Make the SNS/SQS vs NATS choice declarative per environment (toggle) and
+  project the messaging contract (`mode` + endpoints) through Vault/ESO. The
+  consumers declare their `Stream`/`Consumer` CRs once the mode is NATS.
+- Remove Strimzi, Kafka CRs, Kafka values and the Kafka-specific wiring.
+- Document the toggle procedure and the stream/consumer migration.
