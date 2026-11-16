@@ -130,12 +130,23 @@ now idempotent (`SEED_ROTATE=1` to rotate) and seeds the smoke user; the smoke
 proves the realm import, discovery issuer, `login_required` redirect and a real
 password-grant token accepted by userinfo (`make smoke COMPONENT=keycloak`).
 
+**NATS migration (C1).** NATS and NACK are deployed **idle** as the ADR-005
+replacement for Kafka/Strimzi. `nats` (chart/appVersion `2.15.2`, namespace
+`data`, wave 40) runs a single JetStream node in `local`/`dev` and a 3-node
+JetStream cluster with a PDB and preferred anti-affinity in `qa`/`prod`; it
+ships **no** `Stream`/`Consumer` CRs. `nack` (chart `0.35.0` / controller
+`0.24.0`, namespace `nats`, wave 50) installs the six JetStream CRDs and watches
+all namespaces, so it starts after the server it connects to. Kafka/Strimzi stay
+in place until the removal commit. `make smoke COMPONENT=nack` (CRDs
+`Established`, cluster-wide watch) and `make smoke COMPONENT=nats` (JetStream
+enabled, zero streams) are the convergence gates.
+
 | Fact | Value |
 | --- | --- |
 | Repository | `infra-kubernetes` (local, fully-local git serve; published to GitHub before promotion) |
-| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6), redis-operator (Phase 7), Kong (Phase 8), Linkerd control plane (Phase 9), postgres-app/keycloak-db (Phase 10), Kafka (Phase 11), Redis (Phase 12), Keycloak (Phase 13), Velero (Phase 18; backup layer expanded in Phase B, live restore-validated 2026-11-14) |
+| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6), redis-operator (Phase 7), Kong (Phase 8), Linkerd control plane (Phase 9), postgres-app/keycloak-db (Phase 10), Kafka (Phase 11), Redis (Phase 12), Keycloak (Phase 13), NACK/NATS (NATS migration C1, idle), Velero (Phase 18; backup layer expanded in Phase B, live restore-validated 2026-11-14) |
 | `platform-root-local` | not used — `local` runs no services, so there is no root Application; `make bootstrap ENV=local` seeds the catalog wiring (`apps-local` + `kong-local` + `linkerd-local` + `postgres-app-local` + `kafka-local` + `redis-local` + `keycloak-local`) host-side |
-| `platform-local` ApplicationSet | present, eight elements (`cert-manager` wave -20, `external-secrets` + `linkerd-crds` + `cloudnative-pg` + `strimzi` + `redis-operator` wave -10, `vault` wave 0, `velero` wave 80) |
+| `platform-local` ApplicationSet | present, ten elements (`cert-manager` wave -20, `external-secrets` + `linkerd-crds` + `cloudnative-pg` + `strimzi` + `redis-operator` wave -10, `vault` wave 0, `nats` wave 40, `nack` wave 50, `velero` wave 80) |
 | cert-manager app | `cert-manager-local` `Synced` + `Healthy`; `sca-ca` ClusterIssuer `Ready`; leaf Certificate smoke green |
 | vault app | `vault-local` `Synced` + `Healthy`; HA raft trio, TLS via `vault-tls` leaf; `make smoke COMPONENT=vault` → initialized=true sealed=false; seed idempotent and HA-aware |
 | external-secrets app | `external-secrets-local` `Synced` + `Healthy`; `ClusterSecretStore vault` Ready (k8s-auth `external-secrets`, TLS via `vault-tls`); short `refreshInterval` (5m); `make smoke COMPONENT=external-secrets` → throwaway ExternalSecret `SecretSynced` + data verified |
@@ -147,6 +158,8 @@ password-grant token accepted by userinfo (`make smoke COMPONENT=keycloak`).
 | linkerd app | `linkerd-local` `Synced` + `Healthy` (dedicated Application); chart `linkerd/linkerd-control-plane` 1.16.11 (`stable-2.14.10`); control-plane Deployments `linkerd-identity`/`linkerd-destination`/`linkerd-proxy-injector` Ready; identity PKI in-cluster (ConfigMap `linkerd-identity-trust-roots` + cert-manager-issued Secret `linkerd-identity-issuer`, chain to `root.linkerd.cluster.local` verified); 3 admission webhooks wired; `make smoke COMPONENT=linkerd` green, including **data plane end-to-end**: preflight of the control-plane identity-leaf TTL, an injected `nginx-unprivileged`+`curl` workload (both pods carry `linkerd-proxy`), HTTP 200 through the mesh, live identity leaves and inbound+outbound success metrics; `local` raises `identity.issuer.issuanceLifetime` to `168h0m0s` (emulator clock skew; dev/qa/prod keep 24h) |
 | postgres-app app | `postgres-app-local` `Synced` + `Healthy` (dedicated Application, raw CRs); CNPG `Cluster postgres-app` Ready (1 instance local; image `18.4-system-trixie`), `keycloak-db` Ready (1 instance local); ESO `postgres-app-credentials` + `keycloak-db-credentials` `SecretSynced`; `pg_stat_statements` + `vector` + `wal_level=logical` verified through `app@app`; `make smoke COMPONENT=postgres-app` green |
 | kafka app | `kafka-local` `Synced` + `Healthy` (dedicated Application, raw CRs); Strimzi `Kafka/kafka` Ready (Kafka `4.2.0`), `KafkaNodePool/kafka` 1 dual-role node local; `KafkaUser/scram-admin` Ready; ESO `kafka-scram-admin` `SecretSynced` from `secret/kafka/local`; internal listener TLS + SCRAM-SHA-512; `make smoke COMPONENT=kafka` → topic create + produce/consume green |
+| nats app | `nats-local` `Synced` + `Healthy` (ApplicationSet element); chart/appVersion `nats/nats` 2.15.2 with JetStream enabled and a file-store PVC (1 node local/dev, 3-node JetStream cluster qa/prod); no `Stream`/`Consumer` CRs; `make smoke COMPONENT=nats` → server Ready, JetStream enabled, zero streams |
+| nack app | `nack-local` `Synced` + `Healthy` (ApplicationSet element, namespace `nats`); chart `nats/nack` 0.35.0 / controller 0.24.0; six `*.jetstream.nats.io` CRDs `Established`; watches all namespaces; `make smoke COMPONENT=nack` green |
 | redis app | `redis-local` `Synced` + `Healthy` (dedicated Application, raw CRs); `RedisReplication/redis` (1 replica local/dev) with embedded Sentinel only in qa/prod (3/3, mymaster); password from ESO `redis-password` via `secret/redis/<env>`; AOF on PVC, `redisExporter` enabled; `make smoke COMPONENT=redis` → PING/SET/GET and AOF verified; Sentinel checked in qa/prod |
 | keycloak app | `keycloak-local` `Synced` + `Healthy` (dedicated multi-source Application); chart `codecentric/keycloakx` 7.4.0 / Keycloak 26.8.1; StatefulSet `keycloak` Ready; `ExternalSecret/keycloak-admin` + `keycloak-db-credentials` + `keycloak-test-user` `SecretSynced`; realm `sca` imported from `ConfigMap/keycloak-realm-sca`; `Certificate/keycloak-tls` Ready; Kong Ingress `keycloak.local`; `make smoke COMPONENT=keycloak` → discovery issuer, `login_required` redirect, password-grant token + userinfo green |
 | git-local-serve | in-cluster git daemon (`git://<node>:9418/sca-infra.git`) `Ready` |
@@ -166,6 +179,7 @@ password-grant token accepted by userinfo (`make smoke COMPONENT=keycloak`).
 | 2 | **dev / qa / prod clusters pending** | Not provisioned (terraform/ansible outside this repo) | Provision per env; promote via `promote-test` (see [workflow.md](workflow.md)) |
 | 3 | **OpenSSF Best Practices badge — silver blocked** | All silver criteria are met except `contributors_unassociated` and `bus_factor` (≥2): the project has a single maintainer (`CODEOWNERS` = `@Santiago1010`) | Achieved once a second **unassociated** contributor joins and is reflected in `CODEOWNERS` + `.github/GOVERNANCE.md`; passing badge is already achievable (see [.github/GOVERNANCE.md](../.github/GOVERNANCE.md), [docs/ci-cd.md](ci-cd.md)) |
 | 4 | **OpenSSF Best Practices badge — gold blocked** | Beyond the silver gaps, gold requires `two_person_review` (≥50% of changes reviewed by someone other than the author), which is unrealisable while there is a single maintainer; all other gold criteria are Met or N/A (see [.github/SECURITY.md](../.github/SECURITY.md) security review, SPDX + copyright headers per source file) | Unblocked together with silver once a second, **unassociated** reviewer/maintainer exists; `two_person_review` then requires an explicit second reviewer on gold PRs |
+| 5 | **NATS JetStream is idle and unauthenticated** | The ready-but-idle tier ships no `Stream`/`Consumer` CRs and no client auth; the server is reachable only in-cluster (`nats.data.svc.cluster.local:4222`) | Add NATS accounts/credentials with the first consumer and wire them through Vault/ESO (the toggle contract); see [ADR-005](adr/adr-005-kafka-to-nats-jetstream.md) |
 
 ## Intentional exclusions
 
@@ -197,7 +211,7 @@ password-grant token accepted by userinfo (`make smoke COMPONENT=keycloak`).
 | Component/Migration | Status | Notes |
 | --- | --- | --- |
 | Keycloak → Zitadel | **Planned** | Complete replacement. Inventory in progress. |
-| Kafka/Strimzi → NATS JetStream | **Planned** | Togglable design. No current consumers. |
+| Kafka/Strimzi → NATS JetStream | **In progress (C1)** | NATS + NACK deployed idle (no `Stream`/`Consumer` CRs); togglable design, no current consumers. Kafka/Strimzi removal follows. |
 | Linkerd → CNI-native mTLS | **Planned** | PoC required in Floci first. |
 | Velero + Backups | **Done** | The three layers are implemented and live restore-validated on 2026-11-14: Velero scheduled backups, CNPG Barman base backups + WAL/PITR, and Vault Raft snapshot CronJob. `local` uses Floci S3; `dev`/`qa`/`prod` expect external buckets and Vault-provisioned credentials. See [backups.md](backups.md#validation-status). |
 | CNPG RDS replacement | **Done** | The PITR + latest-backup restore smoke (`bootstrap/smoke-postgres-app.sh`) passed live on 2026-11-14, closing the RDS replacement gate. |

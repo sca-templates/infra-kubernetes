@@ -20,6 +20,7 @@ worked in parallel.
 [04 linkerd-crds] ──────────────────────────────▶ [09 linkerd control plane]
 [05 cloudnative-pg] ──▶ [10 postgres-app]
 [06 strimzi] ─────────▶ [11 kafka]
+[06b nack] ───────────▶ [11b nats]   (NATS migration, #105)
 [07 redis-operator] ──▶ [12 redis]
 [08 kong]
 [13 keycloak]
@@ -32,8 +33,10 @@ worked in parallel.
   largely in parallel (each is an operator/CRD).
 - **Wave 0/20/30**: `02` Vault, `08` Kong, `09` linkerd control plane —
   sequential behind their dependencies.
-- **Wave 40**: datastores `10`–`12` (clusters/CRs) behind their operators.
-- **Wave 50**: `13` Keycloak behind its DB (`10`).
+- **Wave 40**: datastores `10`–`12` (clusters/CRs) behind their operators, plus
+  `11b` NATS JetStream (the ADR-005 replacement, deployed idle).
+- **Wave 50**: `13` Keycloak behind its DB (`10`); `06b` NACK after the NATS
+  server it connects to (`11b`).
 - **Wave 60**: observability `14`–`16` (parallel after data keys).
 - **Wave 80**: `18` Velero (local backend: Floci S3). Phase 17 (MinIO) is
   retired.
@@ -81,6 +84,8 @@ worked in parallel.
 | [linkerd](roadmap/linkerd.md) | Edge & Mesh | 30 | M1 control plane | [#14](https://github.com/sca-templates/infra-kubernetes/issues/14) | deployed |
 | [postgres-app](roadmap/postgres-app.md) | Data | 40 | M1 cluster · M1 keycloak-db | [#15](https://github.com/sca-templates/infra-kubernetes/issues/15) · [#27](https://github.com/sca-templates/infra-kubernetes/issues/27) · [#28](https://github.com/sca-templates/infra-kubernetes/issues/28) | deployed |
 | [kafka](roadmap/kafka.md) | Data | 40 | M1 cluster + SCRAM | [#16](https://github.com/sca-templates/infra-kubernetes/issues/16) | deployed |
+| [nats](roadmap/nats.md) | Data | 40 | C1 idle tier | [#105](https://github.com/sca-templates/infra-kubernetes/issues/105) | deployed (NATS migration C1, idle) |
+| [nack](roadmap/nack.md) | Data | 50 | C1 controller | [#105](https://github.com/sca-templates/infra-kubernetes/issues/105) | deployed (NATS migration C1) |
 | [redis](roadmap/redis.md) | Data | 40 | — | [#17](https://github.com/sca-templates/infra-kubernetes/issues/17) | deployed (Phase 12) |
 | [keycloak](roadmap/keycloak.md) | Security & Identity | 50 | M1 deploy | [#18](https://github.com/sca-templates/infra-kubernetes/issues/18) | deployed (Phase 13) |
 | [kube-prometheus-stack](roadmap/kube-prometheus-stack.md) | Observability | 60 | M1 stack · M2 radar | [#19](https://github.com/sca-templates/infra-kubernetes/issues/19) · [#29](https://github.com/sca-templates/infra-kubernetes/issues/29) | pending |
@@ -98,6 +103,7 @@ lands (see the Work Log below).
 
 | Date | Project | Gate | Commit | Issue |
 | --- | --- | --- | --- | --- |
+| 2026-11-15 | nats + nack | deployed idle (ADR-005 replacement, C1) — NATS chart/appVersion `2.15.2` in `data` at wave 40 with JetStream enabled, a file-store PVC and **no** `Stream`/`Consumer` CRs (1 node local/dev, 3-node JetStream cluster with PDB + preferred anti-affinity qa/prod); NACK chart `0.35.0` / controller `0.24.0` in `nats` at wave 50 (after the server it connects to), six `*.jetstream.nats.io` CRDs, cluster-wide watch; both are `ApplicationSet` elements (no dedicated apps); qa/prod anti-affinity uses the supported `podTemplate.merge.spec.affinity` shape; sidecar tags pinned to the chart defaults; smoke = `make smoke COMPONENT=nack` (CRDs `Established`, watch scope) and `make smoke COMPONENT=nats` (server Ready, JetStream enabled, zero streams); Kafka/Strimzi stay until the removal commit | `feat/nats` (PR) | [#105](https://github.com/sca-templates/infra-kubernetes/issues/105) |
 | 2026-11-14 | Phase B backups (velero, cloudnative-pg, vault) | live restore validation green on the Floci EKS substrate — Velero schedule-template `Backup` `Completed` (639 items) plus backup/restore round-trip, CNPG PITR + latest-backup restore, Vault Raft snapshot/upload, and a manual Vault Raft restore drill recovered a canary KV; ExternalSecrets stayed `SecretSynced` and ArgoCD apps were re-pointed to `main` | branch (PR) | — |
 | 2026-11-11 | cluster smoke preload (CI) | fix — `ctr images import` is pinned to the host platform, because Docker's OCI archive can reference attestation manifests it does not include and an unfiltered import fails with `content digest ...: not found` (containerd#11344); images are imported one at a time and any ref still missing is pulled directly into the node with `ctr images pull`, because the runner's containerd image store can write a multi-image `docker save` archive that references a config blob it does not include; the preload cache is scoped per mode (`chart-<chart>-images.tar`, `catalog-<env>-images.tar`) so the 2-image `argocd-up` preload can no longer replace the 25-image catalog cache before `bootstrap` loads it | `fix/cluster-smoke` (PR) | — |
 | 2026-11-11 | smoke tooling (WSL2 ECR, Vault init, preload) | local/CI parity fixes — `make eks-hosts` maps the emulated ECR hostname for WSL2 (Linux/macOS/CI and real ECR use DNS) and `make eks-up` fails fast when it is missing; `seed-vault.sh` archives stale init material when the live Vault is uninitialized, and `make eks-down`/cluster recreation archives it per cluster; the catalog preload inventories the node's containerd first, imports only missing refs, keeps the image cache instead of re-saving it every run, and bounds save/import with timeouts plus a heartbeat | `fix/cluster-smoke` (PR) | — |
@@ -185,7 +191,7 @@ The following epics are planned for cost optimization:
 | Epic | Area | Priority | Status | Notes |
 | --- | --- | --- | --- | --- |
 | Replace Keycloak with Zitadel | Security & Identity | High | Proposed | Complete replacement. Inventory dependencies first. |
-| Replace Kafka/Strimzi with NATS JetStream | Data | Medium | Proposed | Togglable between SNS/SQS and NATS. No consumers currently. |
+| Replace Kafka/Strimzi with NATS JetStream | Data | Medium | In progress | NATS + NACK deployed idle (C1); togglable between SNS/SQS and NATS, no consumers currently. Kafka/Strimzi removal follows. |
 | Replace Linkerd with CNI-native mTLS | Edge & Mesh | High | Proposed | PoC required. Loss of L7 features. |
 | Prioritize Velero + Backups (CNPG + Vault) | Delivery & Resilience | **Critical** | Done | Live restore validation passed on 2026-11-14; see [backups.md](backups.md#validation-status). |
 | Validate CNPG as RDS replacement | Data | High | Done | PITR + latest-backup restore passed live on 2026-11-14. |

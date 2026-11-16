@@ -15,8 +15,9 @@ ArgoCD is deployed (Phase 0); cert-manager (Phase 1), Vault (Phase 2),
 external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg
 (Phase 5), strimzi (Phase 6), redis-operator (Phase 7), Kong (Phase 8), the
 Linkerd control plane (Phase 9), postgres-app/keycloak-db (Phase 10), Kafka
-(Phase 11), Redis (Phase 12) and Keycloak (Phase 13) are deployed; the
-remaining 6 components are `planned`. The delivery plan lives in
+(Phase 11), Redis (Phase 12), Keycloak (Phase 13), NATS + NACK (the NATS
+migration's idle C1 tier) and Velero (Phase 18) are deployed; the four
+observability components (Phases 14-16) are `planned`. The delivery plan lives in
 [docs/roadmap.md](docs/roadmap.md) and what is actually deployed lives in
 [docs/status.md](docs/status.md).
 
@@ -82,14 +83,17 @@ and qa. See
 
 ## Platform Components
 
-The catalog is **18 components** plus ArgoCD. `local` runs the full set;
-`dev`/`qa`/`prod` run the operator/security core plus the gateway and Keycloak.
+The catalog is **18 components** plus ArgoCD in its target state; during the
+NATS migration it is **20** (NATS and NACK are deployed alongside Kafka/Strimzi
+until the removal commit). `local` runs the full set; `dev`/`qa`/`prod` run the
+operator/security core plus the gateway and Keycloak.
 **Currently deployed: ArgoCD (Phase 0), cert-manager (Phase 1), Vault
 (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg
 (Phase 5), strimzi (Phase 6), redis-operator (Phase 7), Kong (Phase 8), the
 Linkerd control plane (Phase 9), postgres-app/keycloak-db (Phase 10), Kafka
-(Phase 11), Redis (Phase 12) and Keycloak (Phase 13); every other component is
-`planned (Phase N)`.**
+(Phase 11), Redis (Phase 12), Keycloak (Phase 13), NATS + NACK (NATS migration
+C1, idle) and Velero (Phase 18); the four observability components (Phases
+14-16) are `planned`.**
 The status column in
 [docs/architecture.md](docs/architecture.md) is the source of truth for what is
 live.
@@ -98,7 +102,7 @@ live.
 | --- | --- |
 | Security and identity | cert-manager (deployed), Vault (deployed), External Secrets Operator (deployed), Keycloak (deployed) |
 | Edge and mesh | linkerd-crds (deployed), Kong (deployed), Linkerd control plane (deployed) |
-| Data | CloudNativePG (deployed), Strimzi (deployed), redis-operator (deployed), postgres-app/keycloak-db (deployed), Kafka (deployed), Redis (deployed) |
+| Data | CloudNativePG (deployed), Strimzi (deployed), redis-operator (deployed), postgres-app/keycloak-db (deployed), Kafka (deployed), NATS JetStream (deployed, idle), NACK (deployed), Redis (deployed) |
 | Observability | kube-prometheus-stack, Loki, Tempo, Alloy |
 | Delivery and resilience | Velero |
 
