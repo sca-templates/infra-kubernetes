@@ -7,8 +7,9 @@ cluster. Companion to [architecture.md](architecture.md) (the *state*) and
 ## Mental model
 
 - The repository is the single source of truth **for the platform catalog**.
-  `make bootstrap` seeds the catalog wiring (`apps-<env>` + `kong-<env>`) into
-  each environment cluster's ArgoCD and applies the root `Application`
+  `make bootstrap` seeds the catalog wiring (`apps-<env>` +
+  `messaging-<env>` + `kong-<env>`) into each environment cluster's ArgoCD and
+  applies the root `Application`
   (`argocd/root-app-<env>.yaml`, which owns the services registry); sync policies
   follow ADR-003.
 - **Services are not part of that catalog.** Each service is the owner of its
@@ -64,7 +65,7 @@ describes:
   centralized in `infra-kubernetes`. Advancing a component from one environment
   to the next is a **promotion**, and it is always a separate PR that touches
   only that env's `envs/<env>/` overlays plus `argocd/apps-<env>.yaml` (the
-  registry).
+  registry) or its optional `argocd/messaging-<env>.yaml` descriptors.
 - **Services** (microservices like `nest-authz`): they own their manifests in
   their own repo (`deploy/`), and their environment placement is an **ArgoCD
   Application sync** triggered from their `promote` workflow — not a PR in

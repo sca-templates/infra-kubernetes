@@ -31,8 +31,8 @@ live in [architecture.md](architecture.md).
 | **Linkerd**                   | Service mesh: mTLS identity, golden signals. CRDs deployed (Phase 4), control plane Phase 9 |
 | **CloudNativePG (CNPG)**      | PostgreSQL operator (`Cluster` CR). Phase 5, `postgres-app`/`keycloak-db` Phase 10         |
 | **Strimzi**                   | Kafka operator (KRaft); `Kafka` + `KafkaNodePool` CRs. Phases 6/11; removed in the NATS migration (ADR-005) |
-| **NATS JetStream**            | Event backbone replacing Kafka; idle tier (no `Stream`/`Consumer` CRs). NATS migration C1 |
-| **NACK**                      | NATS Controller for Kubernetes: installs the `Stream`/`Consumer` CRDs and reconciles them. NATS migration C1 |
+| **NATS JetStream**            | Event backbone replacing Kafka; idle tier (no `Stream`/`Consumer` CRs), optional per env. NATS migration C1/C2 |
+| **NACK**                      | NATS Controller for Kubernetes: installs the `Stream`/`Consumer` CRDs and reconciles them. NATS migration C1/C2 |
 | **redis-operator**            | Redis operator (`Redis` CR). Phases 7/12                                                   |
 | **Kong**                      | API gateway (DB-less, dedicated `Application`, no SSA). Phase 8                            |
 | **Keycloak**                  | OIDC IdP (realm `sca`). Phase 13                                                           |
@@ -59,7 +59,9 @@ Phase numbers refer to the roadmap in [roadmap.md](roadmap.md).
 | **`envs/<env>/`**                 | Per-environment overlays (one file per component)                                  |
 | **`infrastructure/<component>/`** | Per-component chart reference + shared values + CRs/manifests                      |
 | **`argocd/apps-<env>.yaml`**      | Per-env `ApplicationSet` generator — the platform component registry        |
+| **`argocd/messaging-<env>.yaml`** | Optional `ApplicationSet` (git files generator) for NATS/NACK; the descriptors under `argocd/messaging/<env>/` toggle the messaging mode |
+| **messaging contract**            | Vault KV-v2 `secret/messaging/<env>` (`mode` + `nats_url` or SNS/SQS coordinates) projected by each consumer through ESO |
 | **`argocd/services-<env>.yaml`**  | Per-env `ApplicationSet` for services (app-repo-as-source); dev/qa/prod only, never `local`. dev/qa elements track `main` (synced by the service's `promote` workflow); prod elements carry a `version` tag pin (`chore(services)` bump = the deploy go/no-go) |
 | **`promote` workflow**           | Per-service `workflow_dispatch` (wraps `shared-service-promote.yml`) that picks a branch/commit and syncs `<service>-dev` / `<service>-qa` via the ArgoCD API — replaces the retired `deploy/dev` · `deploy/qa` refs |
 | **`argocd/root-app-<env>.yaml`**  | Per-env root `Application` (owns only the services registry; `dev`/`qa`/`prod` only — `local` has none) |
-| **`{{GIT_REPO_URL}}`**            | Placeholder in `repoURL`/`targetRevision` fields of `argocd/apps-<env>.yaml`, `argocd/kong-<env>.yaml` and the root app. `make bootstrap` substitutes them host-side (the `sed` seam) when it seeds the platform `ApplicationSet`, the dedicated Kong app and the root app — the values used are the ref under test (the PR head in CI, `main` otherwise) |
+| **`{{GIT_REPO_URL}}`**            | Placeholder in `repoURL`/`targetRevision` fields of `argocd/apps-<env>.yaml`, `argocd/messaging-<env>.yaml`, the dedicated apps and the root app. `make bootstrap` substitutes them host-side (the `sed` seam) when it seeds the platform/messaging `ApplicationSet`s, the dedicated apps and the root app — the values used are the ref under test (the PR head in CI, `main` otherwise) |

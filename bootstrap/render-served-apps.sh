@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: MIT
 # render-served-apps.sh — push this repo's HEAD into the local git serve.
 # The serve carries the repo **verbatim**: `make bootstrap` seeds the ArgoCD
-# wiring (argocd/apps-<env>.yaml, argocd/kong-<env>.yaml) on the cluster directly
+# wiring (argocd/apps-<env>.yaml, argocd/messaging-<env>.yaml,
+# argocd/kong-<env>.yaml) on the cluster directly
 # with {{GIT_REPO_URL}}/{{GIT_TARGET_BRANCH}} resolved host-side, so nothing on
 # the serve needs substitution — ArgoCD reconciles the served content as-is, and
 # the generated component Applications read the same tree from the serve.
