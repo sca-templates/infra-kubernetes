@@ -98,20 +98,26 @@ if [ "${HAS_CLOUD}" = "1" ] && [ "${CLOUD_ON}" != "1" ]; then
   exit 2
 fi
 
-# Platform Applications, read from the repo so a newly-landed component is
-# covered for free: infrastructure/<c> → <c>-local.
-CATALOG=()
-for d in infrastructure/*/; do
-  [ -d "$d" ] || continue
-  c="${d%/}"; c="${c##*/}"
-  CATALOG+=("$c")
-done
-
 STATE_DIR=".generated"
 TIMEOUT="${SMOKE_TIMEOUT:-600}"
 POLL="${SMOKE_POLL:-10}"
 APP_SUFFIX="local"
 APPSET_NAME="platform-local"
+MESSAGING_APPSET_NAME="messaging-local"
+
+# Platform Applications, read from the repo so a newly-landed component is
+# covered for free: infrastructure/<c> → <c>-local. NATS/NACK are optional:
+# their descriptor in argocd/messaging/<env>/ is the ADR-005 toggle, so they
+# only enter the convergence gate when the local environment is in NATS mode.
+CATALOG=()
+for d in infrastructure/*/; do
+  [ -d "$d" ] || continue
+  c="${d%/}"; c="${c##*/}"
+  case "$c" in
+    nats | nack) [ -f "argocd/messaging/${APP_SUFFIX}/${c}.yaml" ] || continue ;;
+  esac
+  CATALOG+=("$c")
+done
 
 mkdir -p "${STATE_DIR}"
 
@@ -171,6 +177,8 @@ diagnose() {
   done
   echo "── diagnose: ApplicationSet/${APPSET_NAME}"
   kubectl get applicationset "${APPSET_NAME}" -n argocd -o yaml 2>/dev/null | tee "${STATE_DIR}/${APPSET_NAME}-diagnose.yaml" || true
+  echo "── diagnose: ApplicationSet/${MESSAGING_APPSET_NAME}"
+  kubectl get applicationset "${MESSAGING_APPSET_NAME}" -n argocd -o yaml 2>/dev/null | tee "${STATE_DIR}/${MESSAGING_APPSET_NAME}-diagnose.yaml" || true
   echo "── diagnose: pods (all namespaces not Running/Completed)"
   kubectl get pods -A --no-headers 2>/dev/null | grep -vE 'Running|Completed' || true
   echo "── diagnose: recent events (all namespaces, last 100)"
@@ -362,8 +370,9 @@ wait_for_healthy() {
 
 # ── boot the platform COMPLETE (real app-of-apps) ───────────────────────────
 # `make bootstrap` is the single owner of the catalog wiring: it seeds the
-# platform ApplicationSet (argocd/apps-<env>.yaml) and the dedicated Kong
-# Application (argocd/kong-<env>.yaml) with GIT_TARGET_BRANCH resolved to the PR
+# platform/messaging ApplicationSets (argocd/apps-<env>.yaml,
+# argocd/messaging-<env>.yaml) and the dedicated Kong Application
+# (argocd/kong-<env>.yaml) with GIT_TARGET_BRANCH resolved to the PR
 # head, so the children track the ref under test. No git serve is involved: the
 # host seeds the objects directly (the runner cannot reach the EKS node's pod
 # network). `local` runs no services, so there is no root Application to apply.

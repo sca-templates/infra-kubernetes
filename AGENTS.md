@@ -12,11 +12,12 @@ repo.
   projections. Services do **not** live here — each service owns its `deploy/`
   in its own repo (app-repo-as-source, [docs/onboarding-new-service.md](docs/onboarding-new-service.md)).
 - ArgoCD app-of-apps: `make bootstrap` seeds the platform catalog
-  (`apps-<env>.yaml` ApplicationSet + the dedicated `kong-<env>.yaml`,
-  `linkerd-<env>.yaml`, `postgres-app-<env>.yaml` and `kafka-<env>.yaml`
-  Applications) with `{{GIT_REPO_URL}}`/`{{GIT_TARGET_BRANCH}}` resolved
-  host-side; the root Application (`root-app-<env>.yaml`, `dev`/`qa`/`prod`
-  only) owns the services registry (`services-<env>.yaml`, never `local`).
+  (`apps-<env>.yaml` ApplicationSet + the optional `messaging-<env>.yaml`
+  ApplicationSet + the dedicated `kong-<env>.yaml`, `linkerd-<env>.yaml`,
+  `postgres-app-<env>.yaml` and `kafka-<env>.yaml` Applications) with
+  `{{GIT_REPO_URL}}`/`{{GIT_TARGET_BRANCH}}` resolved host-side; the root
+  Application (`root-app-<env>.yaml`, `dev`/`qa`/`prod` only) owns the services
+  registry (`services-<env>.yaml`, never `local`).
 - A **clean restart** of the previous `infra-kubernetes` (which churned in
   `fix` commits): a human-reviewed gate per logical change, rollback over
   forward-fix.
@@ -71,8 +72,8 @@ live under `infrastructure/<component>/` + `envs/<env>/`.
 | Linkerd control plane | `linkerd` | linkerd/linkerd-control-plane | mTLS identity, golden signals | [infra-linkerd](https://github.com/sca-templates/infra-linkerd) | **deployed** (Phase 9) |
 | postgres-app (+ keycloak-db) | `data` | CNPG `Cluster` CRs (raw) | App + Keycloak databases; all 4 envs | [infra-postgres](https://github.com/sca-templates/infra-postgres) | **deployed** (Phase 10) |
 | Kafka | `data` | `Kafka`/`KafkaNodePool` CRs | Event backbone, TLS + SCRAM | [infra-kafka](https://github.com/sca-templates/infra-kafka) | **deployed** (Phase 11) |
-| NATS JetStream | `data` | nats/nats (JetStream) | Event backbone (idle; no Stream/Consumer CRs) | — | **deployed** (NATS migration C1) |
-| NACK | `nats` | nats/nack | JetStream controller (Stream/Consumer CRDs) | — | **deployed** (NATS migration C1) |
+| NATS JetStream | `data` | nats/nats (JetStream) | Event backbone (idle; no Stream/Consumer CRs); optional per env | — | **deployed** (NATS migration C1/C2) |
+| NACK | `nats` | nats/nack | JetStream controller (Stream/Consumer CRDs); optional per env | — | **deployed** (NATS migration C1/C2) |
 | Redis | `data` | `RedisReplication` CR | Cache | [infra-redis](https://github.com/sca-templates/infra-redis) | **deployed** (Phase 12) |
 | Keycloak | `keycloak` | codecentric/keycloakx | OIDC IdP, realm `sca` | [infra-keycloak](https://github.com/sca-templates/infra-keycloak) | **deployed** (Phase 13) |
 | kube-prometheus-stack | `observability` | prometheus-community/kube-prometheus-stack | Metrics + Grafana + Alertmanager | [infra-prometheus](https://github.com/sca-templates/infra-prometheus) | planned (Phase 14) |

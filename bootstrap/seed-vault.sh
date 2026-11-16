@@ -279,6 +279,12 @@ kv_seed "secret/keycloak/test-user/${ENV}" username=smoke password="$(openssl ra
 kv_seed "secret/postgres-app/${ENV}" username=app password="$(openssl rand -hex 24)"
 kv_seed "secret/keycloak-db/${ENV}" username=keycloak password="$(openssl rand -hex 24)"
 kv_seed "secret/kafka/${ENV}" username=scram-admin password="$(openssl rand -hex 24)"
+# ADR-005 messaging contract. Consumers project this path through ESO; `mode`
+# selects the backend. NATS is the local default; SNS/SQS coordinates and
+# credentials are provisioned out of band when that mode is enabled.
+kv_seed "secret/messaging/${ENV}" \
+  mode=nats \
+  nats_url="nats://nats.data.svc.cluster.local:4222"
 kv_seed "secret/redis/${ENV}" password="$(openssl rand -hex 24)"
 kv_seed secret/grafana/admin username=admin password="$(openssl rand -hex 24)"
 kv_seed secret/unleash/admin username=admin password="$(openssl rand -hex 24)"

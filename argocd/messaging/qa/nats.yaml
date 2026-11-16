@@ -1,0 +1,7 @@
+name: nats
+namespace: data
+chartRepo: https://nats-io.github.io/k8s/helm/charts
+chart: nats
+targetRevision: 2.15.2
+wave: "40"
+manifestsPath: nats/manifests

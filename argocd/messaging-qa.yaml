@@ -1,0 +1,75 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: messaging-qa
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-20"
+spec:
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error
+  generators:
+    - git:
+        repoURL: "{{GIT_REPO_URL}}"
+        revision: "{{GIT_TARGET_BRANCH}}"
+        files:
+          - path: "argocd/messaging/qa/*.yaml"
+  template:
+    metadata:
+      name: '{{.name}}-qa'
+      namespace: argocd
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+      annotations:
+        argocd.argoproj.io/sync-wave: '{{.wave}}'
+    spec:
+      project: default
+      sources:
+        - repoURL: '{{.chartRepo}}'
+          chart: '{{.chart}}'
+          targetRevision: '{{.targetRevision}}'
+          helm:
+            releaseName: '{{.name}}'
+            valueFiles:
+              - '$values/infrastructure/{{.name}}/values-base.yaml'
+              - '$values/envs/qa/{{.name}}.yaml'
+        - repoURL: "{{GIT_REPO_URL}}"
+          targetRevision: "{{GIT_TARGET_BRANCH}}"
+          ref: values
+        - repoURL: "{{GIT_REPO_URL}}"
+          targetRevision: "{{GIT_TARGET_BRANCH}}"
+          path: infrastructure/{{.manifestsPath}}
+          directory:
+            recurse: true
+      ignoreDifferences:
+        - group: apiextensions.k8s.io
+          kind: CustomResourceDefinition
+          jqPathExpressions:
+            - .spec.versions[].schema
+            - .status
+            - .spec.conversion
+            - .spec.names.listKind
+            - .spec.preserveUnknownFields
+        - group: apps
+          kind: StatefulSet
+          jqPathExpressions:
+            - .spec.volumeClaimTemplates[].apiVersion
+            - .spec.volumeClaimTemplates[].kind
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{.namespace}}'
+      syncPolicy:
+        automated:
+          prune: false
+          selfHeal: true
+        retry:
+          limit: 10
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 3m
+        syncOptions:
+          - CreateNamespace=true
+          - ApplyOutOfSyncOnly=true
+          - ServerSideApply=true

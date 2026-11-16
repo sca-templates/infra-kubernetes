@@ -19,7 +19,8 @@ streams (1 node local/dev, 3-node JetStream cluster qa/prod).
               preferred anti-affinity (under `podTemplate.merge.spec.affinity`)
         - [x] sidecars pinned to the chart defaults (`reloader` 0.24.0,
               `nats-box` 0.20.0)
-  - [x] `ApplicationSet` element (name `nats`, namespace `data`, wave 40)
+  - [x] optional `ApplicationSet` element (name `nats`, namespace `data`, wave 40)
+        - [x] descriptor `argocd/messaging/<env>/nats.yaml`
         - [x] no `Stream`/`Consumer` CRs in git: the tier is ready but idle
   - [x] smoke: server Ready, JetStream enabled, zero streams
         - [x] `bootstrap/smoke-nats.sh` (`make smoke COMPONENT=nats`)
@@ -37,3 +38,33 @@ Notes:
 - `local`/`dev` run one node (no JetStream R3); `qa`/`prod` run three with a PDB
   and `preferred` anti-affinity so the profile stays schedulable on the
   single-node promote substrate.
+
+## Milestone M2 — SNS/SQS vs NATS toggle
+
+M2 done when: each environment can switch backends from git alone, the NATS
+ApplicationSet disappears in SNS/SQS mode, and consumers have a stable
+endpoint/credential contract.
+
+- [x] Issue #105 · optional `messaging-<env>` `ApplicationSet`
+  - [x] git files generator over `argocd/messaging/<env>/*.yaml`
+  - [x] `nats.yaml` + `nack.yaml` descriptors present in NATS mode (all envs)
+  - [x] removing the descriptors switches that env to SNS/SQS (nothing in-cluster)
+  - [x] `resources-finalizer` prunes the Applications/resources on removal
+- [x] messaging contract `secret/messaging/<env>` (KV-v2)
+  - [x] `mode` + `nats_url`; SNS/SQS coordinates provisioned out of band
+  - [x] local seed in `bootstrap/seed-vault.sh`
+- [x] platform wiring
+  - [x] `argocd/messaging-<env>.yaml` applied by `make bootstrap`
+  - [x] image preload resolves the optional descriptors
+  - [x] `smoke-ci.sh` gates NATS/NACK only when the local descriptors exist
+
+Notes:
+
+- The mandatory platform list (`argocd/apps-<env>.yaml`) no longer owns
+  NATS/NACK. The optional ApplicationSet uses the same app names
+  (`nats-<env>`/`nack-<env>`), so smokes and catalog discovery are unchanged.
+- The toggle is at descriptor-file level rather than a Helm values flag: the
+  platform list generator cannot express a per-env optional component, and a
+  git files generator makes the file set in git the single source of truth.
+- Follow-up (C4): enable NATS accounts/credentials with the first consumer and
+  extend the contract; no consumer exists yet, so the tier stays unauthenticated.

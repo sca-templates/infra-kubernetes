@@ -17,9 +17,11 @@
 #       one chart (used by `make argocd-up` for argo-cd)
 #   preload-chart-images.sh --catalog <env>
 #       every platform Application for <env>: the `argocd/apps-<env>.yaml`
-#       ApplicationSet elements plus the dedicated Applications
-#       (`argocd/*-<env>.yaml`, e.g. kong), rendered with the same values files
-#       ArgoCD uses (`infrastructure/<c>/values-base.yaml` + `envs/<env>/<c>.yaml`)
+#       ApplicationSet elements, the optional `argocd/messaging-<env>.yaml`
+#       descriptors (`argocd/messaging/<env>/*.yaml`) and the dedicated
+#       Applications (`argocd/*-<env>.yaml`, e.g. kong), rendered with the same
+#       values files ArgoCD uses
+#       (`infrastructure/<c>/values-base.yaml` + `envs/<env>/<c>.yaml`)
 #
 # Flow (both modes):
 #   1. resolve the image refs from `helm template` (never drifts from manifests)
@@ -195,10 +197,24 @@ catalog_images() {
     | jq -r '.spec.generators[] | select(.list) | .list.elements[]
              | [.name, .namespace, .chartRepo, .chart, .targetRevision] | @tsv')
 
+  # Optional messaging ApplicationSet (ADR-005 toggle): its git files generator
+  # reads these descriptors and only generates the apps whose files exist.
+  while IFS= read -r f; do
+    while IFS=$'\t' read -r name ns repo chart version; do
+      [ -n "${name}" ] || continue
+      local args=("${name}-preload" "${chart}" --repo "${repo}" --version "${version}" --namespace "${ns}")
+      for file in "infrastructure/${name}/values-base.yaml" "envs/${env}/${name}.yaml"; do
+        [ -f "${file}" ] && args+=(-f "${file}")
+      done
+      images+="$(render_images "${args[@]}")"$'\n'
+    done < <(npx --yes js-yaml@4.1.0 "${f}" \
+      | jq -r '[.name, .namespace, .chartRepo, .chart, .targetRevision] | @tsv')
+  done < <(find "argocd/messaging/${env}" -maxdepth 1 -type f -name '*.yaml' 2>/dev/null | sort)
+
   # Dedicated Applications (not part of the ApplicationSet), e.g. kong.
   while IFS= read -r f; do
     case "${f}" in
-      */apps-* | */root-app-* | */services-* | *-smoke*) continue ;;
+      */apps-* | */messaging-* | */root-app-* | */services-* | *-smoke*) continue ;;
     esac
     while IFS=$'\t' read -r repo chart version; do
       [ -n "${chart}" ] || continue

@@ -41,9 +41,9 @@ make status
   needs sudo). Linux/macOS/CI resolve it natively, and a real ECR registry uses
   DNS — no hosts entry is needed there.
 - `make bootstrap` installs ArgoCD, seeds the platform catalog wiring
-  (`argocd/apps-<env>.yaml` plus the dedicated `kong-<env>`, `linkerd-<env>`,
-  `postgres-app-<env>`, `kafka-<env>`, `redis-<env>` and `keycloak-<env>`
-  Applications) and applies the
+  (`argocd/apps-<env>.yaml`, the optional `argocd/messaging-<env>.yaml` plus
+  the dedicated `kong-<env>`, `linkerd-<env>`, `postgres-app-<env>`,
+  `kafka-<env>`, `redis-<env>` and `keycloak-<env>` Applications) and applies the
   environment root Application (services registry). `GIT_REPO_URL` comes from
   `.env` (see `.env.example`); a live URL is a Phase 1 requirement. In `local`
   the component Applications can reconcile a fully-local in-cluster git serve

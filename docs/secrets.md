@@ -49,6 +49,7 @@ script adapts as components land).
 | `secret/keycloak-db/<env>` | Phase 10 | keycloak-db `Cluster` via CNPG; Keycloak DB credential via ESO |
 | `secret/kafka/<env>` | Phase 11 seed | Kafka SCRAM `scram-admin` (ESO → `kafka-scram-admin` → `KafkaUser`) |
 | `secret/redis/<env>` | Phase 12 seed (`seed-vault.sh`) | Redis `Secret` auth via ESO → `redis-password` |
+| `secret/messaging/<env>` | NATS migration C2 seed (`local`); out of band elsewhere | Messaging contract: `mode` + `nats_url` or SNS/SQS coordinates, projected by each consumer via ESO |
 | `secret/keycloak/admin` | Phase 13 seed | Keycloak bootstrap admin via ESO |
 | `secret/keycloak/test-user/<env>` | Phase 13 seed | Keycloak realm import + smoke user via ESO |
 | `secret/grafana/admin` | Phase 14 | Grafana admin |
