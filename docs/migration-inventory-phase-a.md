@@ -26,9 +26,10 @@ Keycloak components to remove and replace with Zitadel:
 
 ## 3. Kafka/Strimzi References (203 total found)
 
-> **Historical inventory (ADR-005 C1–C3).** All items below were removed in C3
-> (2026-11-16); NATS/NACK are the sole event backbone. The list is kept as the
-> migration record.
+> **Historical inventory (ADR-005 C1–C4).** All items below were removed in C3
+> (2026-11-16); NATS/NACK are the sole event backbone. C4 (2026-11-17) added the
+> toggle and service-owned topology runbook in [messaging.md](messaging.md).
+> The list is kept as the migration record.
 
 - **Strimzi operator**: infrastructure/strimzi/, in all apps-*.yaml
 - **Kafka CRs**: infrastructure/kafka/, argocd/kafka-*.yaml
@@ -37,7 +38,8 @@ Keycloak components to remove and replace with Zitadel:
 - **Namespace**: strimzi, data contains Kafka CRs
 - **Smoke tests**: bootstrap/smoke-kafka.sh
 
-**Action**: Replace with NATS JetStream (togglable), remove all Kafka/Strimzi.
+**Action**: Completed in C1–C4 — NATS JetStream (togglable) replaced
+Kafka/Strimzi; see [messaging.md](messaging.md) for the toggle procedure.
 
 ## 4. CNPG/Postgres References
 
