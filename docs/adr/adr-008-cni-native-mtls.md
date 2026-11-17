@@ -110,6 +110,14 @@ k3s Docker substrate, Cilium chart `1.20.5` with `kubeProxyReplacement: false`,
 WireGuard enabled, a cross-node HTTP smoke and teardown. The PoC was not run in
 D1; D2 owns the evidence and may still open the Calico fallback amendment.
 
+D2 attempt 1 (2026-11-17) failed before Cilium install: k3s `v1.37.2` rejected
+the host's cgroup v1 (`fail-cgroupv1=true` by default), so the kubelet exited
+and the API never became stable. The later capture and smoke errors were only
+cascading effects, and cleanup succeeded. The harness now passes
+`fail-cgroupv1=false` to both kubelets; the D2 rerun is pending. This is a
+substrate compatibility finding, not a WireGuard result or grounds for the
+Calico fallback.
+
 ## D1 decisions and open questions
 
 - The PoC substrate is a separate two-node k3s Docker cluster, not Floci. It

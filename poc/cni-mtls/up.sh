@@ -38,6 +38,7 @@ docker run --detach \
   --disable traefik \
   --disable servicelb \
   --node-label cni-mtls.sca.local/role=server \
+  --kubelet-arg=fail-cgroupv1=false \
   --tls-san 127.0.0.1 \
   --tls-san localhost
 
@@ -68,7 +69,8 @@ docker run --detach \
   --env "K3S_URL=https://${CNI_MTLS_SERVER_IP}:6443" \
   --env "K3S_TOKEN=${K3S_TOKEN}" \
   "${CNI_MTLS_K3S_IMAGE}" agent \
-  --node-label cni-mtls.sca.local/role=agent
+  --node-label cni-mtls.sca.local/role=agent \
+  --kubelet-arg=fail-cgroupv1=false
 
 for attempt in $(seq 1 60); do
   if kube get --raw=/readyz >/dev/null 2>&1; then

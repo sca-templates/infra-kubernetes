@@ -27,7 +27,9 @@ pin; never use a floating tag.
 - Docker with permission to run privileged containers.
 - The repository-pinned `kubectl` and `helm` (`make prereqs`).
 - `openssl` and `jq`.
-- Kernel WireGuard support on the Docker host.
+- Kernel WireGuard support on the Docker host. On cgroup v1 hosts, `up.sh`
+  passes `fail-cgroupv1=false` to both kubelets; this PoC-only override keeps
+  Kubernetes `1.37` runnable there and is not a platform cgroup guarantee.
 
 ## Run
 
