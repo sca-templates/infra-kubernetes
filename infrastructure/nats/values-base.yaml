@@ -5,8 +5,8 @@
 # set in argocd/apps-<env>.yaml; the images are pinned here to the same versions
 # the chart ships, never `latest`.
 #
-# NATS (wave 40) is the JetStream event backbone that replaces Kafka/Strimzi
-# (ADR-005). It is deployed "ready but idle": the server runs with JetStream
+# NATS (wave 40) is the JetStream event backbone (ADR-005). It is deployed
+# "ready but idle": the server runs with JetStream
 # enabled and its CRDs are installed, but no `Stream`/`Consumer` CR ships — the
 # declarative JetStream resources arrive per consumer, managed by the NACK
 # controller (wave 50, its own `nack` element in the catalog). The server is a

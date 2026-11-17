@@ -50,7 +50,7 @@ the CI blocks pushes that leak them.
 ## Scope
 
 This policy covers the infrastructure-as-code in this repository. The
-services it deploys (Kong, Keycloak, Kafka, Redis, PostgreSQL, …) follow the
+services it deploys (Kong, Keycloak, Redis, PostgreSQL, NATS, …) follow the
 security policy of their own upstream projects and of the
 [sca-docs](https://github.com/sca-templates/sca-docs) ecosystem notes.
 

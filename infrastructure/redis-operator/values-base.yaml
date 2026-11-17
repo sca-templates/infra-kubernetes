@@ -33,8 +33,8 @@ redisOperator:
   imagePullPolicy: IfNotPresent
   # Empty = watch every namespace (the chart then renders no WATCH_NAMESPACE
   # env at all). The Redis datastores run in `data` (Phase 12), not in the
-  # operator's own namespace. Same reasoning as Strimzi's watchAnyNamespace and
-  # CloudNativePG's config.clusterWide — RBAC is cluster-scoped either way
+  # operator's own namespace. Same reasoning as CloudNativePG's config.clusterWide
+  # — RBAC is cluster-scoped either way
   # (rbac.scope: cluster), this only widens what it reconciles.
   watchNamespace: ""
   # The webhook server only gates the masterSlaveAntiAffinity feature; it needs

@@ -14,7 +14,7 @@
 # server is reachable.
 #
 # The chart ships the CRDs in its `crds/` bundle; ArgoCD applies them with
-# `--include-crds` (same mechanism as Kong and Strimzi).
+# `--include-crds` (same mechanism as Kong).
 #
 # Deployment name is `nack` and it lives in namespace `nats` — the element's
 # namespace in the ApplicationSet (`useLegacyNames` keeps `.Release.Name`).

@@ -2,8 +2,8 @@
 # Copyright (c) 2026 sca-templates contributors
 # SPDX-License-Identifier: MIT
 # smoke-nats.sh — verify the NATS JetStream server is deployed and that
-# JetStream is enabled and idle. NATS (ADR-005) replaces Kafka/Strimzi as the
-# event backbone; it ships "ready but idle" — the server runs with JetStream on
+# JetStream is enabled and idle. NATS (ADR-005) is the event backbone; it ships
+# "ready but idle" — the server runs with JetStream on
 # and no `Stream`/`Consumer` CR in git, so the smoke proves JetStream answers
 # and the default account holds zero streams. The chart's `nats-box` pod (the
 # NATS CLI) is the tool used to query the server from inside the cluster.

@@ -19,8 +19,8 @@ worked in parallel.
 [01 cert-manager] ──▶ [02 vault] ──▶ [03 external-secrets]
 [04 linkerd-crds] ──────────────────────────────▶ [09 linkerd control plane]
 [05 cloudnative-pg] ──▶ [10 postgres-app]
-[06 strimzi] ─────────▶ [11 kafka]
-[06b nack] ───────────▶ [11b nats]   (NATS migration, #105)
+[06 strimzi] ──╳ retired (ADR-005 C3; Kafka/Strimzi removed)
+[11b nats] ───────────▶ [06b nack]   (NATS migration, #105)
 [07 redis-operator] ──▶ [12 redis]
 [08 kong]
 [13 keycloak]
@@ -29,12 +29,12 @@ worked in parallel.
 [18 velero]
 ```
 
-- **Wave −20/−10**: security + operator layer — `01`–`07` install first,
-  largely in parallel (each is an operator/CRD).
+- **Wave −20/−10**: security + operator layer — `01`–`05` and `07` install
+  first, largely in parallel (each is an operator/CRD or the Vault base).
 - **Wave 0/20/30**: `02` Vault, `08` Kong, `09` linkerd control plane —
   sequential behind their dependencies.
-- **Wave 40**: datastores `10`–`12` (clusters/CRs) behind their operators, plus
-  `11b` NATS JetStream (the ADR-005 replacement, deployed idle).
+- **Wave 40**: datastores `10`, `11b` and `12` (clusters/CRs) behind their
+  operators; `11b` NATS JetStream is the ADR-005 event backbone, deployed idle.
 - **Wave 50**: `13` Keycloak behind its DB (`10`); `06b` NACK after the NATS
   server it connects to (`11b`).
 - **Wave 60**: observability `14`–`16` (parallel after data keys).
@@ -78,14 +78,14 @@ worked in parallel.
 | [external-secrets](roadmap/external-secrets.md) | Security & Identity | -10 | — | [#8](https://github.com/sca-templates/infra-kubernetes/issues/8) | deployed |
 | [linkerd-crds](roadmap/linkerd-crds.md) | Edge & Mesh | -10 | — | [#9](https://github.com/sca-templates/infra-kubernetes/issues/9) | deployed |
 | [cloudnative-pg](roadmap/cloudnative-pg.md) | Data | -10 | — | [#10](https://github.com/sca-templates/infra-kubernetes/issues/10) | deployed |
-| [strimzi](roadmap/strimzi.md) | Data | -10 | — | [#11](https://github.com/sca-templates/infra-kubernetes/issues/11) | deployed |
+| [strimzi](roadmap/strimzi.md) | Data | -10 | — | [#11](https://github.com/sca-templates/infra-kubernetes/issues/11) | removed (ADR-005 C3) |
 | [redis-operator](roadmap/redis-operator.md) | Data | -10 | — | [#12](https://github.com/sca-templates/infra-kubernetes/issues/12) | deployed |
 | [kong](roadmap/kong.md) | Edge & Mesh | 20 | M1 dedicated app | [#13](https://github.com/sca-templates/infra-kubernetes/issues/13) | deployed |
 | [linkerd](roadmap/linkerd.md) | Edge & Mesh | 30 | M1 control plane | [#14](https://github.com/sca-templates/infra-kubernetes/issues/14) | deployed |
 | [postgres-app](roadmap/postgres-app.md) | Data | 40 | M1 cluster · M1 keycloak-db | [#15](https://github.com/sca-templates/infra-kubernetes/issues/15) · [#27](https://github.com/sca-templates/infra-kubernetes/issues/27) · [#28](https://github.com/sca-templates/infra-kubernetes/issues/28) | deployed |
-| [kafka](roadmap/kafka.md) | Data | 40 | M1 cluster + SCRAM | [#16](https://github.com/sca-templates/infra-kubernetes/issues/16) | deployed |
-| [nats](roadmap/nats.md) | Data | 40 | C1 idle tier · C2 toggle | [#105](https://github.com/sca-templates/infra-kubernetes/issues/105) | deployed (NATS migration C1/C2, idle; optional per env) |
-| [nack](roadmap/nack.md) | Data | 50 | C1 controller · C2 toggle | [#105](https://github.com/sca-templates/infra-kubernetes/issues/105) | deployed (NATS migration C1/C2; optional per env) |
+| [kafka](roadmap/kafka.md) | Data | 40 | M1 cluster + SCRAM | [#16](https://github.com/sca-templates/infra-kubernetes/issues/16) | removed (ADR-005 C3) |
+| [nats](roadmap/nats.md) | Data | 40 | C1 idle tier · C2 toggle · C3 cutover | [#105](https://github.com/sca-templates/infra-kubernetes/issues/105) | deployed (NATS migration C1/C2/C3, idle; optional per env) |
+| [nack](roadmap/nack.md) | Data | 50 | C1 controller · C2 toggle · C3 cutover | [#105](https://github.com/sca-templates/infra-kubernetes/issues/105) | deployed (NATS migration C1/C2/C3; optional per env) |
 | [redis](roadmap/redis.md) | Data | 40 | — | [#17](https://github.com/sca-templates/infra-kubernetes/issues/17) | deployed (Phase 12) |
 | [keycloak](roadmap/keycloak.md) | Security & Identity | 50 | M1 deploy | [#18](https://github.com/sca-templates/infra-kubernetes/issues/18) | deployed (Phase 13) |
 | [kube-prometheus-stack](roadmap/kube-prometheus-stack.md) | Observability | 60 | M1 stack · M2 radar | [#19](https://github.com/sca-templates/infra-kubernetes/issues/19) · [#29](https://github.com/sca-templates/infra-kubernetes/issues/29) | pending |
@@ -103,6 +103,7 @@ lands (see the Work Log below).
 
 | Date | Project | Gate | Commit | Issue |
 | --- | --- | --- | --- | --- |
+| 2026-11-16 | nats + nack | cutover landed (ADR-005 C3) — removed Strimzi, the Kafka CRs and all Kafka-specific wiring: `infrastructure/{kafka,strimzi}/`, `argocd/kafka-<env>.yaml`, `envs/<env>/strimzi.yaml`, the `strimzi` platform-list entry and the `kafka` dedicated-app seed, the Vault `secret/kafka/<env>` seed, the `kafka`/`strimzi` smoke targets and the CI path filters; the catalog returns to 18 components with NATS/NACK as the sole event backbone (still idle, optional per env); historical Work Log entries and the ADR-005 decision left intact | branch (PR) | [#105](https://github.com/sca-templates/infra-kubernetes/issues/105) |
 | 2026-11-16 | nats + nack | toggle landed (ADR-005 C2) — optional `messaging-<env>` `ApplicationSet` backed by a git files generator over `argocd/messaging/<env>/*.yaml`; `nats.yaml` + `nack.yaml` descriptors present in NATS mode (all four envs) and removed for SNS/SQS mode (nothing in-cluster), with `resources-finalizer` so disabling prunes the Application/resources; the mandatory platform list no longer owns NATS/NACK; per-env values overlays stay in git; runtime contract `secret/messaging/<env>` (`mode=nats`, `nats_url`) seeded locally and provisioned out of band elsewhere; smoke-ci only gates NATS/NACK when the local descriptors exist; chart/image pins unchanged | branch (PR) | [#105](https://github.com/sca-templates/infra-kubernetes/issues/105) |
 | 2026-11-15 | nats + nack | deployed idle (ADR-005 replacement, C1) — NATS chart/appVersion `2.15.2` in `data` at wave 40 with JetStream enabled, a file-store PVC and **no** `Stream`/`Consumer` CRs (1 node local/dev, 3-node JetStream cluster with PDB + preferred anti-affinity qa/prod); NACK chart `0.35.0` / controller `0.24.0` in `nats` at wave 50 (after the server it connects to), six `*.jetstream.nats.io` CRDs, cluster-wide watch; both were `ApplicationSet` elements at C1 (moved to the optional `messaging-<env>` ApplicationSet in C2, no dedicated apps); qa/prod anti-affinity uses the supported `podTemplate.merge.spec.affinity` shape; sidecar tags pinned to the chart defaults; smoke = `make smoke COMPONENT=nack` (CRDs `Established`, watch scope) and `make smoke COMPONENT=nats` (server Ready, JetStream enabled, zero streams); Kafka/Strimzi stay until the removal commit | `feat/nats` (PR) | [#105](https://github.com/sca-templates/infra-kubernetes/issues/105) |
 | 2026-11-14 | Phase B backups (velero, cloudnative-pg, vault) | live restore validation green on the Floci EKS substrate — Velero schedule-template `Backup` `Completed` (639 items) plus backup/restore round-trip, CNPG PITR + latest-backup restore, Vault Raft snapshot/upload, and a manual Vault Raft restore drill recovered a canary KV; ExternalSecrets stayed `SecretSynced` and ArgoCD apps were re-pointed to `main` | branch (PR) | — |
@@ -192,7 +193,7 @@ The following epics are planned for cost optimization:
 | Epic | Area | Priority | Status | Notes |
 | --- | --- | --- | --- | --- |
 | Replace Keycloak with Zitadel | Security & Identity | High | Proposed | Complete replacement. Inventory dependencies first. |
-| Replace Kafka/Strimzi with NATS JetStream | Data | Medium | In progress | NATS + NACK deployed idle behind the optional `messaging-<env>` ApplicationSet (C2); remove the descriptors for SNS/SQS mode, contract in `secret/messaging/<env>`. No consumers currently. Kafka/Strimzi removal follows. |
+| Replace Kafka/Strimzi with NATS JetStream | Data | Medium | Done (C1–C3) | NATS + NACK deployed idle behind the optional `messaging-<env>` ApplicationSet; remove the descriptors for SNS/SQS mode, contract in `secret/messaging/<env>`. Kafka/Strimzi removed in C3; stream/consumer topology is service-owned (C4). No consumers currently. |
 | Replace Linkerd with CNI-native mTLS | Edge & Mesh | High | Proposed | PoC required. Loss of L7 features. |
 | Prioritize Velero + Backups (CNPG + Vault) | Delivery & Resilience | **Critical** | Done | Live restore validation passed on 2026-11-14; see [backups.md](backups.md#validation-status). |
 | Validate CNPG as RDS replacement | Data | High | Done | PITR + latest-backup restore passed live on 2026-11-14. |

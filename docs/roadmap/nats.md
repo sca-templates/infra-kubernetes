@@ -28,13 +28,13 @@ streams (1 node local/dev, 3-node JetStream cluster qa/prod).
 
 Notes:
 
-- NATS is the ADR-005 replacement for Kafka/Strimzi. It lands **idle**: the
-  server and its file store are ready, but the declarative JetStream resources
-  arrive per consumer (reconciled by NACK) once the toggle and the consumers
-  exist. No client auth in this tier yet; the server is reachable only
-  in-cluster (`nats.data.svc.cluster.local:4222`).
-- Kafka/Strimzi remain deployed until the removal commit, so the platform runs
-  both backbones while the migration is in progress.
+- NATS is the ADR-005 event backbone. It lands **idle**: the server and its file
+  store are ready, but the declarative JetStream resources arrive per consumer
+  (reconciled by NACK) once the consumers exist. No client auth in this tier
+  yet; the server is reachable only in-cluster
+  (`nats.data.svc.cluster.local:4222`).
+- Kafka/Strimzi were removed in C3, leaving NATS/NACK as the sole event
+  backbone. Stream/consumer topology is service-owned (C4).
 - `local`/`dev` run one node (no JetStream R3); `qa`/`prod` run three with a PDB
   and `preferred` anti-affinity so the profile stays schedulable on the
   single-node promote substrate.

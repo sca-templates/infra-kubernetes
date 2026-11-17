@@ -1,5 +1,8 @@
 # Project: Implement Kafka
 
+> **Retired (ADR-005 C3, 2026-11-16).** Kafka was removed from the platform;
+> this file is kept as delivery history. See [nats.md](nats.md).
+
 Area: Data · Wave 40 · Environments: local→dev→qa→prod
 Depends on: strimzi (#11) — operator must be present.
 Project done when: `Kafka`/`KafkaNodePool` CRs present; broker pods `Running`;

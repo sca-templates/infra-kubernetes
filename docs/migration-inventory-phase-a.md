@@ -26,6 +26,10 @@ Keycloak components to remove and replace with Zitadel:
 
 ## 3. Kafka/Strimzi References (203 total found)
 
+> **Historical inventory (ADR-005 C1–C3).** All items below were removed in C3
+> (2026-11-16); NATS/NACK are the sole event backbone. The list is kept as the
+> migration record.
+
 - **Strimzi operator**: infrastructure/strimzi/, in all apps-*.yaml
 - **Kafka CRs**: infrastructure/kafka/, argocd/kafka-*.yaml
 - **Env configs**: envs/*/strimzi.yaml

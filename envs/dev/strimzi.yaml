@@ -1,4 +1,0 @@
-# strimzi — dev profile (shared integration, reduced footprint). Matches the
-# base defaults; declared for tier symmetry.
-
-replicas: 1

@@ -15,7 +15,7 @@ live in [architecture.md](architecture.md).
 | **CR** / **CRD**   | Custom Resource / Custom Resource Definition; CRDs are installed by operators, CRs are the actual instances                                    |
 | **GitOps**         | Git is the single source of truth; the cluster converges toward it                                                                             |
 | **JetStream**      | NATS persistence layer (streams/consumers) enabled on the server and reconciled through NACK                                                   |
-| **Operator**       | Controller + CRDs; reconciles the cluster toward a desired state (CNPG, Strimzi, redis-operator, cert-manager, ESO)                            |
+| **Operator**       | Controller + CRDs; reconciles the cluster toward a desired state (CNPG, redis-operator, cert-manager, ESO, NACK)                            |
 | **promote-test**   | Validating an env overlay (dev/qa/prod) on a local (Floci emulated EKS) cluster before promotion ([workflow.md](workflow.md))                 |
 | **radar**          | The alert/notification layer (PrometheusRules severity `info`) that flags prod sync windows ([observability-radar.md](observability-radar.md)) |
 | **SSA**            | Server-Side Apply, a sync strategy; deliberately **not** global in this repo (breaks Kong's flat CRDs)                                         |
@@ -30,9 +30,8 @@ live in [architecture.md](architecture.md).
 | **External Secrets Operator** | Projects Vault KV → native `Secret`s. Phase 3 (deployed) |
 | **Linkerd**                   | Service mesh: mTLS identity, golden signals. CRDs deployed (Phase 4), control plane Phase 9 |
 | **CloudNativePG (CNPG)**      | PostgreSQL operator (`Cluster` CR). Phase 5, `postgres-app`/`keycloak-db` Phase 10         |
-| **Strimzi**                   | Kafka operator (KRaft); `Kafka` + `KafkaNodePool` CRs. Phases 6/11; removed in the NATS migration (ADR-005) |
-| **NATS JetStream**            | Event backbone replacing Kafka; idle tier (no `Stream`/`Consumer` CRs), optional per env. NATS migration C1/C2 |
-| **NACK**                      | NATS Controller for Kubernetes: installs the `Stream`/`Consumer` CRDs and reconciles them. NATS migration C1/C2 |
+| **NATS JetStream**            | Event backbone (ADR-005); idle tier (no `Stream`/`Consumer` CRs), optional per env. NATS migration C1/C2/C3 |
+| **NACK**                      | NATS Controller for Kubernetes: installs the `Stream`/`Consumer` CRDs and reconciles them. NATS migration C1/C2/C3 |
 | **redis-operator**            | Redis operator (`Redis` CR). Phases 7/12                                                   |
 | **Kong**                      | API gateway (DB-less, dedicated `Application`, no SSA). Phase 8                            |
 | **Keycloak**                  | OIDC IdP (realm `sca`). Phase 13                                                           |

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-11-15)
+Accepted (2026-11-15); implemented in C1–C3 (2026-11-16)
 
 ## Context
 
@@ -49,5 +49,7 @@ Replace Kafka/Strimzi with NATS JetStream. NATS must be configurable/togglable t
 - Consumers declare their `Stream`/`Consumer` CRs only in NATS mode. The
   ApplicationSet ordering keeps NACK (wave 50) after the NATS server (wave 40);
   a consumer that owns streams must sit at a later wave.
-- Remove Strimzi, Kafka CRs, Kafka values and the Kafka-specific wiring.
+- Remove Strimzi, Kafka CRs, Kafka values and the Kafka-specific wiring. Landed
+  in C3: the catalog returns to 18 components and NATS/NACK are the sole event
+  backbone.
 - Document the toggle procedure and the stream/consumer migration (C4).
