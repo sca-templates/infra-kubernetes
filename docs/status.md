@@ -131,10 +131,12 @@ C3, taking their CRs, dedicated Applications, values and smokes with them.
 cluster-wide watch) and `make smoke COMPONENT=nats` (JetStream enabled, zero
 streams) are the convergence gates.
 
-**Linkerd replacement (D0).** The static inventory and option evaluation are
-complete in [ADR-008](adr/adr-008-cni-native-mtls.md): Cilium + WireGuard is
-the D1 PoC candidate and Calico + WireGuard the fallback. No cluster, ArgoCD,
-chart or wiring changed in D0; Linkerd remains deployed until the D3/D4
+**Linkerd replacement (D1 files).** The static inventory and option evaluation
+are complete in [ADR-008](adr/adr-008-cni-native-mtls.md). D1 added the
+[PoC harness](../poc/cni-mtls/README.md) for Cilium `1.20.5` with WireGuard on a
+disposable two-node k3s substrate; the PoC was not run and D2 owns the evidence
+gate. Calico + WireGuard remains the fallback. No cluster, ArgoCD, chart or
+platform wiring changed in D0/D1; Linkerd remains deployed until the D3/D4
 cutover. WireGuard is node-to-node transport encryption, not workload mTLS.
 
 | Fact | Value |
@@ -208,7 +210,7 @@ cutover. WireGuard is node-to-node transport encryption, not workload mTLS.
 | --- | --- | --- |
 | Keycloak → Zitadel | **Planned** | Complete replacement. Inventory in progress. |
 | Kafka/Strimzi → NATS JetStream | **Done (C1–C4)** | NATS + NACK deployed idle (no `Stream`/`Consumer` CRs) via the optional `messaging-<env>` ApplicationSet; remove `argocd/messaging/<env>/{nats,nack}.yaml` for SNS/SQS mode. Contract `secret/messaging/<env>` carries `mode` + endpoints. Kafka/Strimzi removed in C3; the C4 runbook for the toggle and service-owned topology is in [messaging.md](messaging.md). |
-| Linkerd → CNI-native mTLS | **Under evaluation (D0 complete; PoC pending)** | Static inventory and option evaluation in [ADR-008](adr/adr-008-cni-native-mtls.md); Cilium + WireGuard is the D1 PoC candidate, Calico + WireGuard the fallback. Linkerd stays deployed until D4; no runtime change in D0. |
+| Linkerd → CNI-native mTLS | **Under evaluation (D1 PoC files added; evidence pending)** | Static inventory and option evaluation in [ADR-008](adr/adr-008-cni-native-mtls.md); [poc/cni-mtls](../poc/cni-mtls/README.md) pins Cilium `1.20.5` and a disposable two-node k3s substrate. D2 runs the PoC; Calico + WireGuard is the fallback. Linkerd stays deployed until D4; no runtime or platform wiring change in D0/D1. |
 | Velero + Backups | **Done** | The three layers are implemented and live restore-validated on 2026-11-14: Velero scheduled backups, CNPG Barman base backups + WAL/PITR, and Vault Raft snapshot CronJob. `local` uses Floci S3; `dev`/`qa`/`prod` expect external buckets and Vault-provisioned credentials. See [backups.md](backups.md#validation-status). |
 | CNPG RDS replacement | **Done** | The PITR + latest-backup restore smoke (`bootstrap/smoke-postgres-app.sh`) passed live on 2026-11-14, closing the RDS replacement gate. |
 

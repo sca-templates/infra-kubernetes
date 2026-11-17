@@ -1,0 +1,23 @@
+image:
+  repository: quay.io/cilium/cilium
+  tag: v1.20.5
+  pullPolicy: IfNotPresent
+operator:
+  replicas: 1
+  image:
+    repository: quay.io/cilium/operator
+    tag: v1.20.5
+    pullPolicy: IfNotPresent
+ipam:
+  mode: kubernetes
+tunnel: vxlan
+kubeProxyReplacement: false
+encryption:
+  enabled: true
+  type: wireguard
+devices: eth0
+cni:
+  exclusive: true
+  install: true
+hubble:
+  enabled: false

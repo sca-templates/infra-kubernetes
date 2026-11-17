@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed (2026-11-17; D0 research complete, PoC pending). Supersedes ADR-002 for the replacement plan; Linkerd remains deployed until the D3/D4 cutover.
+Proposed (2026-11-17; D0 research complete, D1 PoC files added; evidence pending). Supersedes ADR-002 for the replacement plan; Linkerd remains deployed until the D3/D4 cutover.
 
 ## Context
 
@@ -105,13 +105,22 @@ observability component is added by this migration.
 | D4 | Remove Linkerd CRDs, control plane, identity PKI, smoke targets, Vault allowlist exception, service-template annotation and repository wiring | No Linkerd runtime or ArgoCD references remain; catalog count and sync-wave map updated; Linkerd smokes removed |
 | D5 | Documentation closeout: remove Linkerd golden-signal assumptions from observability docs, update status/catalog/roadmap and mark ADR-008 implemented | Docs match the deployed platform; Work Log row records the cutover |
 
-## Open questions for D1
+D1 added the [PoC harness](../../poc/cni-mtls/README.md): a disposable two-node
+k3s Docker substrate, Cilium chart `1.20.5` with `kubeProxyReplacement: false`,
+WireGuard enabled, a cross-node HTTP smoke and teardown. The PoC was not run in
+D1; D2 owns the evidence and may still open the Calico fallback amendment.
 
-- How the Floci k3s substrate can start with `--flannel-backend=none` or join a
-  second node without becoming a new catalog component.
-- Which Cilium chart/app version is pinned, and whether `kubeProxyReplacement`
-  stays disabled to keep this checkpoint scoped to networking and encryption.
+## D1 decisions and open questions
+
+- The PoC substrate is a separate two-node k3s Docker cluster, not Floci. It
+  starts with `--flannel-backend=none` and `--disable-network-policy`, keeps its
+  own kubeconfig under `.generated/cni-mtls/`, and never becomes a catalog
+  component.
+- Cilium chart and agent/operator images are pinned to `1.20.5`;
+  `kubeProxyReplacement: false` keeps this checkpoint scoped to networking and
+  encryption.
 - How the environment gradient is expressed once local is no longer Flannel,
-  including dev/qa/prod profiles that are provisioned outside this repo.
-- How service repositories are notified to drop the injected annotation at D4;
-  this repo can change only the service template.
+  including dev/qa/prod profiles that are provisioned outside this repo, stays
+  open for D3.
+- How service repositories are notified to drop the injected annotation at D4
+  stays open; this repo can change only the service template.
