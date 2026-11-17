@@ -49,8 +49,8 @@ kubectl -n "$NAMESPACE" rollout status "deployment/${DEPLOYMENT}" --timeout="$TI
 # The operator must watch the CRs wherever they land: the Redis datastores run in
 # `data` (Phase 12), not in the operator's own namespace. An empty
 # `redisOperator.watchNamespace` renders no WATCH_NAMESPACE env at all, which is
-# the chart's way of saying "all namespaces" — the mirror image of Strimzi's
-# explicit `STRIMZI_NAMESPACE=*`.
+# the chart's way of saying "all namespaces" — the mirror image of CloudNativePG's
+# `config.clusterWide`.
 echo "── smoke(redis-operator): operator watches all namespaces (Redis CRs land in data at Phase 12)"
 watch_all="$(kubectl -n "$NAMESPACE" get deployment "$DEPLOYMENT" \
   -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="WATCH_NAMESPACE")].value}')"

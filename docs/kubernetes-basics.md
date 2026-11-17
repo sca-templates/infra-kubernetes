@@ -24,7 +24,7 @@ Official: [Overview of Kubernetes Objects](https://kubernetes.io/docs/concepts/o
   and converges the cluster toward it. This is the engine behind *everything
   in this repo*.
 - **Operator** = controller + custom resource definitions (CRDs). Examples in
-  the catalog: CloudNativePG (`Cluster`), Strimzi (`Kafka`/`KafkaNodePool`),
+  the catalog: CloudNativePG (`Cluster`), NACK (`Stream`/`Consumer`),
   redis-operator (`Redis`), cert-manager (`Certificate`), ESO
   (`ExternalSecret`). CRDs arrive at wave -10 (operators) before CRs at wave 40
   ([architecture.md](architecture.md#sync-wave-map)).

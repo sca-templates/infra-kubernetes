@@ -1,5 +1,8 @@
 # Project: Implement Strimzi
 
+> **Retired (ADR-005 C3, 2026-11-16).** Strimzi was removed from the platform;
+> this file is kept as delivery history. See [nats.md](nats.md).
+
 Area: Data · Wave -10 · Environments: local→dev→qa→prod
 Depends on: — (operator only, wave -10)
 Project done when: `strimzi-cluster-operator` `Running`; a `Kafka`/

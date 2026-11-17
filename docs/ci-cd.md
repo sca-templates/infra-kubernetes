@@ -193,7 +193,7 @@ smoke instead of merging untested.
 Docker and load them into the EKS node (`bootstrap/preload-chart-images.sh`)
 before Helm runs — a **catalog-wide** preload (`--catalog <env>` resolves the
 images for every chart in the env's mandatory/optional ApplicationSets plus the
-dedicated apps, including the raw manifests of postgres-app, Kafka and Redis,
+dedicated apps, including the raw manifests of postgres-app and Redis,
 plus the Keycloak chart).
 A node-side pull on an ephemeral runner can stall behind registry throttling past
 a Deployment's `progressDeadlineSeconds`, surfacing as a flaky `argocd-up`
@@ -363,7 +363,7 @@ Floci's EKS backing, not ArgoCD-managed).
   ArgoCD manifests' `repoURL`/`targetRevision` to the PR head via the `sed` seam),
   after which ArgoCD reconciles the **real app-of-apps** (ApplicationSet
   `platform-local` → the optional `messaging-local`, the dedicated `kong-local`,
-  `linkerd-local`, `postgres-app-local`, `kafka-local`, `redis-local` and
+  `linkerd-local`, `postgres-app-local`, `redis-local` and
   `keycloak-local`), gates every platform Application (`<name>-local`, NATS/NACK,
   Kong and Linkerd included), seeds Vault
   (it is born sealed, so
@@ -374,7 +374,7 @@ Floci's EKS backing, not ArgoCD-managed).
 - **Wiring** — `smoke-ci.sh` has a single path: `make eks-up` boots the EKS
   substrate, `make bootstrap ENV=local` seeds the platform `ApplicationSet`, the
   optional `messaging-local` ApplicationSet and the dedicated
-  `kong-local`/`linkerd-local`/`postgres-app-local`/`kafka-local`/
+  `kong-local`/`linkerd-local`/`postgres-app-local`/
   `redis-local`/`keycloak-local` apps from the PR head and applies the
   catalog, the
   catalog is gated `Synced` → Vault seeded → `Synced/Healthy`, and the touched

@@ -4,10 +4,10 @@ Reference for the `sca` platform on Kubernetes: layers, the component catalog,
 sync-waves, namespaces, the secret flow and the environment model. This is a
 **state document** — how the platform *is*. Beyond ArgoCD, cert-manager
 (Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4),
-cloudnative-pg (Phase 5), strimzi (Phase 6), redis-operator (Phase 7), Kong
-(Phase 8), the Linkerd control plane (Phase 9), postgres-app/keycloak-db
-(Phase 10), Kafka (Phase 11), Redis (Phase 12) and Keycloak (Phase 13) are
-deployed; every other catalog entry is marked `planned` until its phase lands. For how changes *flow* through the platform, see
+cloudnative-pg (Phase 5), redis-operator (Phase 7), Kong (Phase 8), the Linkerd
+control plane (Phase 9), postgres-app/keycloak-db (Phase 10), Redis (Phase 12),
+Keycloak (Phase 13), NATS/NACK (ADR-005) and Velero (Phase 18) are deployed;
+the observability components (Phases 14-16) remain `planned`. For how changes *flow* through the platform, see
 [workflow.md](workflow.md); for
 what is done and what is next, see [status.md](status.md).
 
@@ -36,7 +36,7 @@ resolves the `{{GIT_REPO_URL}}`/`{{GIT_TARGET_BRANCH}}` placeholders host-side):
   [workflow.md](workflow.md#services-app-repo-as-source) and
   [onboarding-new-service.md](onboarding-new-service.md).
 
-There is **no global `ServerSideApply`**; Kong, `postgres-app`, Kafka, Redis and
+There is **no global `ServerSideApply`**; Kong, `postgres-app`, Redis and
 Keycloak are dedicated per-environment `Application`s (see [Sync-wave map](#sync-wave-map)
 and the [Deviations log](#deviations-log)).
 Nothing is deployed by hand after `make bootstrap`.
@@ -72,7 +72,7 @@ graph TD
     end
     subgraph Data["Data"]
         E --> E1[CloudNativePG / postgres-app + keycloak-db]
-        E --> E2[Strimzi / Kafka]
+        E --> E2[NATS JetStream / NACK]
         E --> E3[Redis]
     end
     subgraph Obs["Observability"]
@@ -90,17 +90,15 @@ both. This repository builds no images.
 
 ## Component catalog
 
-The catalog has **20 components** plus ArgoCD while the NATS migration is in
-progress: NATS and NACK are deployed alongside Kafka/Strimzi until the removal
-commit, which returns the catalog to its target 18. Each row shows its intended
+The catalog has **18 components** plus ArgoCD. Each row shows its intended
 namespace, upstream chart, ArgoCD sync-wave and roadmap phase. Chart and image
 pins are set per component when that phase lands (values live under
 `infrastructure/<component>/` and `envs/<env>/` from Phase 1 on); in the table
 ArgoCD, cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3),
-linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6),
-redis-operator (Phase 7), Kong (Phase 8), the Linkerd control plane (Phase 9),
-postgres-app/keycloak-db (Phase 10), Kafka (Phase 11), Redis (Phase 12),
-Keycloak (Phase 13), NACK/NATS (NATS migration C1/C2) and Velero (Phase 18) are
+linkerd-crds (Phase 4), cloudnative-pg (Phase 5), redis-operator (Phase 7),
+Kong (Phase 8), the Linkerd control plane (Phase 9),
+postgres-app/keycloak-db (Phase 10), Redis (Phase 12), Keycloak (Phase 13),
+NACK/NATS (NATS migration C1/C2/C3) and Velero (Phase 18) are
 deployed; the observability components (Phases 14-16) remain `planned`.
 
 **Services are not part of this catalog.** They are registered in
@@ -115,14 +113,12 @@ their own repositories — see
 | external-secrets | `external-secrets` | external-secrets/external-secrets | -10 | 3 | deployed (Phase 3) |
 | linkerd-crds | `linkerd` | linkerd/linkerd-crds | -10 | 4 | deployed (Phase 4) |
 | cloudnative-pg | `cloudnative-pg` | cloudnative-pg/cloudnative-pg | -10 | 5 | deployed (Phase 5) |
-| strimzi | `strimzi` | strimzi/strimzi-kafka-operator | -10 | 6 | deployed (Phase 6) |
 | redis-operator | `data` | ot-container-kit/redis-operator | -10 | 7 | deployed (Phase 7) |
 | kong | `kong` | kong/kong (DB-less) | 20 | 8 | deployed (Phase 8) |
 | linkerd control plane | `linkerd` | linkerd/linkerd-control-plane | 30 | 9 | deployed (Phase 9) |
 | postgres-app (+ keycloak-db) | `data` | CNPG `Cluster` CRs (raw) | 40 | 10 | deployed (Phase 10) |
-| kafka (CR) | `data` | `Kafka` + `KafkaNodePool` CRs | 40 | 11 | deployed (Phase 11) |
-| nats (JetStream) | `data` | nats/nats (JetStream) | 40 | — | deployed (NATS migration C1/C2, idle; optional per env) |
-| nack (JetStream controller) | `nats` | nats/nack | 50 | — | deployed (NATS migration C1/C2; optional per env) |
+| nats (JetStream) | `data` | nats/nats (JetStream) | 40 | — | deployed (NATS migration C1/C2/C3, idle; optional per env) |
+| nack (JetStream controller) | `nats` | nats/nack | 50 | — | deployed (NATS migration C1/C2/C3; optional per env) |
 | redis (CR) | `data` | `RedisReplication` CR | 40 | 12 | deployed (Phase 12) |
 | keycloak | `keycloak` | codecentric/keycloakx (realm import) | 50 | 13 | deployed (Phase 13) |
 | kube-prometheus-stack | `observability` | prometheus-community/kube-prometheus-stack | 60 | 14 | planned (Phase 14) |
@@ -136,10 +132,10 @@ Notes:
 
 - **Status column** is the source of truth for "is it live?". ArgoCD,
   cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3),
-  linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6),
+  linkerd-crds (Phase 4), cloudnative-pg (Phase 5),
   redis-operator (Phase 7), Kong (Phase 8), the Linkerd control plane
-  (Phase 9), postgres-app/keycloak-db (Phase 10), Kafka (Phase 11), Redis (Phase 12),
-  Keycloak (Phase 13), NACK/NATS (NATS migration C1/C2) and Velero (Phase 18) are
+  (Phase 9), postgres-app/keycloak-db (Phase 10), Redis (Phase 12),
+  Keycloak (Phase 13), NACK/NATS (NATS migration C1/C2/C3) and Velero (Phase 18) are
   deployed; the observability components (Phases 14-16) remain `planned (Phase N)`. The
   CNPG scheduled backups and Vault Raft snapshot CronJob are **backup
   resources**, not separate catalog components; they are described in
@@ -150,22 +146,14 @@ Notes:
   the `ApplicationSet` generator list) and owns both CNPG `Cluster`s in `data`:
   `postgres-app` (application database, `app`/`app`) and `keycloak-db`
   (`keycloak`/`keycloak`, consumed by Keycloak in Phase 13). Both run in every
-  environment at wave 40. The Kafka and Redis **operators** (waves -10) are
-  installed everywhere; their **custom resources** live in `data` at wave 40 —
-  Kafka is deployed at Phase 11 and Redis at Phase 12 (both below).
-  redis-operator shares the `data` namespace with the CRs it reconciles, while
-  Strimzi and CloudNativePG each get a namespace of their own (see
+  environment at wave 40. The Redis **operator** (wave -10) is installed
+  everywhere; its **custom resources** live in `data` at wave 40 — Redis is
+  deployed at Phase 12. redis-operator shares the `data` namespace with the CRs
+  it reconciles, while CloudNativePG gets a namespace of its own (see
   [Deviations log](#deviations-log)).
-- `kafka` is a **dedicated raw `Application` per environment** (not in the
-  `ApplicationSet` generator list): the Strimzi `Kafka`/`KafkaNodePool`/
-  `KafkaUser` resources are CRs, not a chart. It runs one dual-role
-  (`controller,broker`) node in `local`/`dev` and three in `qa`/`prod`, with
-  the internal listener TLS + SCRAM-SHA-512; the `scram-admin` password is
-  projected by ESO from `secret/kafka/<env>` and consumed by the User Operator
-  via `password.valueFrom.secretKeyRef`. See
-  [Deviations log](#deviations-log).
 - `nats` and `nack` are **optional `ApplicationSet` elements** (not dedicated
-  apps), deployed idle as the ADR-005 replacement for Kafka/Strimzi. The
+  apps), deployed idle as the ADR-005 event backbone; Kafka/Strimzi were removed
+  in C3. The
   dedicated `argocd/messaging-<env>.yaml` ApplicationSet uses a git files
   generator over `argocd/messaging/<env>/*.yaml`: the descriptors present in
   NATS mode generate `nats` (chart `nats/nats` 2.15.2, namespace `data`, wave
@@ -175,8 +163,7 @@ Notes:
   SNS/SQS mode and removes the Applications; the per-env values overlays stay in
   git either way. The platform Applications are not children of a root app, so
   cross-Application sync-waves are best-effort — the controller retries until
-  NATS answers. Kafka/Strimzi stay until the removal commit. See
-  [ADR-005](adr/adr-005-kafka-to-nats-jetstream.md).
+  NATS answers. See [ADR-005](adr/adr-005-kafka-to-nats-jetstream.md).
 - `keycloak` is a **dedicated multi-source `Application` per environment**
   (`keycloak-<env>`, wave 50): the chart (`codecentric/keycloakx` 7.4.0 /
   Keycloak 26.8.1), the `$values` refs, the per-env ExternalSecrets and the
@@ -227,7 +214,6 @@ graph LR
         D[external-secrets]
         E[linkerd-crds]
         F[cloudnative-pg]
-        G[strimzi]
         H[redis-operator]
     end
     subgraph W0["0"]
@@ -244,11 +230,12 @@ graph LR
     end
     subgraph W40["40"]
         M[postgres-app / keycloak-db]
-        N[Kafka CR]
+        N[NATS JetStream]
         O[RedisReplication + Sentinel qa/prod]
     end
     subgraph W50["50"]
         P[Keycloak]
+        P2[NACK]
     end
     subgraph W60["60"]
         Q[kube-prometheus-stack]
@@ -304,7 +291,7 @@ graph LR
     B --> C[External Secrets Operator]
     C --> D[K8s Secrets]
     D --> E[Application Pods]
-    D --> F[CNPG Clusters / Kafka / Keycloak]
+    D --> F[CNPG Clusters / Keycloak]
 ```
 
 - Secrets are declared **once** in Vault at `secret/<service>/<env>` and
@@ -327,9 +314,9 @@ Full inventory and runbooks: [secrets.md](secrets.md).
 | `external-secrets` | Secret projection from Vault |
 | `linkerd` | Service mesh CRDs and control plane |
 | `cloudnative-pg` | PostgreSQL operator |
-| `strimzi` | Kafka operator |
 | `kong` | API gateway |
-| `data` | Datastores: postgres-app, keycloak-db, Kafka, Redis — plus the redis-operator (Phase 7) |
+| `data` | Datastores: postgres-app, keycloak-db, NATS JetStream, Redis — plus the redis-operator (Phase 7) |
+| `nats` | NACK JetStream controller |
 | `keycloak` | OIDC identity provider |
 | `observability` | Metrics + Grafana + Alertmanager, Alloy log collection |
 | `loki` | Log aggregation (named after the chart, unlike the observability ns) |
@@ -359,14 +346,12 @@ lands — through the NATS migration, C1):
 | vault (HA raft) | 1 | 1 | 3 | 3 |
 | external-secrets | 1 | 2 | 3 | 3 |
 | cloudnative-pg | 1 | 1 | 2 | 2 |
-| strimzi | 1 | 1 | 2 | 2 |
 | redis-operator | 1 | 1 | 2 | 2 |
 | redis | 1 | 1 | 3 | 3 |
 | kong (gateway + controller, one Deployment) | 1 | 1 | 2 | 2 |
 | keycloak | 1 | 2 | 3 | 3 |
 | postgres-app | 1 | 1 | 3 | 3 |
 | keycloak-db | 1 | 1 | 3 | 3 |
-| kafka (dual-role nodes) | 1 | 1 | 3 | 3 |
 | nats (JetStream nodes) | 1 | 1 | 3 | 3 |
 | nack (controller) | 1 | 1 | 1 | 1 |
 
@@ -390,7 +375,6 @@ as each component lands; the log always explains *why*, never just *what*.
 | local git serve (dev tooling) | `make local-git-up` stands up an in-cluster git daemon serving this repo's HEAD **verbatim** (`bootstrap/render-served-apps.sh` mirrors `HEAD` onto the serve branch — no placeholder substitution); local ArgoCD reconciles the served tree instead of GitHub. The CI cluster smoke does **not** use it — `make bootstrap` seeds the wiring host-side | The serving/reconciliation path is exercised on a developer machine; nothing on the serve needs substitution now that `make bootstrap` owns the wiring, so the serve mirrors the repo as-is. The CI runner cannot reach the EKS node's pod network (the emulator publishes only its own port), so the smoke seeds host-side rather than serving resolved content |
 | Kong | DB-less (`database: off`), `ingressController.installCRDs: false`, managed as a dedicated `Application`, no SSA | Kong ships flat-schema CRDs; structured-merge diff breaks under `ServerSideApply=true`, and `--include-crds` re-emits CRDs twice |
 | postgres-app | Dedicated raw `Application` per environment (`postgres-app-<env>`), not in the `ApplicationSet` generator list; one shared manifest directory with `directory.include: "*-<env>.yaml"` | The datastores are raw CNPG `Cluster` CRs, so the Helm-chart generator cannot render them. They run in **all four** environments (app DB + Keycloak DB), and the per-env `include` keeps a single source directory while selecting only that environment's CRs. Like Kong, the dedicated app is also what the cluster smoke discovers as `postgres-app-<env>` |
-| Kafka | Dedicated raw `Application` per environment (`kafka-<env>`), not in the `ApplicationSet`; one shared manifest directory with `directory.include: "*-<env>.yaml"`; `KafkaNodePool` owns storage/resources/JVM; TLS + SCRAM-SHA-512 in all four envs; qa/prod use `preferred` anti-affinity | The `Kafka`/`KafkaNodePool`/`KafkaUser` resources are Strimzi CRs, not a Helm chart, so the chart generator cannot render them. The pool is the Strimzi-native place for the per-env profile (1 dual-role node local/dev, 3 qa/prod) and keeps storage/resources out of the Kafka CR. The SCRAM password is projected by ESO from `secret/kafka/<env>` and referenced by `KafkaUser.spec.authentication.password.valueFrom`, keeping Vault as the secret SSOT instead of letting Strimzi generate and own the password. `preferred` anti-affinity keeps the 3-node profile schedulable on the single-node promote substrate; qa does not prune and prod syncs manually per ADR-003 |
 | Keycloak | `codecentric/keycloakx` 7.4.0 / Keycloak 26.8.1 instead of the planned `bitnami/keycloak`; dedicated **multi-source** `Application` per environment (`keycloak-<env>`) with chart + `$values` + per-env ExternalSecrets + shared realm/TLS, realm imported at startup (`--import-realm`), preferred anti-affinity in every env | The `bitnami/keycloak` chart referenced by the original roadmap is no longer a viable pin, while `keycloakx` tracks the official Keycloak 26 image and exposes the startup knobs this deployment needs. Multi-source is required because the component owns both a Helm release and raw resources (three ExternalSecrets, the realm ConfigMap, the TLS Certificate); keeping them in one dedicated app gives one owner and the same `keycloak-<env>` convergence gate the smoke expects. Importing the realm from git makes the realm reviewable without an Admin API sidecar, and `--import-realm` is a no-op once `sca` exists (the StatefulSet is `OrderedReady`, so replicas do not race on first import). `preferred` anti-affinity keeps the 3-replica qa/prod profile schedulable on the single-node promote substrate |
 | nats + nack | Both are optional elements of a dedicated `messaging-<env>` `ApplicationSet` (not the platform list); NACK is pinned at wave 50 (after the NATS server at 40), NATS ships "ready but idle" with no `Stream`/`Consumer` CRs, and the tier has no client auth yet | NACK connects to NATS at startup; the platform Applications are not children of a root app, so cross-Application sync-waves are not enforced, and placing NACK after NATS keeps the logical order while the controller retries until the server answers. Idle avoids committing streams before the toggle and the consumers exist (ADR-005); once the first consumer lands, NATS accounts/credentials are wired through Vault/ESO. Both use upstream charts, so the ApplicationSet covers them without dedicated app files |
 | Messaging toggle (NATS/NACK) | A dedicated `argocd/messaging-<env>.yaml` `ApplicationSet` (git files generator over `argocd/messaging/<env>/*.yaml`) owns the optional NATS/NACK Applications; the descriptors exist in NATS mode and are removed for SNS/SQS mode. The app template sets `resources-finalizer.argocd.argoproj.io`, so removing a descriptor deletes the Application and its resources. The per-env values overlays (`envs/<env>/{nats,nack}.yaml`) remain in both modes | The platform list generator cannot express "this component is optional per environment". A git files generator is declarative and needs no values-flag conditionals: the file set in git *is* the mode. Keeping the values overlays makes switching back a descriptor-only change, while the finalizer guarantees SNS/SQS mode leaves no NATS pods behind (the idle tier has no data worth preserving). The app names stay `nats-<env>`/`nack-<env>`, so the existing smokes and catalog discovery are unchanged. Vault's `secret/messaging/<env>` is the runtime contract (`mode` + endpoints); the descriptor set is the deployment gate |
@@ -404,7 +388,7 @@ as each component lands; the log always explains *why*, never just *what*.
 | AppSet (StatefulSet apps) | StatefulSet `ignoreDifferences` extended with `.spec.volumeClaimTemplates[].apiVersion` and `.spec.volumeClaimTemplates[].kind` | The API server defaults `apiVersion`/`kind` inside every `volumeClaimTemplates` entry even when the chart does not declare them, so the NATS StatefulSet showed a perpetual `OutOfSync` that a server-side diff proved was not drift. The fields are API-server defaults, not genuine drift; the rest of the PVC template spec remains compared |
 | linkerd-crds (local) | Five leftover Linkerd CRDs from the pre-restart bulk install (2026-09-02) removed manually: the conflicting `servers`/`serviceprofiles` and the orphaned `egressnetworks`, `externalworkloads`, `httplocalratelimitpolicies` (managed by no app) | SSA cannot remove extra CRD versions or objects it does not manage, so the newer-version leftovers made the app converge to a permanent `OutOfSync`. After cleanup the chart 1.8.0 app re-applied pristine definitions and re-converged to `Synced`. One-off cluster hygiene, not repo state |
 | cloudnative-pg + future-phase CRDs (local) | Same one-off cluster hygiene extended: **60 orphaned CRDs** from the 2026-09-02 bulk install removed — the 11 `postgresql.cnpg.io` (Phase 5) plus the undeployed groups `kafka.strimzi.io`/`core.strimzi.io` (10, Phase 6), `redis.redis.opstreelabs.in` (4, Phase 7), `configuration.konghq.com` (12, Phase 8), `monitoring.coreos.com`/`monitoring.grafana.com` (11, Phase 14) and `velero.io` (13, Phase 18). All lacked ArgoCD ownership (`helm.sh/resource-policy: keep`, no tracking labels) | Extra CRDs not owned by any app wedge the app that ships them into a permanent `OutOfSync` under SSA (same as the linkerd-crds row); each future phase would have hit the same gate. The converging `cloudnative-pg` app re-created its 11 CRDs as app-owned and converged `Synced`+`Healthy`; the undeployed groups were plain leftovers. ArgoCD, cert-manager, external-secrets and linkerd CRDs untouched |
-| redis-operator | The operator is installed in the **`data` namespace**, sharing it with the datastores it reconciles, instead of getting a namespace of its own like `strimzi` / `cloudnative-pg` | `data` is where the Phase 10/11/12 CRs land; the operator watches every namespace anyway (`watchNamespace: ""` renders no `WATCH_NAMESPACE`, RBAC is cluster-scoped), so a dedicated namespace would only add a second place to look. It also means the wave -10 app is the first thing to create `data` (`CreateNamespace=true`) |
+| redis-operator | The operator is installed in the **`data` namespace**, sharing it with the datastores it reconciles, instead of getting a namespace of its own like `cloudnative-pg` | `data` is where the Phase 10/12 CRs land; the operator watches every namespace anyway (`watchNamespace: ""` renders no `WATCH_NAMESPACE`, RBAC is cluster-scoped), so a dedicated namespace would only add a second place to look. It also means the wave -10 app is the first thing to create `data` (`CreateNamespace=true`) |
 | redis-operator | **No PodDisruptionBudget** in the `qa`/`prod` overlays (both run 2 replicas with soft anti-affinity), and the chart's **webhook stays off** | This chart ships no PDB value, so a budget would have to be a raw manifest under `infrastructure/redis-operator/manifests/` — and that directory is env-agnostic, so it would also apply to `local`. The operator is stateless and leader-elected, so a voluntary eviction just re-elects a leader. The webhook only gates the `masterSlaveAntiAffinity` feature (and drags a serving certificate in with it); nothing in the platform uses master/slave anti-affinity — Sentinel and cluster topologies arrive as their own CRs at Phase 12 — so it stays off |
 | redis-operator | `chartRepo` is pinned to `https://ot-container-kit.github.io/helm-charts` instead of the documented `https://charts.ot-container-kit.io` | The old host stopped resolving upstream: it answers `NXDOMAIN` authoritatively for `io` (verified against public DNS on 2026-09-27), which wedged the app in `ComparisonError: failed to fetch chart`. The maintainers publish the same charts from the GitHub Pages repo of `ot-container-kit/helm-charts` — same publisher, same chart versions, `redis-operator` 0.26.1 with an identical digest — so the pin stays official and version-pinned, and ArgoCD reaches it as any other `https://` chart repo. Recorded in `docs/roadmap/redis-operator.md` |
 | Releases | The tag is cut automatically when the release PR merges and the release goes out as a **full release held off `latest`**, with the pointer left on the previous release; only the manual `Release promote` workflow moves `latest` forward — so the automation never promotes a release on its own | `make_latest` is the lever: GitHub defaults it to `true` for newly published releases and release-please never sends it, so publishing a full release would claim the pointer on its own. Declining it is not enough on its own either — `make_latest=false` stores no pointer and `GET /releases/latest` falls back to the newest published release — so the local `finalize` job publishes off `latest` *and* re-designates the previous release, which keeps the pointer tied to adoption instead of to merge order, the same rule the Services row follows. A draft would keep it off too, but the shared flow's tag force-push publishes it. See [versioning.md](versioning.md) |
@@ -432,7 +416,7 @@ The following migrations are planned to optimize costs while maintaining service
 | Migration | Status | Notes |
 | --- | --- | --- |
 | Keycloak → Zitadel | **Proposed** | Complete replacement, no parallel long-term deployment. All OIDC clients must be migrated. |
-| Kafka/Strimzi → NATS JetStream | **In progress (C2)** | NATS + NACK deployed idle (no `Stream`/`Consumer` CRs) behind the optional `messaging-<env>` ApplicationSet; remove `argocd/messaging/<env>/{nats,nack}.yaml` for SNS/SQS mode (nothing in-cluster). Contract `secret/messaging/<env>` carries `mode` + endpoints; Kafka/Strimzi removal follows in C3. No current consumers. |
+| Kafka/Strimzi → NATS JetStream | **Done (C1–C3)** | NATS + NACK deployed idle (no `Stream`/`Consumer` CRs) behind the optional `messaging-<env>` ApplicationSet; remove `argocd/messaging/<env>/{nats,nack}.yaml` for SNS/SQS mode (nothing in-cluster). Contract `secret/messaging/<env>` carries `mode` + endpoints. Kafka/Strimzi removed in C3; stream/consumer topology is service-owned (C4). No current consumers. |
 | Linkerd → CNI-native mTLS | **Proposed** | L3/L4 mTLS via WireGuard/IPsec. Loss of L7 features (retries, timeouts, traffic split). PoC required first. |
 | CNPG as RDS replacement | **Done** | Backups/PITR and the restore smoke passed live on 2026-11-14, closing the gate. |
 | Vault hardening | **Landed (live restore validated 2026-11-14)** | Raft snapshots to object storage are implemented in all four environments; see [backups.md](backups.md). |

@@ -15,8 +15,6 @@ case "$component" in
   linkerd) exec "$(dirname "$0")/smoke-linkerd.sh" ;;
   cloudnative-pg) exec "$(dirname "$0")/smoke-cloudnative-pg.sh" ;;
   postgres-app) exec "$(dirname "$0")/smoke-postgres-app.sh" ;;
-  kafka) exec "$(dirname "$0")/smoke-kafka.sh" ;;
-  strimzi) exec "$(dirname "$0")/smoke-strimzi.sh" ;;
   redis-operator) exec "$(dirname "$0")/smoke-redis-operator.sh" ;;
   redis) exec "$(dirname "$0")/smoke-redis.sh" ;;
   nack) exec "$(dirname "$0")/smoke-nack.sh" ;;
@@ -26,7 +24,7 @@ case "$component" in
   velero) exec "$(dirname "$0")/smoke-velero.sh" ;;
   cloud) exec "$(dirname "$0")/smoke-cloud.sh" ;;
   eks) exec "$(dirname "$0")/smoke-eks.sh" ;;
-  "") echo "usage: $0 <component> (cert-manager, vault, external-secrets, linkerd-crds, linkerd, cloudnative-pg, postgres-app, kafka, strimzi, redis-operator, kong, redis, nack, nats, keycloak, velero, cloud, eks)" >&2; exit 2 ;;
+  "") echo "usage: $0 <component> (cert-manager, vault, external-secrets, linkerd-crds, linkerd, cloudnative-pg, postgres-app, redis-operator, kong, redis, nack, nats, keycloak, velero, cloud, eks)" >&2; exit 2 ;;
   *,*) echo "ERROR: smoke-target.sh smokes one component; use smoke-ci.sh for a comma-separated list" >&2; exit 2 ;;
   *) echo "ERROR: no smoke command for component '$component'" >&2; exit 2 ;;
 esac

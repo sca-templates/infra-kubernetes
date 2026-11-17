@@ -10,7 +10,8 @@ Milestones and Issues.
 
 ## Current state
 
-**Phase 13 — Keycloak deployed; Phase B — backup layer landed and live
+**Phase 13 — Keycloak deployed; the NATS migration (C1–C3) completed with
+Kafka/Strimzi removed; Phase B — backup layer landed and live
 restore-validated on 2026-11-14 (Velero, CloudNativePG PITR, Vault Raft
 snapshots).**
 Phase 0 delivered the scaffold
@@ -31,14 +32,10 @@ Application with no workloads; it is the base the Linkerd control plane
 PostgreSQL operator — at wave -10 in the `cloudnative-pg` namespace: chart
 pinned 0.29.0 (operator 1.30.0), cluster-wide watch (`config.clusterWide`) so
 the datastores can run in `data` at Phase 10, monitoring off until Phase 14,
-with the 11 `postgresql.cnpg.io` CRDs all `Established`. **Phase 6** lands
-Strimzi — the Kafka operator — at wave -10 in the `strimzi` namespace: chart
-pinned 1.2.0 (operator 1.2.0, `quay.io/strimzi/operator`), watching every
-namespace (`watchAnyNamespace`) so the Kafka datastores can run in `data` at
-Phase 11, with the 10 `kafka.strimzi.io` / `core.strimzi.io` CRDs all
-`Established`. **Phase 7** lands redis-operator — the Redis operator — at wave
+with the 11 `postgresql.cnpg.io` CRDs all `Established`. **Phase 7** lands
+redis-operator — the Redis operator — at wave
 -10 in the `data` namespace (shared with the datastores it will manage, unlike
-the dedicated `strimzi` / `cloudnative-pg` namespaces): chart pinned 0.26.1
+the dedicated `cloudnative-pg` namespace): chart pinned 0.26.1
 (operator 0.26.0, `quay.io/opstree/redis-operator`), cluster-wide watch
 (`watchNamespace: ""` renders no `WATCH_NAMESPACE`) so the Redis datastores can
 run in `data` at Phase 12, webhook off, no PDB, with the 4
@@ -46,8 +43,8 @@ run in `data` at Phase 12, webhook off, no PDB, with the 4
 further than the other operators: a throwaway `Redis` CR in a scratch namespace
 must produce a Ready StatefulSet and answer `PING` → `PONG`, which is the
 honest proof that the CR is honored (the `Redis` CRD declares an empty status
-object, so no condition can be asserted). The Kafka custom resources land at
-Phase 11 (below); the `Redis` CR at Phase 12. **Phase 8** lands Kong — the
+object, so no condition can be asserted). The `Redis` CR lands at Phase 12.
+**Phase 8** lands Kong — the
 edge gateway — as a **dedicated `Application` per environment (`kong-<env>`)** at
 wave 20 in the `kong` namespace, deliberately *outside* the `ApplicationSet`:
 chart pinned 3.4.1 (`kong/kong`), gateway `kong:3.9.4` plus the bundled
@@ -83,21 +80,6 @@ all`; CNPG manages `shared_preload_libraries`) and `wal_level=logical`;
 `keycloak-db` backs Keycloak (Phase 13). The catalog preload resolves the CNPG
 image from the raw manifests, and `make smoke COMPONENT=postgres-app` validates
 both clusters, both projected users, the extensions and logical WAL.
-**Phase 11** lands the event backbone: a KRaft `Kafka` + `KafkaNodePool`
-(1 dual-role node local/dev, 3 qa/prod) and a `KafkaUser scram-admin` in `data`
-at wave 40, across **all four** environments. Kafka is pinned at `4.2.0`
-(`quay.io/strimzi/kafka:1.2.0-kafka-4.2.0`); the internal listener `9092` is
-TLS + SCRAM-SHA-512 with simple authorization and `scram-admin` as superUser.
-The SCRAM password is projected by ESO from `secret/kafka/<env>` into the
-`kafka-scram-admin` Secret and consumed by the User Operator through
-`KafkaUser.spec.authentication.password.valueFrom`, so Vault stays the source of
-truth. Like postgres-app, the CRs ship through a **dedicated `Application` per
-environment** (`argocd/kafka-<env>.yaml`, `directory.include: "*-<env>.yaml"`)
-rather than the Helm `ApplicationSet`; `local`/`dev` run one node with 1/2 GiB
-storage and RF/minISR `1/1`, `qa`/`prod` run three with 10/20 GiB, RF/minISR
-`3/2` and `preferred` anti-affinity. `make smoke COMPONENT=kafka` waits for the
-projected credentials, Kafka, KafkaUser and brokers, then creates a topic and
-produces/consumes one record over SASL_SSL/SCRAM.
 
 **Phase 12** lands the Redis cache: a `RedisReplication` in `data` at wave 40 across all four
 environments — 1 replica in local/dev, 3 in qa/prod with embedded Sentinel 3 (quorum 2,
@@ -106,7 +88,7 @@ master group `mymaster`). Images are pinned to `quay.io/opstree/redis:v7.4.11`,
 The password is projected by ESO from `secret/redis/<env>` into `redis-password` and
 consumed through `kubernetesConfig.redisSecret`; persistence is AOF on a PVC, the
 exporter is enabled now (PodMonitor in Phase 14), and qa/prod add PDB + preferred
-anti-affinity. Like postgres-app and Kafka, the CRs ship through a **dedicated
+anti-affinity. Like postgres-app, the CRs ship through a **dedicated
 `Application` per environment** (`argocd/redis-<env>.yaml`, `directory.include:
 "*-<env>.yaml"`); `make smoke COMPONENT=redis` waits for the ExternalSecret and
 StatefulSets, then exercises PING/SET/GET, AOF and (when present) Sentinel quorum.
@@ -130,9 +112,10 @@ now idempotent (`SEED_ROTATE=1` to rotate) and seeds the smoke user; the smoke
 proves the realm import, discovery issuer, `login_required` redirect and a real
 password-grant token accepted by userinfo (`make smoke COMPONENT=keycloak`).
 
-**NATS migration (C1/C2).** NATS and NACK are deployed **idle** as the ADR-005
-replacement for Kafka/Strimzi. `nats` (chart/appVersion `2.15.2`, namespace
-`data`, wave 40) runs a single JetStream node in `local`/`dev` and a 3-node
+**NATS migration (C1/C2/C3).** NATS and NACK are deployed **idle** as the
+ADR-005 event backbone; Kafka and Strimzi were removed in C3. `nats`
+(chart/appVersion `2.15.2`, namespace `data`, wave 40) runs a single JetStream
+node in `local`/`dev` and a 3-node
 JetStream cluster with a PDB and preferred anti-affinity in `qa`/`prod`; it
 ships **no** `Stream`/`Consumer` CRs. `nack` (chart `0.35.0` / controller
 `0.24.0`, namespace `nats`, wave 50) installs the six JetStream CRDs and watches
@@ -141,29 +124,28 @@ by the optional `messaging-<env>` ApplicationSet from
 `argocd/messaging/<env>/{nats,nack}.yaml`: remove those descriptors to switch the
 environment to SNS/SQS mode, where nothing is deployed in-cluster. The runtime
 contract is Vault KV-v2 `secret/messaging/<env>` (`mode` + endpoints);
-`bootstrap/seed-vault.sh` seeds local `mode=nats`. Kafka/Strimzi stay in place
-until the removal commit. `make smoke COMPONENT=nack` (CRDs `Established`,
+`bootstrap/seed-vault.sh` seeds local `mode=nats`. Kafka/Strimzi were removed in
+C3, taking their CRs, dedicated Applications, values and smokes with them.
+`make smoke COMPONENT=nack` (CRDs `Established`,
 cluster-wide watch) and `make smoke COMPONENT=nats` (JetStream enabled, zero
 streams) are the convergence gates.
 
 | Fact | Value |
 | --- | --- |
 | Repository | `infra-kubernetes` (local, fully-local git serve; published to GitHub before promotion) |
-| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg (Phase 5), strimzi (Phase 6), redis-operator (Phase 7), Kong (Phase 8), Linkerd control plane (Phase 9), postgres-app/keycloak-db (Phase 10), Kafka (Phase 11), Redis (Phase 12), Keycloak (Phase 13), NACK/NATS (NATS migration C1/C2, idle, optional per env), Velero (Phase 18; backup layer expanded in Phase B, live restore-validated 2026-11-14) |
-| `platform-root-local` | not used — `local` runs no services, so there is no root Application; `make bootstrap ENV=local` seeds the catalog wiring (`apps-local` + `messaging-local` + `kong-local` + `linkerd-local` + `postgres-app-local` + `kafka-local` + `redis-local` + `keycloak-local`) host-side |
-| `platform-local` ApplicationSet | present, eight mandatory elements (`cert-manager` wave -20, `external-secrets` + `linkerd-crds` + `cloudnative-pg` + `strimzi` + `redis-operator` wave -10, `vault` wave 0, `velero` wave 80) |
+| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg (Phase 5), redis-operator (Phase 7), Kong (Phase 8), Linkerd control plane (Phase 9), postgres-app/keycloak-db (Phase 10), Redis (Phase 12), Keycloak (Phase 13), NACK/NATS (NATS migration C1/C2/C3, idle, optional per env), Velero (Phase 18; backup layer expanded in Phase B, live restore-validated 2026-11-14) |
+| `platform-root-local` | not used — `local` runs no services, so there is no root Application; `make bootstrap ENV=local` seeds the catalog wiring (`apps-local` + `messaging-local` + `kong-local` + `linkerd-local` + `postgres-app-local` + `redis-local` + `keycloak-local`) host-side |
+| `platform-local` ApplicationSet | present, seven mandatory elements (`cert-manager` wave -20, `external-secrets` + `linkerd-crds` + `cloudnative-pg` + `redis-operator` wave -10, `vault` wave 0, `velero` wave 80) |
 | `messaging-local` ApplicationSet | present, optional `nats` (wave 40) + `nack` (wave 50) generated by the git files generator over `argocd/messaging/local/*.yaml`; remove the two descriptors for SNS/SQS mode |
 | cert-manager app | `cert-manager-local` `Synced` + `Healthy`; `sca-ca` ClusterIssuer `Ready`; leaf Certificate smoke green |
 | vault app | `vault-local` `Synced` + `Healthy`; HA raft trio, TLS via `vault-tls` leaf; `make smoke COMPONENT=vault` → initialized=true sealed=false; seed idempotent and HA-aware |
 | external-secrets app | `external-secrets-local` `Synced` + `Healthy`; `ClusterSecretStore vault` Ready (k8s-auth `external-secrets`, TLS via `vault-tls`); short `refreshInterval` (5m); `make smoke COMPONENT=external-secrets` → throwaway ExternalSecret `SecretSynced` + data verified |
 | linkerd-crds app | `linkerd-crds-local` `Synced`, namespace `linkerd` present, CRD-only app (no workloads); `servers`/`serverauthorizations`/`serviceprofiles` + policy group all `Established`; `make smoke COMPONENT=linkerd-crds` green |
 | cloudnative-pg app | `cloudnative-pg-local` `Synced` + `Healthy`; operator Deployment `cloudnative-pg` Ready (chart 0.29.0 / operator 1.30.0); 11 `postgresql.cnpg.io` CRDs present + `Established`; `make smoke COMPONENT=cloudnative-pg` green |
-| strimzi app | `strimzi-local` `Synced` + `Healthy`; operator Deployment `strimzi-cluster-operator` Ready (chart 1.2.0 / operator 1.2.0); watches all namespaces (`STRIMZI_NAMESPACE=*`); 10 `kafka.strimzi.io` + `core.strimzi.io` CRDs present + `Established`; `make smoke COMPONENT=strimzi` green |
 | redis-operator app | `redis-operator-local` `Synced` + `Healthy` in namespace `data`; operator Deployment `redis-operator` Ready (chart 0.26.1 / operator 0.26.0); watches all namespaces (no `WATCH_NAMESPACE` env); 4 `redis.redis.opstreelabs.in` CRDs present + `Established`; `make smoke COMPONENT=redis-operator` → throwaway `Redis` CR honored (StatefulSet ready + `PING` → `PONG`) |
 | kong app | `kong-local` `Synced` + `Healthy` in namespace `kong` (dedicated Application, **no SSA**); chart 3.4.1, gateway Deployment `kong` Ready (containers `ingress-controller` KIC 3.5.5 + `proxy` kong 3.9.4), DB-less (`KONG_DATABASE=off`); IngressClass `kong`; `configuration.konghq.com` CRDs `Established`; `Certificate/kong-proxy` Ready (leaf off `sca-ca`); declarative `Ingress kong-demo` + `KongPlugin demo-termination`; `make smoke COMPONENT=kong` → `GET https://kong.local/demo` → 200 |
 | linkerd app | `linkerd-local` `Synced` + `Healthy` (dedicated Application); chart `linkerd/linkerd-control-plane` 1.16.11 (`stable-2.14.10`); control-plane Deployments `linkerd-identity`/`linkerd-destination`/`linkerd-proxy-injector` Ready; identity PKI in-cluster (ConfigMap `linkerd-identity-trust-roots` + cert-manager-issued Secret `linkerd-identity-issuer`, chain to `root.linkerd.cluster.local` verified); 3 admission webhooks wired; `make smoke COMPONENT=linkerd` green, including **data plane end-to-end**: preflight of the control-plane identity-leaf TTL, an injected `nginx-unprivileged`+`curl` workload (both pods carry `linkerd-proxy`), HTTP 200 through the mesh, live identity leaves and inbound+outbound success metrics; `local` raises `identity.issuer.issuanceLifetime` to `168h0m0s` (emulator clock skew; dev/qa/prod keep 24h) |
 | postgres-app app | `postgres-app-local` `Synced` + `Healthy` (dedicated Application, raw CRs); CNPG `Cluster postgres-app` Ready (1 instance local; image `18.4-system-trixie`), `keycloak-db` Ready (1 instance local); ESO `postgres-app-credentials` + `keycloak-db-credentials` `SecretSynced`; `pg_stat_statements` + `vector` + `wal_level=logical` verified through `app@app`; `make smoke COMPONENT=postgres-app` green |
-| kafka app | `kafka-local` `Synced` + `Healthy` (dedicated Application, raw CRs); Strimzi `Kafka/kafka` Ready (Kafka `4.2.0`), `KafkaNodePool/kafka` 1 dual-role node local; `KafkaUser/scram-admin` Ready; ESO `kafka-scram-admin` `SecretSynced` from `secret/kafka/local`; internal listener TLS + SCRAM-SHA-512; `make smoke COMPONENT=kafka` → topic create + produce/consume green |
 | nats app | `nats-local` `Synced` + `Healthy` (optional `messaging-local` ApplicationSet element); chart/appVersion `nats/nats` 2.15.2 with JetStream enabled and a file-store PVC (1 node local/dev, 3-node JetStream cluster qa/prod); no `Stream`/`Consumer` CRs; `make smoke COMPONENT=nats` → server Ready, JetStream enabled, zero streams |
 | nack app | `nack-local` `Synced` + `Healthy` (optional `messaging-local` ApplicationSet element, namespace `nats`); chart `nats/nack` 0.35.0 / controller 0.24.0; six `*.jetstream.nats.io` CRDs `Established`; watches all namespaces; `make smoke COMPONENT=nack` green |
 | messaging contract | Vault KV-v2 `secret/messaging/local` `mode=nats` + `nats_url`; consumers project it through ESO. SNS/SQS coordinates (topic/queue/region, optional endpoint/credentials) are provisioned out of band when that mode is enabled |
@@ -218,7 +200,7 @@ streams) are the convergence gates.
 | Component/Migration | Status | Notes |
 | --- | --- | --- |
 | Keycloak → Zitadel | **Planned** | Complete replacement. Inventory in progress. |
-| Kafka/Strimzi → NATS JetStream | **In progress (C2)** | NATS + NACK deployed idle (no `Stream`/`Consumer` CRs) via the optional `messaging-<env>` ApplicationSet; remove `argocd/messaging/<env>/{nats,nack}.yaml` for SNS/SQS mode. Contract `secret/messaging/<env>` carries `mode` + endpoints. Kafka/Strimzi removal follows. |
+| Kafka/Strimzi → NATS JetStream | **Done (C1–C3)** | NATS + NACK deployed idle (no `Stream`/`Consumer` CRs) via the optional `messaging-<env>` ApplicationSet; remove `argocd/messaging/<env>/{nats,nack}.yaml` for SNS/SQS mode. Contract `secret/messaging/<env>` carries `mode` + endpoints. Kafka/Strimzi removed in C3; stream/consumer topology is service-owned (C4). |
 | Linkerd → CNI-native mTLS | **Planned** | PoC required in Floci first. |
 | Velero + Backups | **Done** | The three layers are implemented and live restore-validated on 2026-11-14: Velero scheduled backups, CNPG Barman base backups + WAL/PITR, and Vault Raft snapshot CronJob. `local` uses Floci S3; `dev`/`qa`/`prod` expect external buckets and Vault-provisioned credentials. See [backups.md](backups.md#validation-status). |
 | CNPG RDS replacement | **Done** | The PITR + latest-backup restore smoke (`bootstrap/smoke-postgres-app.sh`) passed live on 2026-11-14, closing the RDS replacement gate. |
