@@ -418,7 +418,7 @@ The following migrations are planned to optimize costs while maintaining service
 | --- | --- | --- |
 | Keycloak → Zitadel | **Proposed** | Complete replacement, no parallel long-term deployment. All OIDC clients must be migrated. |
 | Kafka/Strimzi → NATS JetStream | **Done (C1–C4)** | NATS + NACK deployed idle (no `Stream`/`Consumer` CRs) behind the optional `messaging-<env>` ApplicationSet; remove `argocd/messaging/<env>/{nats,nack}.yaml` for SNS/SQS mode (nothing in-cluster). Contract `secret/messaging/<env>` carries `mode` + endpoints. Kafka/Strimzi removed in C3; the C4 toggle runbook and service-owned stream/consumer guide are in [messaging.md](messaging.md). No current consumers. |
-| Linkerd → CNI-native mTLS | **Proposed** | L3/L4 mTLS via WireGuard/IPsec. Loss of L7 features (retries, timeouts, traffic split). PoC required first. |
+| Linkerd → CNI-native mTLS | **Under evaluation (D0 complete; PoC pending)** | D0 evaluated Cilium + WireGuard (primary), Calico + WireGuard (fallback) and k3s Flannel WireGuard-native / IPsec (not selected). WireGuard is authenticated node-to-node transport encryption, not workload mTLS; L7 retries/timeouts/traffic split and per-workload identity are lost. Linkerd stays deployed until D4; gates and inventory live in [ADR-008](adr/adr-008-cni-native-mtls.md). |
 | CNPG as RDS replacement | **Done** | Backups/PITR and the restore smoke passed live on 2026-11-14, closing the gate. |
 | Vault hardening | **Landed (live restore validated 2026-11-14)** | Raft snapshots to object storage are implemented in all four environments; see [backups.md](backups.md). |
 | Velero priority | **Done** | Velero, CNPG backups, and Vault snapshots passed live restore validation on 2026-11-14. |
