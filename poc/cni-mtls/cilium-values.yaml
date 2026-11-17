@@ -10,12 +10,12 @@ operator:
     pullPolicy: IfNotPresent
 ipam:
   mode: kubernetes
-tunnel: vxlan
+routingMode: tunnel
+tunnelProtocol: vxlan
 kubeProxyReplacement: false
 encryption:
   enabled: true
   type: wireguard
-devices: eth0
 cni:
   exclusive: true
   install: true

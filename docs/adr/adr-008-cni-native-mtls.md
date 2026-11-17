@@ -120,8 +120,12 @@ D2 attempt 2 got past cluster startup but Helm did not resolve chart
 `cilium/cilium` `1.20.5` from `https://helm.cilium.io`, so Cilium never
 installed and the later workload, capture and smoke failures were cascading.
 The harness now installs the same pinned chart from
-`oci://quay.io/cilium/charts/cilium`, the OCI method recommended by Cilium;
-the D2 rerun is pending.
+`oci://quay.io/cilium/charts/cilium`, the OCI method recommended by Cilium.
+D2 attempt 3 pulled that OCI chart successfully but Helm validation rejected
+the legacy `tunnel: vxlan` value, removed in Cilium 1.15; Cilium never
+installed and the later workload errors were cascading. The PoC values now use
+`routingMode: tunnel` with `tunnelProtocol: vxlan`, the current 1.20 keys, and
+drop the ignored `encryption.devices` value; the D2 rerun is pending.
 
 ## D1 decisions and open questions
 
@@ -130,8 +134,10 @@ the D2 rerun is pending.
   own kubeconfig under `.generated/cni-mtls/`, and never becomes a catalog
   component.
 - Cilium chart and agent/operator images are pinned to `1.20.5`; the chart is
-  installed from OCI as recommended upstream. `kubeProxyReplacement: false`
-  keeps this checkpoint scoped to networking and encryption.
+  installed from OCI as recommended upstream. `routingMode: tunnel` with
+  `tunnelProtocol: vxlan` preserves the overlay for the Docker substrate, and
+  `kubeProxyReplacement: false` keeps this checkpoint scoped to networking and
+  encryption.
 - How the environment gradient is expressed once local is no longer Flannel,
   including dev/qa/prod profiles that are provisioned outside this repo, stays
   open for D3.

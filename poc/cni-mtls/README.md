@@ -20,8 +20,9 @@ workload mTLS, and same-node pod traffic stays plaintext by design.
 
 All pins live in [versions.env](versions.env) and
 [cilium-values.yaml](cilium-values.yaml). The chart is pulled directly from OCI,
-so no `helm repo add` is required. Override pins only for a new reviewed pin;
-never use a floating tag.
+so no `helm repo add` is required. Routing uses `routingMode: tunnel` with
+`tunnelProtocol: vxlan`, the Cilium 1.20 replacement for the removed `tunnel`
+key. Override pins only for a new reviewed pin; never use a floating tag.
 
 ## Prerequisites
 
