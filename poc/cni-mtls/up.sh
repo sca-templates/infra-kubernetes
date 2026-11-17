@@ -86,8 +86,7 @@ if ! kube get --raw=/readyz >/dev/null 2>&1; then
 fi
 
 export KUBECONFIG="${CNI_MTLS_KUBECONFIG_PATH}"
-helm upgrade --install cilium cilium/cilium \
-  --repo https://helm.cilium.io \
+helm upgrade --install cilium oci://quay.io/cilium/charts/cilium \
   --version "${CNI_MTLS_CILIUM_CHART_VERSION}" \
   --namespace kube-system \
   --values "${COMMON_DIR}/cilium-values.yaml" \
