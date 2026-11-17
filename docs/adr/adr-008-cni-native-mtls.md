@@ -125,7 +125,26 @@ D2 attempt 3 pulled that OCI chart successfully but Helm validation rejected
 the legacy `tunnel: vxlan` value, removed in Cilium 1.15; Cilium never
 installed and the later workload errors were cascading. The PoC values now use
 `routingMode: tunnel` with `tunnelProtocol: vxlan`, the current 1.20 keys, and
-drop the ignored `encryption.devices` value; the D2 rerun is pending.
+drop the ignored `encryption.devices` value.
+D2 attempt 4 installed the release but Helm timed out after 5m with the
+`cilium` and `cilium-envoy` DaemonSets at `0/2`; the workload pods stayed
+Pending because no CNI was ready, and cleanup succeeded. The harness now keeps
+the OCI/values fixes, extends the Helm readiness window to 10m and dumps Cilium
+pod state, descriptions and logs on timeout.
+D2 attempt 5 exposed the actual blocker: Cilium's `mount-bpf-fs` init container
+failed with `path "/sys/fs/bpf" is mounted on "/sys" but it is not a shared
+mount`, so no CNI initialized. The harness now bind-mounts `/sys/fs/bpf` with
+`rshared` into both k3s containers.
+D2 attempt 6 installed Cilium successfully and both nodes reached `Ready`.
+`cilium_wg0` existed on both nodes but stayed at zero counters because the
+smoke failed at Service DNS resolution before sending traffic. The smoke now
+requests the server pod IP directly; Service DNS is outside the D2 transport
+gate.
+D2 attempt 7 reached the server pod IP but timed out before any packet entered
+`cilium_wg0` on either node, so the blocker is the cross-node datapath rather
+than WireGuard. The PoC now uses native routing with `autoDirectNodeRoutes` for
+the Docker bridge and dumps Cilium status and node routes if the request fails;
+the D2 rerun is pending.
 
 ## D1 decisions and open questions
 

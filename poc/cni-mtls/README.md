@@ -20,13 +20,15 @@ workload mTLS, and same-node pod traffic stays plaintext by design.
 
 All pins live in [versions.env](versions.env) and
 [cilium-values.yaml](cilium-values.yaml). The chart is pulled directly from OCI,
-so no `helm repo add` is required. Routing uses `routingMode: tunnel` with
-`tunnelProtocol: vxlan`, the Cilium 1.20 replacement for the removed `tunnel`
-key. Override pins only for a new reviewed pin; never use a floating tag.
+so no `helm repo add` is required. Routing uses native routing with
+`autoDirectNodeRoutes` for the Docker bridge. Override pins only for a new
+reviewed pin; never use a floating tag.
 
 ## Prerequisites
 
-- Docker with permission to run privileged containers.
+- Docker with permission to run privileged containers and `rshared` bind mounts.
+  `up.sh` bind-mounts `/sys/fs/bpf` with `rshared` into both k3s containers so
+  Cilium can propagate its BPF filesystem mounts.
 - The repository-pinned `kubectl` and `helm` (`make prereqs`).
 - `openssl` and `jq`.
 - Kernel WireGuard support on the Docker host. On cgroup v1 hosts, `up.sh`
@@ -42,12 +44,14 @@ poc/cni-mtls/smoke.sh
 
 `up.sh` creates a two-node k3s cluster in namespace-local Docker resources,
 writes a private kubeconfig under `.generated/cni-mtls/`, installs Cilium with
-WireGuard, and waits for both nodes to become Ready. It does not touch
-`$KUBECONFIG`.
+WireGuard, and waits for both nodes to become Ready. If Helm times out, it
+prints Cilium DaemonSet, pod, describe and log diagnostics before exiting. It
+does not touch `$KUBECONFIG`.
 
 `smoke.sh` pins the HTTP server to the agent node and the client to the server
-node, performs a real cross-node request, then checks Cilium WireGuard status
-and a recorded handshake on both nodes. Expected markers:
+node, performs a real cross-node request to the server pod IP, then checks
+Cilium WireGuard status and a recorded handshake on both nodes. Service DNS is
+not part of this gate. Expected markers:
 `CNI_MTLS_SMOKE_OK`, `Encryption: Wireguard`, `Port: 51871`, and `Peers: 1`.
 
 For the D2 capture evidence, inspect the `cilium_wg0` interface or UDP `51871`
