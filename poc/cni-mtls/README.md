@@ -13,14 +13,15 @@ workload mTLS, and same-node pod traffic stays plaintext by design.
 | Component | Pin |
 | --- | --- |
 | Cluster nodes | `rancher/k3s:v1.37.2-k3s1` |
-| Cilium Helm chart | `1.20.5` from `https://helm.cilium.io` |
+| Cilium Helm chart | `1.20.5` from `oci://quay.io/cilium/charts/cilium` |
 | Cilium agent and operator | `v1.20.5` (`quay.io/cilium/cilium`, `quay.io/cilium/operator`) |
 | Smoke server | `nginxinc/nginx-unprivileged:1.27-alpine` |
 | Smoke client | `curlimages/curl:8.10.1` |
 
 All pins live in [versions.env](versions.env) and
-[cilium-values.yaml](cilium-values.yaml). Override them only for a new reviewed
-pin; never use a floating tag.
+[cilium-values.yaml](cilium-values.yaml). The chart is pulled directly from OCI,
+so no `helm repo add` is required. Override pins only for a new reviewed pin;
+never use a floating tag.
 
 ## Prerequisites
 

@@ -114,9 +114,14 @@ D2 attempt 1 (2026-11-17) failed before Cilium install: k3s `v1.37.2` rejected
 the host's cgroup v1 (`fail-cgroupv1=true` by default), so the kubelet exited
 and the API never became stable. The later capture and smoke errors were only
 cascading effects, and cleanup succeeded. The harness now passes
-`fail-cgroupv1=false` to both kubelets; the D2 rerun is pending. This is a
-substrate compatibility finding, not a WireGuard result or grounds for the
-Calico fallback.
+`fail-cgroupv1=false` to both kubelets; this is a substrate compatibility
+finding, not a WireGuard result or grounds for the Calico fallback.
+D2 attempt 2 got past cluster startup but Helm did not resolve chart
+`cilium/cilium` `1.20.5` from `https://helm.cilium.io`, so Cilium never
+installed and the later workload, capture and smoke failures were cascading.
+The harness now installs the same pinned chart from
+`oci://quay.io/cilium/charts/cilium`, the OCI method recommended by Cilium;
+the D2 rerun is pending.
 
 ## D1 decisions and open questions
 
@@ -124,9 +129,9 @@ Calico fallback.
   starts with `--flannel-backend=none` and `--disable-network-policy`, keeps its
   own kubeconfig under `.generated/cni-mtls/`, and never becomes a catalog
   component.
-- Cilium chart and agent/operator images are pinned to `1.20.5`;
-  `kubeProxyReplacement: false` keeps this checkpoint scoped to networking and
-  encryption.
+- Cilium chart and agent/operator images are pinned to `1.20.5`; the chart is
+  installed from OCI as recommended upstream. `kubeProxyReplacement: false`
+  keeps this checkpoint scoped to networking and encryption.
 - How the environment gradient is expressed once local is no longer Flannel,
   including dev/qa/prod profiles that are provisioned outside this repo, stays
   open for D3.
