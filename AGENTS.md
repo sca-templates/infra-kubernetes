@@ -69,8 +69,8 @@ live under `infrastructure/<component>/` + `envs/<env>/`.
 | Kong | `kong` | kong/kong (DB-less) | Edge gateway, dedicated Application, no SSA | [infra-kong](https://github.com/sca-templates/infra-kong) | **deployed** (Phase 8) |
 | Linkerd control plane | `linkerd` | linkerd/linkerd-control-plane | mTLS identity, golden signals | [infra-linkerd](https://github.com/sca-templates/infra-linkerd) | **deployed** (Phase 9) |
 | postgres-app (+ keycloak-db) | `data` | CNPG `Cluster` CRs (raw) | App + Keycloak databases; all 4 envs | [infra-postgres](https://github.com/sca-templates/infra-postgres) | **deployed** (Phase 10) |
-| NATS JetStream | `data` | nats/nats (JetStream) | Event backbone (idle; no Stream/Consumer CRs); optional per env | — | **deployed** (NATS migration C1/C2/C3) |
-| NACK | `nats` | nats/nack | JetStream controller (Stream/Consumer CRDs); optional per env | — | **deployed** (NATS migration C1/C2/C3) |
+| NATS JetStream | `data` | nats/nats (JetStream) | Event backbone (idle; no Stream/Consumer CRs); optional per env | — | **deployed** (NATS migration C1–C4) |
+| NACK | `nats` | nats/nack | JetStream controller (Stream/Consumer CRDs); optional per env | — | **deployed** (NATS migration C1–C4) |
 | Redis | `data` | `RedisReplication` CR | Cache | [infra-redis](https://github.com/sca-templates/infra-redis) | **deployed** (Phase 12) |
 | Keycloak | `keycloak` | codecentric/keycloakx | OIDC IdP, realm `sca` | [infra-keycloak](https://github.com/sca-templates/infra-keycloak) | **deployed** (Phase 13) |
 | kube-prometheus-stack | `observability` | prometheus-community/kube-prometheus-stack | Metrics + Grafana + Alertmanager | [infra-prometheus](https://github.com/sca-templates/infra-prometheus) | planned (Phase 14) |

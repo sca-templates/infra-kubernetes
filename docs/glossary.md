@@ -30,8 +30,8 @@ live in [architecture.md](architecture.md).
 | **External Secrets Operator** | Projects Vault KV → native `Secret`s. Phase 3 (deployed) |
 | **Linkerd**                   | Service mesh: mTLS identity, golden signals. CRDs deployed (Phase 4), control plane Phase 9 |
 | **CloudNativePG (CNPG)**      | PostgreSQL operator (`Cluster` CR). Phase 5, `postgres-app`/`keycloak-db` Phase 10         |
-| **NATS JetStream**            | Event backbone (ADR-005); idle tier (no `Stream`/`Consumer` CRs), optional per env. NATS migration C1/C2/C3 |
-| **NACK**                      | NATS Controller for Kubernetes: installs the `Stream`/`Consumer` CRDs and reconciles them. NATS migration C1/C2/C3 |
+| **NATS JetStream**            | Event backbone (ADR-005); idle tier (no `Stream`/`Consumer` CRs), optional per env. NATS migration C1–C4; see [messaging.md](messaging.md) |
+| **NACK**                      | NATS Controller for Kubernetes: installs the `Stream`/`Consumer` CRDs and reconciles them. NATS migration C1–C4; see [messaging.md](messaging.md) |
 | **redis-operator**            | Redis operator (`Redis` CR). Phases 7/12                                                   |
 | **Kong**                      | API gateway (DB-less, dedicated `Application`, no SSA). Phase 8                            |
 | **Keycloak**                  | OIDC IdP (realm `sca`). Phase 13                                                           |

@@ -109,7 +109,8 @@ Messaging uses the platform contract at Vault KV-v2
 
 The service projects the path with its own `ExternalSecret`; the platform never
 copies the contract into service namespaces. The data/environment values are
-seeded or provisioned out of band per [ADR-005](adr/adr-005-kafka-to-nats-jetstream.md).
+seeded or provisioned out of band per [ADR-005](adr/adr-005-kafka-to-nats-jetstream.md)
+and the runbook in [messaging.md](messaging.md).
 
 ## 4. Environment promotion and releases
 

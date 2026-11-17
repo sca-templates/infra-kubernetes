@@ -23,7 +23,8 @@ resolves the `{{GIT_REPO_URL}}`/`{{GIT_TARGET_BRANCH}}` placeholders host-side):
   bootstrap` with the ref under test (the PR head in CI, `main` otherwise).
 - `argocd/messaging-<env>.yaml` — the **optional messaging `ApplicationSet`**
   (git files generator over `argocd/messaging/<env>/*.yaml`): the descriptor
-  files toggle NATS/NACK per environment.
+  files toggle NATS/NACK per environment; see [messaging.md](messaging.md) for
+  the procedure.
 - `argocd/kong-<env>.yaml` — the **dedicated Kong `Application`** (flat-schema
   CRDs, no SSA), seeded the same way.
 - `argocd/root-app-<env>.yaml` — the root `Application` (present for
@@ -98,7 +99,7 @@ ArgoCD, cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3),
 linkerd-crds (Phase 4), cloudnative-pg (Phase 5), redis-operator (Phase 7),
 Kong (Phase 8), the Linkerd control plane (Phase 9),
 postgres-app/keycloak-db (Phase 10), Redis (Phase 12), Keycloak (Phase 13),
-NACK/NATS (NATS migration C1/C2/C3) and Velero (Phase 18) are
+NACK/NATS (NATS migration C1–C4) and Velero (Phase 18) are
 deployed; the observability components (Phases 14-16) remain `planned`.
 
 **Services are not part of this catalog.** They are registered in
@@ -117,8 +118,8 @@ their own repositories — see
 | kong | `kong` | kong/kong (DB-less) | 20 | 8 | deployed (Phase 8) |
 | linkerd control plane | `linkerd` | linkerd/linkerd-control-plane | 30 | 9 | deployed (Phase 9) |
 | postgres-app (+ keycloak-db) | `data` | CNPG `Cluster` CRs (raw) | 40 | 10 | deployed (Phase 10) |
-| nats (JetStream) | `data` | nats/nats (JetStream) | 40 | — | deployed (NATS migration C1/C2/C3, idle; optional per env) |
-| nack (JetStream controller) | `nats` | nats/nack | 50 | — | deployed (NATS migration C1/C2/C3; optional per env) |
+| nats (JetStream) | `data` | nats/nats (JetStream) | 40 | — | deployed (NATS migration C1–C4, idle; optional per env) |
+| nack (JetStream controller) | `nats` | nats/nack | 50 | — | deployed (NATS migration C1–C4; optional per env) |
 | redis (CR) | `data` | `RedisReplication` CR | 40 | 12 | deployed (Phase 12) |
 | keycloak | `keycloak` | codecentric/keycloakx (realm import) | 50 | 13 | deployed (Phase 13) |
 | kube-prometheus-stack | `observability` | prometheus-community/kube-prometheus-stack | 60 | 14 | planned (Phase 14) |
@@ -135,7 +136,7 @@ Notes:
   linkerd-crds (Phase 4), cloudnative-pg (Phase 5),
   redis-operator (Phase 7), Kong (Phase 8), the Linkerd control plane
   (Phase 9), postgres-app/keycloak-db (Phase 10), Redis (Phase 12),
-  Keycloak (Phase 13), NACK/NATS (NATS migration C1/C2/C3) and Velero (Phase 18) are
+  Keycloak (Phase 13), NACK/NATS (NATS migration C1–C4) and Velero (Phase 18) are
   deployed; the observability components (Phases 14-16) remain `planned (Phase N)`. The
   CNPG scheduled backups and Vault Raft snapshot CronJob are **backup
   resources**, not separate catalog components; they are described in
@@ -376,7 +377,7 @@ as each component lands; the log always explains *why*, never just *what*.
 | Kong | DB-less (`database: off`), `ingressController.installCRDs: false`, managed as a dedicated `Application`, no SSA | Kong ships flat-schema CRDs; structured-merge diff breaks under `ServerSideApply=true`, and `--include-crds` re-emits CRDs twice |
 | postgres-app | Dedicated raw `Application` per environment (`postgres-app-<env>`), not in the `ApplicationSet` generator list; one shared manifest directory with `directory.include: "*-<env>.yaml"` | The datastores are raw CNPG `Cluster` CRs, so the Helm-chart generator cannot render them. They run in **all four** environments (app DB + Keycloak DB), and the per-env `include` keeps a single source directory while selecting only that environment's CRs. Like Kong, the dedicated app is also what the cluster smoke discovers as `postgres-app-<env>` |
 | Keycloak | `codecentric/keycloakx` 7.4.0 / Keycloak 26.8.1 instead of the planned `bitnami/keycloak`; dedicated **multi-source** `Application` per environment (`keycloak-<env>`) with chart + `$values` + per-env ExternalSecrets + shared realm/TLS, realm imported at startup (`--import-realm`), preferred anti-affinity in every env | The `bitnami/keycloak` chart referenced by the original roadmap is no longer a viable pin, while `keycloakx` tracks the official Keycloak 26 image and exposes the startup knobs this deployment needs. Multi-source is required because the component owns both a Helm release and raw resources (three ExternalSecrets, the realm ConfigMap, the TLS Certificate); keeping them in one dedicated app gives one owner and the same `keycloak-<env>` convergence gate the smoke expects. Importing the realm from git makes the realm reviewable without an Admin API sidecar, and `--import-realm` is a no-op once `sca` exists (the StatefulSet is `OrderedReady`, so replicas do not race on first import). `preferred` anti-affinity keeps the 3-replica qa/prod profile schedulable on the single-node promote substrate |
-| nats + nack | Both are optional elements of a dedicated `messaging-<env>` `ApplicationSet` (not the platform list); NACK is pinned at wave 50 (after the NATS server at 40), NATS ships "ready but idle" with no `Stream`/`Consumer` CRs, and the tier has no client auth yet | NACK connects to NATS at startup; the platform Applications are not children of a root app, so cross-Application sync-waves are not enforced, and placing NACK after NATS keeps the logical order while the controller retries until the server answers. Idle avoids committing streams before the toggle and the consumers exist (ADR-005); once the first consumer lands, NATS accounts/credentials are wired through Vault/ESO. Both use upstream charts, so the ApplicationSet covers them without dedicated app files |
+| nats + nack | Both are optional elements of a dedicated `messaging-<env>` `ApplicationSet` (not the platform list); NACK is pinned at wave 50 (after the NATS server at 40), NATS ships "ready but idle" with no `Stream`/`Consumer` CRs, and the tier has no client auth yet | NACK connects to NATS at startup; the platform Applications are not children of a root app, so cross-Application sync-waves are not enforced, and placing NACK after NATS keeps the logical order while the controller retries until the server answers. Idle avoids committing streams before the toggle and the consumers exist (ADR-005); once the first consumer lands, NATS accounts/credentials are wired through Vault/ESO. Both use upstream charts, so the ApplicationSet covers them without dedicated app files. See [messaging.md](messaging.md) for the toggle and service-owned topology |
 | Messaging toggle (NATS/NACK) | A dedicated `argocd/messaging-<env>.yaml` `ApplicationSet` (git files generator over `argocd/messaging/<env>/*.yaml`) owns the optional NATS/NACK Applications; the descriptors exist in NATS mode and are removed for SNS/SQS mode. The app template sets `resources-finalizer.argocd.argoproj.io`, so removing a descriptor deletes the Application and its resources. The per-env values overlays (`envs/<env>/{nats,nack}.yaml`) remain in both modes | The platform list generator cannot express "this component is optional per environment". A git files generator is declarative and needs no values-flag conditionals: the file set in git *is* the mode. Keeping the values overlays makes switching back a descriptor-only change, while the finalizer guarantees SNS/SQS mode leaves no NATS pods behind (the idle tier has no data worth preserving). The app names stay `nats-<env>`/`nack-<env>`, so the existing smokes and catalog discovery are unchanged. Vault's `secret/messaging/<env>` is the runtime contract (`mode` + endpoints); the descriptor set is the deployment gate |
 | Messaging contract | `secret/messaging/<env>` is the single KV-v2 contract: `mode` (`nats`/`sns-sqs`), `nats_url`, and the SNS/SQS coordinates (`sns_topic_arn`, `sqs_queue_url`, `aws_region`, optional endpoint/credentials). `bootstrap/seed-vault.sh` seeds local `mode=nats`; external environments provision the path out of band | Consumers must switch backends without code changes, and Vault is the secrets SSOT. A per-service copy would drift; a platform ConfigMap would not carry credentials. Keeping the contract in Vault lets every service project it with its own ESO scope. No consumer exists yet, so the idle tier remains unauthenticated |
 | Linkerd | Control plane deployed as a **dedicated ArgoCD `Application`** (`argocd/linkerd-<env>.yaml`), **not** by the `linkerd install` script, and with **no `linkerd-viz`** | The script model cannot be validated by the cluster smoke, which discovers the catalog from `infrastructure/*/` and requires every entry to be an ArgoCD `Application` `<name>-<env>` that converges (`bootstrap/smoke-ci.sh`); the dedicated-Application pattern (same shape as Kong) makes the control plane a normal, reviewable, `git`-driven catalog entry. `linkerd-viz` stays out (headless mesh): the golden signals are scraped by the Phase 14 observability stack |
@@ -416,7 +417,7 @@ The following migrations are planned to optimize costs while maintaining service
 | Migration | Status | Notes |
 | --- | --- | --- |
 | Keycloak → Zitadel | **Proposed** | Complete replacement, no parallel long-term deployment. All OIDC clients must be migrated. |
-| Kafka/Strimzi → NATS JetStream | **Done (C1–C3)** | NATS + NACK deployed idle (no `Stream`/`Consumer` CRs) behind the optional `messaging-<env>` ApplicationSet; remove `argocd/messaging/<env>/{nats,nack}.yaml` for SNS/SQS mode (nothing in-cluster). Contract `secret/messaging/<env>` carries `mode` + endpoints. Kafka/Strimzi removed in C3; stream/consumer topology is service-owned (C4). No current consumers. |
+| Kafka/Strimzi → NATS JetStream | **Done (C1–C4)** | NATS + NACK deployed idle (no `Stream`/`Consumer` CRs) behind the optional `messaging-<env>` ApplicationSet; remove `argocd/messaging/<env>/{nats,nack}.yaml` for SNS/SQS mode (nothing in-cluster). Contract `secret/messaging/<env>` carries `mode` + endpoints. Kafka/Strimzi removed in C3; the C4 toggle runbook and service-owned stream/consumer guide are in [messaging.md](messaging.md). No current consumers. |
 | Linkerd → CNI-native mTLS | **Proposed** | L3/L4 mTLS via WireGuard/IPsec. Loss of L7 features (retries, timeouts, traffic split). PoC required first. |
 | CNPG as RDS replacement | **Done** | Backups/PITR and the restore smoke passed live on 2026-11-14, closing the gate. |
 | Vault hardening | **Landed (live restore validated 2026-11-14)** | Raft snapshots to object storage are implemented in all four environments; see [backups.md](backups.md). |

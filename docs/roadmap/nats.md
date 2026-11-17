@@ -34,7 +34,8 @@ Notes:
   yet; the server is reachable only in-cluster
   (`nats.data.svc.cluster.local:4222`).
 - Kafka/Strimzi were removed in C3, leaving NATS/NACK as the sole event
-  backbone. Stream/consumer topology is service-owned (C4).
+  backbone. The C4 toggle runbook and service-owned topology guide are in
+  [messaging.md](../messaging.md).
 - `local`/`dev` run one node (no JetStream R3); `qa`/`prod` run three with a PDB
   and `preferred` anti-affinity so the profile stays schedulable on the
   single-node promote substrate.
@@ -66,5 +67,6 @@ Notes:
 - The toggle is at descriptor-file level rather than a Helm values flag: the
   platform list generator cannot express a per-env optional component, and a
   git files generator makes the file set in git the single source of truth.
-- Follow-up (C4): enable NATS accounts/credentials with the first consumer and
-  extend the contract; no consumer exists yet, so the tier stays unauthenticated.
+- Follow-up (first consumer): enable NATS accounts/credentials and extend the
+  contract; no consumer exists yet, so the tier stays unauthenticated. See
+  [messaging.md](../messaging.md) for the procedure boundary.

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-11-15); implemented in C1–C3 (2026-11-16)
+Accepted (2026-11-15); implemented in C1–C4 (2026-11-17)
 
 ## Context
 
@@ -52,4 +52,4 @@ Replace Kafka/Strimzi with NATS JetStream. NATS must be configurable/togglable t
 - Remove Strimzi, Kafka CRs, Kafka values and the Kafka-specific wiring. Landed
   in C3: the catalog returns to 18 components and NATS/NACK are the sole event
   backbone.
-- Document the toggle procedure and the stream/consumer migration (C4).
+- Documented the toggle procedure and service-owned `Stream`/`Consumer` migration in [messaging.md](../messaging.md) (C4, 2026-11-17).
