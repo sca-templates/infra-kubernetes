@@ -25,6 +25,7 @@ docker run --detach \
   --network "${CNI_MTLS_NETWORK}" \
   --ip "${CNI_MTLS_SERVER_IP}" \
   --privileged \
+  --mount "type=bind,source=/sys/fs/bpf,target=/sys/fs/bpf,bind-propagation=rshared" \
   --publish "${CNI_MTLS_API_PORT}:6443" \
   --env "K3S_TOKEN=${K3S_TOKEN}" \
   --env K3S_KUBECONFIG_OUTPUT=/output/server-kubeconfig.yaml \
@@ -66,6 +67,7 @@ docker run --detach \
   --network "${CNI_MTLS_NETWORK}" \
   --ip "${CNI_MTLS_AGENT_IP}" \
   --privileged \
+  --mount "type=bind,source=/sys/fs/bpf,target=/sys/fs/bpf,bind-propagation=rshared" \
   --env "K3S_URL=https://${CNI_MTLS_SERVER_IP}:6443" \
   --env "K3S_TOKEN=${K3S_TOKEN}" \
   "${CNI_MTLS_K3S_IMAGE}" agent \
@@ -86,14 +88,23 @@ if ! kube get --raw=/readyz >/dev/null 2>&1; then
 fi
 
 export KUBECONFIG="${CNI_MTLS_KUBECONFIG_PATH}"
-helm upgrade --install cilium oci://quay.io/cilium/charts/cilium \
+if ! helm upgrade --install cilium oci://quay.io/cilium/charts/cilium \
   --version "${CNI_MTLS_CILIUM_CHART_VERSION}" \
   --namespace kube-system \
   --values "${COMMON_DIR}/cilium-values.yaml" \
   --set "image.tag=${CNI_MTLS_CILIUM_IMAGE_TAG}" \
   --set "operator.image.tag=${CNI_MTLS_CILIUM_IMAGE_TAG}" \
   --wait \
-  --timeout 5m
+  --timeout 10m; then
+  kube -n kube-system get daemonset cilium cilium-envoy -o wide || true
+  kube -n kube-system get pods -l 'k8s-app in (cilium,cilium-envoy)' -o wide || true
+  for pod in $(kube -n kube-system get pods -l 'k8s-app in (cilium,cilium-envoy)' -o name 2>/dev/null || true); do
+    kube -n kube-system describe "${pod}" || true
+    kube -n kube-system logs "${pod}" --all-containers --tail=200 || true
+  done
+  echo "ERROR: Cilium installation did not become ready"
+  exit 1
+fi
 
 ready_count=0
 for attempt in $(seq 1 90); do

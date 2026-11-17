@@ -10,8 +10,9 @@ operator:
     pullPolicy: IfNotPresent
 ipam:
   mode: kubernetes
-routingMode: tunnel
-tunnelProtocol: vxlan
+routingMode: native
+autoDirectNodeRoutes: true
+ipv4NativeRoutingCIDR: 10.244.0.0/16
 kubeProxyReplacement: false
 encryption:
   enabled: true
