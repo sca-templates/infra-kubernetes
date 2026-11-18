@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed (2026-11-17; D0 research complete, D1 PoC files added; evidence pending). Supersedes ADR-002 for the replacement plan; Linkerd remains deployed until the D3/D4 cutover.
+Proposed (2026-11-17; D0/D1 complete, Cilium D2 failed on the Docker/WSL2 substrate). Supersedes ADR-002 for the replacement plan; the Calico fallback is open in [ADR-009](adr-009-calico-wireguard-fallback.md). Linkerd remains deployed until the D3/D4 cutover.
 
 ## Context
 
@@ -72,7 +72,8 @@ The CNI is platform substrate, not a wave-ordered catalog Application: it must
 exist before ArgoCD can reconcile workloads. D1 must confirm how the bootstrap
 installs it on a fresh cluster without a live CNI swap. If the Cilium PoC
 fails, evaluate Calico + WireGuard in a new ADR amendment; do not substitute
-IPsec or silently keep Linkerd while calling the migration complete.
+IPsec or silently keep Linkerd while calling the migration complete. That
+fallback is now open in [ADR-009](adr-009-calico-wireguard-fallback.md).
 
 The accepted trade-offs are the loss of Linkerd workload identity and L7
 retries/timeouts/traffic split, and the operational prerequisites of the CNI.
@@ -140,11 +141,14 @@ D2 attempt 6 installed Cilium successfully and both nodes reached `Ready`.
 smoke failed at Service DNS resolution before sending traffic. The smoke now
 requests the server pod IP directly; Service DNS is outside the D2 transport
 gate.
-D2 attempt 7 reached the server pod IP but timed out before any packet entered
-`cilium_wg0` on either node, so the blocker is the cross-node datapath rather
-than WireGuard. The PoC now uses native routing with `autoDirectNodeRoutes` for
-the Docker bridge and dumps Cilium status and node routes if the request fails;
-the D2 rerun is pending.
+D2 attempt 7 used native routing with `autoDirectNodeRoutes` and reached the
+server pod IP, but the request still timed out after 10s. Cilium reported
+`Encryption: Wireguard` with `Port: 51871` and `Peers: 1` on both nodes, while
+`cilium_wg0` counters stayed at zero and no handshake was observed. Host routes
+to the remote pod CIDR were present on both nodes. Tunnel and native routing
+were both exercised, so the remaining failure is the Cilium datapath on this
+Docker/WSL2 substrate. The Cilium D2 gate is failed and
+[ADR-009](adr-009-calico-wireguard-fallback.md) opens the Calico fallback.
 
 ## D1 decisions and open questions
 
@@ -153,10 +157,9 @@ the D2 rerun is pending.
   own kubeconfig under `.generated/cni-mtls/`, and never becomes a catalog
   component.
 - Cilium chart and agent/operator images are pinned to `1.20.5`; the chart is
-  installed from OCI as recommended upstream. `routingMode: tunnel` with
-  `tunnelProtocol: vxlan` preserves the overlay for the Docker substrate, and
-  `kubeProxyReplacement: false` keeps this checkpoint scoped to networking and
-  encryption.
+  installed from OCI as recommended upstream. Both `routingMode: tunnel` with
+  `tunnelProtocol: vxlan` and native routing with `autoDirectNodeRoutes` were
+  exercised in D2. The Cilium gate failed; ADR-009 owns the fallback candidate.
 - How the environment gradient is expressed once local is no longer Flannel,
   including dev/qa/prod profiles that are provisioned outside this repo, stays
   open for D3.

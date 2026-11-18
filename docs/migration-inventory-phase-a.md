@@ -46,11 +46,15 @@ Docs and history:
   Work Log rows and `CHANGELOG.md` remain as the decision and migration
   history; do not rewrite them as if Linkerd had never been deployed.
 - [ADR-008](adr/adr-008-cni-native-mtls.md) is the source of truth for the
-  proposed replacement; `status.md` keeps the deployed/until-cutover state.
+  proposed replacement; [ADR-009](adr/adr-009-calico-wireguard-fallback.md)
+  owns the fallback after the Cilium D2 gate failed; `status.md` keeps the
+  deployed/until-cutover state.
 
 **Action**: D0 complete (research only). D1 added the disposable
-[PoC harness](../poc/cni-mtls/README.md); D2 gates on its evidence, D3 lands the
-CNI substrate, D4 removes the runtime surfaces above and D5 closes the docs.
+[Cilium PoC harness](../poc/cni-mtls/README.md); D2 failed on Cilium and passed
+on the [Calico PoC harness](../poc/calico-wireguard/README.md), D3 lands the
+chosen CNI substrate, D4 removes the runtime surfaces above and D5 closes
+the docs.
 Service repositories are outside this repo and must drop their own injection
 annotations at D4.
 
@@ -87,5 +91,5 @@ Kafka/Strimzi; see [messaging.md](messaging.md) for the toggle procedure.
 
 1. Keep statuses cross-linked from [status.md](status.md) and the global Work
    Log in [roadmap.md](roadmap.md); do not duplicate deployment state here
-2. Run the ADR-008 D2 evidence gate against the D1 PoC harness; D1 did not run it
+2. D2 evidence is complete: the ADR-008 Cilium gate failed and the ADR-009 Calico gate passed; proceed with D3
 3. Inventory Keycloak/OIDC clients in E0 before any Zitadel cutover

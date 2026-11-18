@@ -39,13 +39,18 @@ wired.
 
 D0 research is complete (2026-11-17): [ADR-008](../adr/adr-008-cni-native-mtls.md)
 proposes replacing the mesh with CNI-managed WireGuard transport encryption.
-The mesh stays deployed through D2; D1 added the disposable
-[PoC harness](../../poc/cni-mtls/README.md), D2 gates on its evidence, D3 lands
-the CNI substrate, D4 removes the control plane and every wiring surface
-inventoried in [migration-inventory-phase-a.md](../migration-inventory-phase-a.md),
-and D5 closes the docs. Do not describe WireGuard as workload mTLS: ADR-008
-records the identity and L7 trade-offs. No runtime or platform wiring work has
-landed in this project.
+D1 added the disposable [Cilium PoC harness](../../poc/cni-mtls/README.md); D2
+ran it seven times and failed the cross-node gate, so
+[ADR-009](../adr/adr-009-calico-wireguard-fallback.md) opened the Calico
+fallback with the [Calico PoC harness](../../poc/calico-wireguard/README.md),
+whose D2 gate passed on 2026-11-17 with cross-node HTTP and WireGuard
+peer/handshake/counter evidence on both nodes. D3 lands the CNI substrate,
+D4 removes the control
+plane and every wiring surface inventoried in
+[migration-inventory-phase-a.md](../migration-inventory-phase-a.md), and D5
+closes the docs. Do not describe WireGuard as workload mTLS: ADR-008 records
+the identity and L7 trade-offs. No runtime or platform wiring work has landed
+in this project.
 
 No natural further phases under M1 → the retirement checkpoints are tracked by
-ADR-008 and the global Work Log.
+ADR-008, ADR-009 and the global Work Log.
