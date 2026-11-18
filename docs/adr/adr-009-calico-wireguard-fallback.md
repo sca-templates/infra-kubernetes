@@ -1,0 +1,112 @@
+# ADR-009: Calico + WireGuard fallback for Linkerd replacement
+
+## Status
+
+Proposed (2026-11-17). Opens the fallback branch defined by
+[ADR-008](adr-008-cni-native-mtls.md) after the Cilium D2 gate failed. Linkerd
+remains deployed until the D3/D4 cutover; this ADR does not change runtime or
+ArgoCD wiring.
+
+## Context
+
+ADR-008 selected Cilium + WireGuard as the primary replacement and required a
+two-node evidence gate before any cutover. The Cilium PoC was iterated through
+seven runs. Harness defects were fixed first: cgroup v1 on the WSL2 host, chart
+resolution through the OCI registry, Cilium 1.20 routing keys, Helm readiness,
+and the non-shared `/sys/fs/bpf` mount. Cilium then installed cleanly and both
+nodes reached `Ready`.
+
+D2 still failed. Attempt 6 reached Service DNS resolution before any cross-node
+request; attempt 7 used the server pod IP directly with native routing and
+`autoDirectNodeRoutes`. The request timed out after 10s. Cilium reported
+`Encryption: Wireguard` with `Port: 51871` and `Peers: 1` on both nodes, but
+`cilium_wg0` counters stayed at zero and no handshake was observed. Host routes
+to the remote pod CIDR were present on both nodes. Tunnel and native routing
+were both exercised, so the remaining failure is the Cilium datapath on this
+Docker/WSL2 substrate, not the chart pin, Helm wiring, or WireGuard key setup.
+
+ADR-008 line 103 states that a D2 failure opens the Calico fallback amendment.
+This ADR is that amendment.
+
+D2-Calico attempt 1 failed before CNI readiness: Calico `v3.31.7` renders the
+`ebpf-bootstrap` init container unconditionally, and its bidirectional `/sys/fs`
+mount is rejected by the WSL2/Docker substrate. The harness now removes that
+init container and its BPF-only mounts and volumes from the pinned manifest;
+this PoC uses the iptables dataplane and needs no eBPF. This is a substrate
+compatibility finding, not a WireGuard result.
+D2-Calico attempt 2 then failed creating the main `calico-node` container:
+WSL2 has no `/sys/kernel/security`, and kubelet could not create the hostPath
+(`failed to mkdir "/sys/kernel/security": operation not permitted`). The harness
+now also removes that mount and volume; Felix treats an unreadable lockdown
+file as not locked down, so this does not affect the iptables/VXLAN dataplane.
+D2-Calico attempt 3 brought both nodes to `Ready` and reached the cross-node
+HTTP check, but the verifier called `wg show` inside `quay.io/calico/node`,
+which does not ship the `wg` CLI. This is a harness defect, not a WireGuard
+result. The gate now enables Felix WireGuard Prometheus metrics and reads
+peer, handshake and byte counters from `hostNetwork` pods using the already
+pinned curl image.
+D2-Calico attempt 4 confirmed the config keys but showed that patching
+`FelixConfiguration` after the `calico-node` rollout is too late: Felix calls
+`ConfigurePrometheusMetrics` at startup and registers the WireGuard collector
+only when `wireguardEnabled` is already true. `/metrics` answered, but no
+`wireguard_*` series existed. The harness now patches `FelixConfiguration`
+before waiting for the rollout and forces a `calico-node` restart to avoid the
+DaemonSet creation race; the gate requires `wireguard_meta` before checking
+peer keys.
+D2-Calico attempt 5 registered the collector and passed the `wireguard_meta`
+readiness check, but the evidence scrape ran within Felix's one-second
+WireGuard collection rate limit and captured an empty series. The gate now
+retries WireGuard scrapes until a `wireguard_meta` sample is present before
+capturing and validating the evidence.
+
+## Decision
+
+Evaluate Calico `v3.31.7` + WireGuard as the CNI replacement using a disposable
+two-node k3s-in-Docker PoC. The candidate is pinned to
+`https://raw.githubusercontent.com/projectcalico/calico/v3.31.7/manifests/calico-vxlan.yaml`
+with VXLAN `Always`, IPIP `Never`, pod CIDR `10.244.0.0/16`, MTU `1440`, and
+`IP_AUTODETECTION_METHOD=interface=eth0`. WireGuard is enabled through
+`FelixConfiguration`, not through `calicoctl`.
+
+The D2-Calico gate requires: both nodes Ready; Calico pods Ready;
+`projectcalico.org/WireguardPublicKey` present on both nodes; `wireguard.cali`
+with one peer and a recent handshake on both nodes increasing transfer
+counters; a cross-node pod-IP HTTP request succeeding; and scratch cluster
+removed. The evidence must state that Calico encrypts only the host-to-host leg;
+pod-to-host traffic and same-node pod traffic remain plaintext. WireGuard is
+authenticated L3/L4 transport, not workload mTLS, SPIFFE identity, or Linkerd
+L7 retries/timeouts/traffic split.
+
+If D2-Calico fails on this substrate, stop the migration and report the
+substrate limitation. Do not substitute IPsec, silently keep Linkerd, or start
+the D3/D4 cutover without a passing D2 gate.
+
+## Result
+
+D2-Calico passed on 2026-11-17. Both nodes reached `Ready`, cross-node pod-IP
+HTTP succeeded, and Felix metrics showed `wireguard.cali` with one peer on each
+node, a recent handshake and positive `wireguard_bytes_sent` and
+`wireguard_bytes_rcvd`. The scratch cluster was removed; evidence is under
+`.generated/calico-wireguard-evidence/`. D3 is unblocked and Linkerd stays
+deployed until the D4 removal.
+
+## Consequences
+
+- A new pinned PoC harness lives under `poc/calico-wireguard/`; the Cilium PoC
+  stays as the failed primary-candidate evidence.
+- D3 is unblocked after the passing D2-Calico gate. Linkerd stays deployed until D4.
+- The selected CNI becomes bootstrap-managed substrate in D3, with per-env
+  pinned profiles and a documented rollback.
+- Services still lose per-workload identity, Linkerd golden signals and L7
+  traffic management; any future requirement needs a separate ADR.
+- Same-node pod traffic is never encrypted, and the pod-to-host leg under
+  Calico remains plaintext.
+
+## Implementation plan
+
+| Checkpoint | Scope | Gate |
+| --- | --- | --- |
+| D2-Calico | Add the pinned Calico WireGuard PoC harness and run it on a fresh two-node cluster | D2-Calico evidence gate above |
+| D3 | Land the chosen CNI as bootstrap-managed substrate with per-env pinned profiles, preflight checks, CI path filters and substrate smoke; keep Linkerd deployed | Fresh local substrate reaches full platform health with the new CNI and a documented rollback |
+| D4 | Remove Linkerd CRDs, control plane, identity PKI, smoke targets, Vault allowlist exception, service-template annotation and repository wiring | No Linkerd runtime or ArgoCD references remain |
+| D5 | Documentation closeout: update status/catalog/roadmap and mark ADR-008 and this ADR implemented | Docs match the deployed platform |
