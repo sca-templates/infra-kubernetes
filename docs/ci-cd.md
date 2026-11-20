@@ -393,8 +393,8 @@ Floci's EKS backing, not ArgoCD-managed).
   after which ArgoCD reconciles the **real app-of-apps** (ApplicationSet
   `platform-local` → the optional `messaging-local`, the dedicated `kong-local`,
   `linkerd-local`, `postgres-app-local`, `redis-local` and
-  `keycloak-local`), gates every platform Application (`<name>-local`, NATS/NACK,
-  Kong and Linkerd included), seeds Vault
+  `keycloak-local`), gates every platform Application (`<name>-local`, plus
+  NATS/NACK when their descriptors exist; Kong and Linkerd included), seeds Vault
   (it is born sealed, so
   it can only report `Healthy` once `seed-vault.sh` ran), then gates the whole
   catalog on `Synced/Healthy`, runs the touched component smoke(s), the EKS check

@@ -16,6 +16,12 @@ STATEFULSET="${NATS_STATEFULSET:-nats}"
 BOX="${NATS_BOX:-nats-box}"
 SERVER_URL="${NATS_URL:-nats://nats:4222}"
 TIMEOUT="${SMOKE_TIMEOUT:-120s}"
+APP="${NATS_APP:-nats-local}"
+
+if ! kubectl get application "${APP}" -n argocd >/dev/null 2>&1; then
+  echo "[SKIP] smoke(nats): Application ${APP} is not deployed (optional messaging tier)"
+  exit 0
+fi
 
 echo "── smoke(nats): namespace ${NAMESPACE} present"
 kubectl get namespace "$NAMESPACE" --no-headers >/dev/null
