@@ -160,13 +160,19 @@ wait_for_felix_config() {
 
 check_kubernetes_service() {
   local pod="cni-kubernetes-probe"
-  local attempt phase overrides probe
+  local attempt phase overrides probe node
+
+  node="$(kube get nodes --no-headers -o custom-columns=NAME:.metadata.name | awk 'NR == 1 { print; exit }')"
+  [ -n "${node}" ] || {
+    echo "ERROR: no node available for the internal API probe" >&2
+    return 1
+  }
 
   kube -n kube-system delete pod "${pod}" --ignore-not-found >/dev/null 2>&1 || true
 
   probe='curl -fsS --max-time 10 --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt -H "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" https://kubernetes.default.svc.cluster.local/version'
-  overrides="$(printf '{"spec":{"hostNetwork":true,"automountServiceAccountToken":true,"containers":[{"name":"curl","image":"%s","command":["sh","-c","%s"]}]}}' \
-    "${CNI_SMOKE_CLIENT_IMAGE}" "${probe//\"/\\\"}")"
+  overrides="$(printf '{"spec":{"nodeName":"%s","hostNetwork":true,"automountServiceAccountToken":true,"containers":[{"name":"curl","image":"%s","command":["sh","-c","%s"]}]}}' \
+    "${node}" "${CNI_SMOKE_CLIENT_IMAGE}" "${probe//\"/\\\"}")"
 
   if ! kube -n kube-system run "${pod}" \
     --image="${CNI_SMOKE_CLIENT_IMAGE}" --restart=Never --overrides="${overrides}" >/dev/null; then
