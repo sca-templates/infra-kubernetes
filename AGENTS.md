@@ -140,7 +140,10 @@ guards ([docs/security.md](docs/security.md)).
 | `make eks-up` | Start Floci in EKS mode: create the emulated EKS cluster (k3s) and point kubectl at it — the only local cluster substrate (dev/CI tooling, not a component) |
 | `make eks-hosts` | WSL2 only: map the emulated ECR hostname to `127.0.0.1` in `/etc/hosts` (sudo; re-run after a WSL restart) |
 | `make eks-down` | Delete the emulated EKS cluster, IAM user and kubeconfig context |
-| `make eks-status` | Report the emulated EKS cluster status and its nodes |
+| `make eks-status` | Report the emulated EKS cluster status, its nodes and the CNI substrate |
+| `make cni-up` | Install the bootstrap-managed Calico + WireGuard + kube-proxy substrate in the emulated EKS cluster (dev/CI tooling, not a component) |
+| `make cni-down` | Remove the bootstrap-managed CNI resources from the emulated EKS cluster |
+| `make cni-status` | Report bootstrap-managed CNI DaemonSets, WireGuard config and node keys |
 | `make port-forward APP=<name>` | Reach a platform UI/API locally (argocd, vault, keycloak, grafana, prometheus, …) |
 | `make clean` | Remove local state (`.env`, `.secrets/`, generated artifacts) |
 
@@ -197,6 +200,7 @@ Base URL: `https://raw.githubusercontent.com/sca-templates/sca-docs/main/<path>`
 | ArgoCD app `OutOfSync` | Drift or failed sync-wave | `kubectl get application <name> -n argocd`; check `status.conditions`; sync manually if prod |
 | ExternalSecret `SecretSyncedError` | Vault path missing or k8s-auth role wrong | Check `ClusterSecretStore vault` Ready; verify path under `secret/<service>/<env>`; re-run `bootstrap/seed-vault.sh` (local) |
 | Pods CrashLoopBackOff after a wave bump | Dependency started before its datastore/operator | Re-check wave assignment; consumers must be ≥10 above their dependency |
+| `smoke COMPONENT=cni` fails | Calico/kube-proxy substrate did not converge on the Floci node | `make cni-status`; check `calico-node`/`kube-proxy` in `kube-system`, `FelixConfiguration/default` and node WireGuard annotations; revert D3 + `make eks-down` for rollback, do not flip dataplanes in place |
 | EKS node OOM | Host RAM exhausted | Stop the Compose stack before bootstrapping; 1-replica local profile |
 | EKS smoke: ECR hostname does not resolve | WSL2 does not resolve `*.localhost` | `make eks-hosts` (sudo; re-run after a WSL restart); Linux/macOS/CI resolve it natively |
 | `ImagePullBackOff` | Bad pin or unreachable registry | Verify the pinned tag exists upstream; check node images; never float `latest` |

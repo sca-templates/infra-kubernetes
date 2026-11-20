@@ -83,6 +83,10 @@ aws_start() {
   # real EKS (no default class without a CSI driver), which leaves every PVC on
   # the smoke cluster Pending (vault dataStorage). All three are harmless
   # outside EKS.
+  #
+  # D3: pin the k3s image (Floci otherwise resolves rancher/k3s:latest) and
+  # disable Floci's bundled Flannel/kube-proxy. The bootstrap-managed Calico
+  # substrate installs its own pinned kube-proxy right after the node is Ready.
   docker network inspect "${CLOUD_NETWORK}" >/dev/null 2>&1 \
     || docker network create "${CLOUD_NETWORK}" >/dev/null
   local run_args=(
@@ -90,6 +94,8 @@ aws_start() {
     -e FLOCI_SERVICES_DOCKER_NETWORK="${CLOUD_NETWORK}"
     -e FLOCI_SERVICES_EKS_ECR_REGISTRY_MIRROR=true
     -e FLOCI_SERVICES_EKS_DEFAULT_STORAGE_CLASS=true
+    -e FLOCI_SERVICES_EKS_DEFAULT_IMAGE="${FLOCI_EKS_K3S_IMAGE}"
+    -e FLOCI_SERVICES_EKS_DISABLE_CNI="${FLOCI_SERVICES_EKS_DISABLE_CNI}"
   )
 
   docker run -d --name "${FLOCI_NAME}" \

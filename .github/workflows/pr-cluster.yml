@@ -29,7 +29,7 @@ on:
   workflow_dispatch:
     inputs:
       component:
-        description: Component(s) to smoke — subdir(s) of infrastructure/, comma-separated, or `cloud`/`eks`
+        description: Component(s) to smoke — subdir(s) of infrastructure/, comma-separated, or `cni`/`cloud`/`eks`
         type: string
         default: cert-manager
       ref:
@@ -235,6 +235,7 @@ jobs:
             c="$(printf '%s' "$f" | sed -E 's|^bootstrap/smoke-||; s|\.sh$||; s|-aws$||')"
             case "$c" in
               ci|target) ;;
+              cni) add cni ;;
               cloud|cloud-*) add cloud ;;
               eks) add cert-manager ;;
               *)
@@ -258,7 +259,12 @@ jobs:
             add cert-manager
           fi
 
-          # 7. shared framework/tooling → default component (cert-manager): the
+          # 7. CNI substrate (not a catalog component) → `cni`.
+          if printf '%s\n' "$changed" | grep -qE '^(bootstrap/cni-emulator\.sh|bootstrap/cni/|envs/[^/]+/cni\.yaml$)'; then
+            add cni
+          fi
+
+          # 8. shared framework/tooling → default component (cert-manager): the
           #    smoke's own machinery (and the argocd manifest set / Makefile it
           #    drives) must be exercised by the smoke, not merged untested.
           framework_re='^(Makefile|argocd/|bootstrap/(smoke-ci|smoke-target|render-served-apps|sca|versions|local-git-|preload-chart-images|collect-argocd-diagnostics)[^/]*$)'

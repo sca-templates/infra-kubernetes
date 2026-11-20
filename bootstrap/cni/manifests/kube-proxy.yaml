@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kube-proxy
+  namespace: kube-system
+  labels:
+    k8s-app: kube-proxy
+spec:
+  selector:
+    matchLabels:
+      k8s-app: kube-proxy
+  template:
+    metadata:
+      labels:
+        k8s-app: kube-proxy
+    spec:
+      automountServiceAccountToken: true
+      serviceAccountName: kube-proxy
+      containers:
+        - name: kube-proxy
+          image: registry.k8s.io/kube-proxy:v1.34.1
+          command:
+            - /usr/local/bin/kube-proxy
+          args:
+            - --cluster-cidr=10.42.0.0/16
+            - --hostname-override=$(NODE_NAME)
+            - --proxy-mode=iptables
+            - --conntrack-max-per-core=0
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: KUBERNETES_SERVICE_HOST
+              value: 127.0.0.1
+            - name: KUBERNETES_SERVICE_PORT
+              value: "6443"
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: xtables-lock
+              mountPath: /run/xtables.lock
+      dnsPolicy: ClusterFirstWithHostNet
+      hostNetwork: true
+      nodeSelector:
+        kubernetes.io/os: linux
+      priorityClassName: system-node-critical
+      tolerations:
+        - operator: Exists
+      volumes:
+        - name: xtables-lock
+          hostPath:
+            path: /run/xtables.lock
+            type: FileOrCreate

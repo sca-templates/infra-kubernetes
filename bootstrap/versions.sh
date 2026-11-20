@@ -27,9 +27,23 @@ LINKERD_SMOKE_CLIENT_IMAGE="${LINKERD_SMOKE_CLIENT_IMAGE:-curlimages/curl:8.10.1
 FLOCI_EKS_CLUSTER="${FLOCI_EKS_CLUSTER:-sca-eks}"
 FLOCI_EKS_CONTEXT="${FLOCI_EKS_CONTEXT:-floci-eks}"
 FLOCI_EKS_NETWORK="${FLOCI_EKS_NETWORK:-sca-eks}"
+FLOCI_EKS_K3S_VERSION="${FLOCI_EKS_K3S_VERSION:-v1.34.1-k3s1}"
+FLOCI_EKS_K3S_IMAGE="${FLOCI_EKS_K3S_IMAGE:-rancher/k3s:${FLOCI_EKS_K3S_VERSION}}"
+FLOCI_SERVICES_EKS_DISABLE_CNI="${FLOCI_SERVICES_EKS_DISABLE_CNI:-true}"
 FLOCI_EKS_IAM_USER="${FLOCI_EKS_IAM_USER:-eks-admin}"
 FLOCI_EKS_ROLE_ARN="${FLOCI_EKS_ROLE_ARN:-arn:aws:iam::000000000000:role/eks-role}"
 FLOCI_EKS_SUBNET="${FLOCI_EKS_SUBNET:-subnet-default-us-east-1-a}"
 FLOCI_EKS_ECR_REPO="${FLOCI_EKS_ECR_REPO:-sca-smoke}"
 FLOCI_AWS_REGION="${FLOCI_AWS_REGION:-us-east-1}"
 FLOCI_AWS_ACCOUNT="${FLOCI_AWS_ACCOUNT:-000000000000}"
+
+# Bootstrap-managed CNI substrate (dev/CI tooling only; not a catalog component).
+# Calico iptables + VXLAN + WireGuard is the D2-validated dataplane; Floci's
+# disabled CNI also disables its bundled kube-proxy, so a pinned kube-proxy
+# DaemonSet is part of the substrate. See docs/ci-cd.md.
+CALICO_VERSION="${CALICO_VERSION:-v3.31.7}"
+CALICO_MANIFEST_URL="${CALICO_MANIFEST_URL:-https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/calico-vxlan.yaml}"
+CALICO_MANIFEST_SHA256="${CALICO_MANIFEST_SHA256:-324475bc90d0fc6b432092b91a011190fdaed47823fcc936762ea58507c6a5a3}"
+KUBE_PROXY_VERSION="${KUBE_PROXY_VERSION:-v1.34.1}"
+KUBE_PROXY_IMAGE="${KUBE_PROXY_IMAGE:-registry.k8s.io/kube-proxy:${KUBE_PROXY_VERSION}}"
+CNI_SMOKE_CLIENT_IMAGE="${CNI_SMOKE_CLIENT_IMAGE:-curlimages/curl:8.10.1}"

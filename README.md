@@ -119,7 +119,10 @@ intentionally excluded.
 | `make install-cli` | Symlink `bootstrap/sca.sh` → `~/.local/bin/sca` |
 | `make eks-up` | Start Floci in EKS mode: create the emulated EKS cluster and point kubectl at it |
 | `make eks-hosts` | WSL2 only: map the emulated ECR hostname to `127.0.0.1` in `/etc/hosts` |
-| `make eks-status` | Report the emulated EKS cluster status and its nodes |
+| `make eks-status` | Report the emulated EKS cluster status, its nodes and the CNI substrate |
+| `make cni-up` | Install the bootstrap-managed Calico + WireGuard + kube-proxy substrate in the emulated EKS cluster |
+| `make cni-down` | Remove the bootstrap-managed CNI resources from the emulated EKS cluster |
+| `make cni-status` | Report bootstrap-managed CNI DaemonSets, WireGuard config and node keys |
 | `make eks-down` | Delete the emulated EKS cluster, IAM user and kubeconfig context |
 | `make bootstrap` | Install ArgoCD, seed the catalog wiring and apply the root Application |
 | `make status` | Show nodes, ArgoCD Applications and pod health |

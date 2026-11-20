@@ -110,3 +110,56 @@ deployed until the D4 removal.
 | D3 | Land the chosen CNI as bootstrap-managed substrate with per-env pinned profiles, preflight checks, CI path filters and substrate smoke; keep Linkerd deployed | Fresh local substrate reaches full platform health with the new CNI and a documented rollback |
 | D4 | Remove Linkerd CRDs, control plane, identity PKI, smoke targets, Vault allowlist exception, service-template annotation and repository wiring | No Linkerd runtime or ArgoCD references remain |
 | D5 | Documentation closeout: update status/catalog/roadmap and mark ADR-008 and this ADR implemented | Docs match the deployed platform |
+
+## D3 implementation
+
+D3 landed the selected CNI as **bootstrap substrate**, not as a catalog
+component: `bootstrap/cni-emulator.sh` installs a pinned
+`registry.k8s.io/kube-proxy:v1.34.1` DaemonSet first with
+`--conntrack-max-per-core=0` (the WSL2 host makes `/proc/sys/net/netfilter` read
+only), probes `kubernetes.default.svc` before continuing, points Calico at the
+real API endpoint via `kubernetes-services-endpoint`, then applies a checksum-verified
+Calico `v3.31.7` VXLAN manifest (iptables dataplane, WireGuard, `MTU=1440`,
+`interface=eth0`, eBPF/securityfs mounts stripped as in D2). Floci starts with
+`FLOCI_SERVICES_EKS_DISABLE_CNI=true` and `rancher/k3s:v1.34.1-k3s1` (the
+`--kubernetes-version` passed to `create-cluster` is `1.34`), so no CNI image
+floats to `latest`. The `1.35` pin was reverted because kubelet `1.35` refuses
+to start on the cgroup v1 WSL2 host; real EKS nodes run cgroup v2 and are
+unaffected. Profiles live in `envs/<env>/cni.yaml`: `local` is enforced by the
+preflight; `dev`/`qa`/`prod` record the external-cluster contract until those
+clusters are managed outside Floci. `bootstrap/smoke-cni.sh` (`make smoke
+COMPONENT=cni`) runs before `make bootstrap` on every smoke and gates on both
+DaemonSets, `FelixConfiguration/default`, per-node WireGuard public keys,
+Felix metrics over `hostNetwork` (WireGuard interface metrics only where peers
+exist), and pod-to-pod HTTP. CI resolves CNI
+changes via `pr-cluster.yml`, and `validate.yml` kubeconform/kube-lints
+`bootstrap/cni/manifests/*.yaml`.
+
+### Local gate (user-run)
+
+```bash
+make eks-up
+make smoke COMPONENT=cni
+make bootstrap ENV=local
+make validate
+make smoke COMPONENT=cert-manager
+make smoke COMPONENT=eks
+```
+
+The gate passes only when the fresh single-node substrate reaches full platform
+health with Linkerd still deployed and `smoke-cni.sh` reports
+`[OK] smoke(cni)`. On 2026-11-20 the substrate portion passed: `make eks-up`
+reached node `Ready` and `make smoke COMPONENT=cni` reported
+`[OK] smoke(cni)`. The full platform portion is still pending; multi-node
+peer/handshake evidence remains the D2 gate and is not re-run here. The first
+full attempt failed at ArgoCD's `argocd-redis-secret-init` pre-install hook
+because D3's own kube-proxy crashed on `nf_conntrack_max: permission denied`,
+leaving ClusterIP routing down. The `--conntrack-max-per-core=0` flag and the
+internal API probe above close that gap; the rerun is pending.
+
+### Rollback
+
+There is no in-place flip between dataplanes. Revert the D3 change and run
+`make eks-down`; the next `make eks-up` restores Floci's bundled
+Flannel/kube-proxy. Update `docs/status.md` and this ADR to record the rollback
+instead of patching forward.
