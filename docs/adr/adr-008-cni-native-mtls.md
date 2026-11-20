@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed (2026-11-17; D0/D1 complete, Cilium D2 failed on the Docker/WSL2 substrate). Supersedes ADR-002 for the replacement plan; the Calico fallback is open in [ADR-009](adr-009-calico-wireguard-fallback.md). Linkerd remains deployed until the D3/D4 cutover.
+Accepted / implemented (2026-11-20; D0–D5 complete). Supersedes ADR-002 for the replacement plan; [ADR-009](adr-009-calico-wireguard-fallback.md) selected the Calico fallback after the Cilium D2 gate failed. Linkerd was removed in D4 and D5 closed the documentation.
 
 ## Context
 
@@ -73,7 +73,7 @@ exist before ArgoCD can reconcile workloads. D1 must confirm how the bootstrap
 installs it on a fresh cluster without a live CNI swap. If the Cilium PoC
 fails, evaluate Calico + WireGuard in a new ADR amendment; do not substitute
 IPsec or silently keep Linkerd while calling the migration complete. That
-fallback is now open in [ADR-009](adr-009-calico-wireguard-fallback.md).
+fallback was selected in [ADR-009](adr-009-calico-wireguard-fallback.md).
 
 The accepted trade-offs are the loss of Linkerd workload identity and L7
 retries/timeouts/traffic split, and the operational prerequisites of the CNI.
@@ -88,12 +88,14 @@ observability component is added by this migration.
   misconfiguration.
 - Every node needs kernel WireGuard support and UDP `51871` reachability, and
   the chosen CNI must be installed before the platform workload layer.
-- Services lose per-workload identity, Linkerd golden signals and L7 traffic
-  management. Any future requirement for those features needs a separate ADR.
+- Services lost per-workload identity, service-mesh golden signals and L7
+  traffic management. Any future requirement for those features needs a separate
+  ADR.
 - A CNI change is disruptive: D1 and D2 use disposable clusters only, and D3
   must define the rollback path before touching the shared platforms.
-- Documentation must stop describing Linkerd as the active mesh only at D4/D5;
-  until then, `status.md` and `architecture.md` continue to report it deployed.
+- Documentation stopped describing Linkerd as the active mesh at D4 and D5
+  closed the migration record; `status.md` and `architecture.md` now report the
+  CNI substrate and the accepted trade-offs.
 
 ## Implementation plan
 
@@ -104,7 +106,14 @@ observability component is added by this migration.
 | D2 | Run the PoC on a fresh disposable cluster with at least two nodes and record the evidence | CNI and workloads Ready; WireGuard peers/handshakes on both nodes; cross-node HTTP request succeeds and captures show traffic through `cilium_wg0`/UDP `51871`; same-node limitation recorded; scratch cluster removed. Failure stops the migration or opens the Calico fallback amendment |
 | D3 | Land the chosen CNI as bootstrap-managed substrate with per-env pinned profiles, preflight checks, CI path filters and substrate smoke; keep Linkerd deployed | Fresh local substrate reaches full platform health with the new CNI and a documented rollback to the previous substrate |
 | D4 | Remove Linkerd CRDs, control plane, identity PKI, smoke targets, Vault allowlist exception, service-template annotation and repository wiring | No Linkerd runtime or ArgoCD references remain; catalog count and sync-wave map updated; Linkerd smokes removed |
-| D5 | Documentation closeout: remove Linkerd golden-signal assumptions from observability docs, update status/catalog/roadmap and mark ADR-008 implemented | Docs match the deployed platform; Work Log row records the cutover |
+| D5 | Documentation closeout: remove service-mesh golden-signal assumptions from observability docs, update status/catalog/roadmap and mark ADR-008 implemented | Docs match the deployed platform; Work Log row records the cutover |
+
+D5 closed the documentation: ADR-008 and ADR-009 were marked implemented,
+current-state docs were aligned with the CNI substrate, `observability-radar.md`
+was scoped to native targets, and the Work Log records the closure. Service
+repositories are outside this repo; the only in-repo injection surface was the
+service template, removed in D4, and downstream annotation removal remains an
+out-of-band follow-up.
 
 D1 added the [PoC harness](../../poc/cni-mtls/README.md): a disposable two-node
 k3s Docker substrate, Cilium chart `1.20.5` with `kubeProxyReplacement: false`,
@@ -163,5 +172,6 @@ Docker/WSL2 substrate. The Cilium D2 gate is failed and
 - How the environment gradient is expressed once local is no longer Flannel,
   including dev/qa/prod profiles that are provisioned outside this repo, stays
   open for D3.
-- How service repositories are notified to drop the injected annotation at D4
-  stays open; this repo can change only the service template.
+- Service repositories are outside this repo; the only in-repo injection surface
+  was the service template, removed at D4. Downstream annotation removal remains
+  an out-of-band follow-up.

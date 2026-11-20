@@ -2,10 +2,10 @@
 
 ## Status
 
-Proposed (2026-11-17). Opens the fallback branch defined by
+Accepted / implemented (2026-11-20). Opened the fallback branch defined by
 [ADR-008](adr-008-cni-native-mtls.md) after the Cilium D2 gate failed. Linkerd
-remains deployed until the D3/D4 cutover; this ADR does not change runtime or
-ArgoCD wiring.
+was removed in D4 and D5 closed the documentation; this ADR remains the record
+of the selected Calico fallback.
 
 ## Context
 
@@ -87,17 +87,18 @@ D2-Calico passed on 2026-11-17. Both nodes reached `Ready`, cross-node pod-IP
 HTTP succeeded, and Felix metrics showed `wireguard.cali` with one peer on each
 node, a recent handshake and positive `wireguard_bytes_sent` and
 `wireguard_bytes_rcvd`. The scratch cluster was removed; evidence is under
-`.generated/calico-wireguard-evidence/`. D3 is unblocked and Linkerd stays
-deployed until the D4 removal.
+`.generated/calico-wireguard-evidence/`. D3 proceeded, D4 removed Linkerd and
+D5 closed the documentation.
 
 ## Consequences
 
 - A new pinned PoC harness lives under `poc/calico-wireguard/`; the Cilium PoC
   stays as the failed primary-candidate evidence.
-- D3 is unblocked after the passing D2-Calico gate. Linkerd stays deployed until D4.
+- D3 landed after the passing D2-Calico gate; D4 removed Linkerd and D5 closed
+  the documentation.
 - The selected CNI becomes bootstrap-managed substrate in D3, with per-env
   pinned profiles and a documented rollback.
-- Services still lose per-workload identity, Linkerd golden signals and L7
+- Services lost per-workload identity, service-mesh golden signals and L7
   traffic management; any future requirement needs a separate ADR.
 - Same-node pod traffic is never encrypted, and the pod-to-host leg under
   Calico remains plaintext.
@@ -110,6 +111,10 @@ deployed until the D4 removal.
 | D3 | Land the chosen CNI as bootstrap-managed substrate with per-env pinned profiles, preflight checks, CI path filters and substrate smoke; keep Linkerd deployed | Fresh local substrate reaches full platform health with the new CNI and a documented rollback |
 | D4 | Remove Linkerd CRDs, control plane, identity PKI, smoke targets, Vault allowlist exception, service-template annotation and repository wiring | No Linkerd runtime or ArgoCD references remain |
 | D5 | Documentation closeout: update status/catalog/roadmap and mark ADR-008 and this ADR implemented | Docs match the deployed platform |
+
+D5 closed the documentation: ADR-008 and this ADR were marked implemented,
+current-state docs were aligned with the D4 removal, `observability-radar.md`
+was scoped to native targets, and the Work Log records the closure.
 
 ## D3 implementation
 
@@ -147,12 +152,13 @@ make smoke COMPONENT=eks
 ```
 
 The gate passes only when the fresh single-node substrate reaches full platform
-health with Linkerd still deployed and `smoke-cni.sh` reports
+health with the bootstrap-managed CNI and `smoke-cni.sh` reports
 `[OK] smoke(cni)`. On 2026-11-20 the full gate passed: `make eks-up` reached node
 `Ready`, `make smoke COMPONENT=cni` reported `[OK] smoke(cni)`, `make bootstrap
-ENV=local` + `make validate` converged all 13 local Applications
-`Synced`/`Healthy`, and the component smoke sweep was green (`nats`/`nack`
-reported `[SKIP]` because the optional messaging tier is absent on `main`).
+ENV=local` + `make validate` converged 13 local Applications
+`Synced`/`Healthy` on `feature/decisions` with the optional messaging tier
+enabled, and the component smoke sweep was green. On `main`, where that tier is
+absent, the catalog has 11 Applications and `nats`/`nack` report `[SKIP]`.
 Multi-node peer/handshake evidence remains the D2 gate and is not re-run here.
 The first full attempt failed at ArgoCD's `argocd-redis-secret-init` pre-install
 hook because D3's own kube-proxy crashed on `nf_conntrack_max: permission

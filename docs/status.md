@@ -127,7 +127,7 @@ C3, taking their CRs, dedicated Applications, values and smokes with them.
 cluster-wide watch) and `make smoke COMPONENT=nats` (JetStream enabled, zero
 streams) are the convergence gates.
 
-**Linkerd replacement (Calico D2/D3 passed; D4 removes Linkerd).** The
+**Linkerd replacement (D0–D5 complete).** The
 static inventory and option evaluation are complete in
 [ADR-008](adr/adr-008-cni-native-mtls.md). D1 added the
 [Cilium PoC harness](../poc/cni-mtls/README.md); D2 ran it seven times and
@@ -137,16 +137,17 @@ and native routing were tried. [ADR-009](adr/adr-009-calico-wireguard-fallback.m
 opened the Calico fallback and the
 [Calico PoC harness](../poc/calico-wireguard/README.md) passed its D2 gate on
 2026-11-17: both nodes Ready, cross-node HTTP, one WireGuard peer per node, a
-recent handshake and positive byte counters. D3 adds the bootstrap-managed
+recent handshake and positive byte counters. D3 landed the bootstrap-managed
 Calico `v3.31.7` + WireGuard + pinned kube-proxy substrate, per-env CNI profiles
 and a single-node smoke; `make eks-up` and `make smoke COMPONENT=cni` passed on
 2026-11-20. The full platform gate also passed that day via `make bootstrap
-ENV=local` and `make validate`: all 13 local Applications converged
-`Synced`/`Healthy` and the full component smoke sweep was green (`nats`/`nack`
-reported `[SKIP]` because the optional messaging tier is absent on `main`). D4
-now removes the Linkerd Applications, CRDs, identity PKI, smokes, annotations
-and repository wiring; the expected local catalog is 11 Applications.
-WireGuard is node-to-node transport encryption, not workload mTLS.
+ENV=local` and `make validate`: 13 local Applications converged
+`Synced`/`Healthy` on `feature/decisions` with the optional messaging tier
+enabled, and the component smoke sweep was green. D4 removed the Linkerd
+Applications, CRDs, identity PKI, smokes, annotations and repository wiring; D5
+closed the docs. The `main` catalog has 11 Applications because `nats`/`nack`
+are absent there. WireGuard is node-to-node transport encryption, not workload
+mTLS.
 
 | Fact | Value |
 | --- | --- |
@@ -186,6 +187,7 @@ WireGuard is node-to-node transport encryption, not workload mTLS.
 | 3 | **OpenSSF Best Practices badge — silver blocked** | All silver criteria are met except `contributors_unassociated` and `bus_factor` (≥2): the project has a single maintainer (`CODEOWNERS` = `@Santiago1010`) | Achieved once a second **unassociated** contributor joins and is reflected in `CODEOWNERS` + `.github/GOVERNANCE.md`; passing badge is already achievable (see [.github/GOVERNANCE.md](../.github/GOVERNANCE.md), [docs/ci-cd.md](ci-cd.md)) |
 | 4 | **OpenSSF Best Practices badge — gold blocked** | Beyond the silver gaps, gold requires `two_person_review` (≥50% of changes reviewed by someone other than the author), which is unrealisable while there is a single maintainer; all other gold criteria are Met or N/A (see [.github/SECURITY.md](../.github/SECURITY.md) security review, SPDX + copyright headers per source file) | Unblocked together with silver once a second, **unassociated** reviewer/maintainer exists; `two_person_review` then requires an explicit second reviewer on gold PRs |
 | 5 | **NATS JetStream is idle and unauthenticated** | The ready-but-idle tier ships no `Stream`/`Consumer` CRs and no client auth; the server is reachable only in-cluster (`nats.data.svc.cluster.local:4222`). The `secret/messaging/<env>` contract exists, but no consumer uses it yet | Add NATS accounts/credentials with the first consumer, wire them through ESO and extend the contract; see [ADR-005](adr/adr-005-kafka-to-nats-jetstream.md) and [messaging.md](messaging.md) |
+| 6 | **No service-mesh L7 features or golden signals** | The CNI substrate provides authenticated node-to-node transport only; there is no workload identity, retry/timeout/traffic split or mesh request metrics. Phase 14 monitors native targets only | Requires a separate ADR before reintroducing a mesh or L7 observability; see [ADR-008](adr/adr-008-cni-native-mtls.md) and [observability-radar.md](observability-radar.md) |
 
 ## Intentional exclusions
 
@@ -218,7 +220,7 @@ WireGuard is node-to-node transport encryption, not workload mTLS.
 | --- | --- | --- |
 | Keycloak → Zitadel | **Planned** | Complete replacement. Inventory in progress. |
 | Kafka/Strimzi → NATS JetStream | **Done (C1–C4)** | NATS + NACK deployed idle (no `Stream`/`Consumer` CRs) via the optional `messaging-<env>` ApplicationSet; remove `argocd/messaging/<env>/{nats,nack}.yaml` for SNS/SQS mode. Contract `secret/messaging/<env>` carries `mode` + endpoints. Kafka/Strimzi removed in C3; the C4 runbook for the toggle and service-owned topology is in [messaging.md](messaging.md). |
-| Linkerd → CNI-native mTLS | **D4 removed Linkerd (D2/D3 full platform gate passed)** | Static inventory and option evaluation in [ADR-008](adr/adr-008-cni-native-mtls.md); [poc/cni-mtls](../poc/cni-mtls/README.md) records the failed Cilium `1.20.5` gate. [ADR-009](adr/adr-009-calico-wireguard-fallback.md) and [poc/calico-wireguard](../poc/calico-wireguard/README.md) pin the Calico `v3.31.7` fallback, whose D2 gate passed on 2026-11-17 with cross-node HTTP and WireGuard peer/handshake/counter evidence. D3 adds `bootstrap/cni-emulator.sh`, `envs/<env>/cni.yaml` and `bootstrap/smoke-cni.sh` as bootstrap substrate (not a catalog Application); D4 removes Linkerd and keeps the ADRs as history. |
+| Linkerd → CNI-native mTLS | **Done (D0–D5)** | Static inventory and option evaluation in [ADR-008](adr/adr-008-cni-native-mtls.md); [poc/cni-mtls](../poc/cni-mtls/README.md) records the failed Cilium `1.20.5` gate. [ADR-009](adr/adr-009-calico-wireguard-fallback.md) and [poc/calico-wireguard](../poc/calico-wireguard/README.md) pin the Calico `v3.31.7` fallback, whose D2 gate passed on 2026-11-17 with cross-node HTTP and WireGuard peer/handshake/counter evidence. D3 landed `bootstrap/cni-emulator.sh`, `envs/<env>/cni.yaml` and `bootstrap/smoke-cni.sh` as bootstrap substrate (not a catalog Application); D4 removed Linkerd and D5 closed the docs. |
 | Velero + Backups | **Done** | The three layers are implemented and live restore-validated on 2026-11-14: Velero scheduled backups, CNPG Barman base backups + WAL/PITR, and Vault Raft snapshot CronJob. `local` uses Floci S3; `dev`/`qa`/`prod` expect external buckets and Vault-provisioned credentials. See [backups.md](backups.md#validation-status). |
 | CNPG RDS replacement | **Done** | The PITR + latest-backup restore smoke (`bootstrap/smoke-postgres-app.sh`) passed live on 2026-11-14, closing the RDS replacement gate. |
 

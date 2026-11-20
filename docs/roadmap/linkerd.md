@@ -49,7 +49,7 @@ CNI substrate (Calico + WireGuard + pinned kube-proxy, per-env profiles and a
 single-node smoke); its fresh-cluster substrate gate and the full platform gate
 passed on 2026-11-20. D4 removed the control plane and every wiring surface
 inventoried in [migration-inventory-phase-a.md](../migration-inventory-phase-a.md);
-D5 closes the docs. Do not describe WireGuard as workload mTLS: ADR-008 records
+D5 closed the docs. Do not describe WireGuard as workload mTLS: ADR-008 records
 the identity and L7 trade-offs. The D4 Work Log row records the repository and
 local-cluster cleanup.
 

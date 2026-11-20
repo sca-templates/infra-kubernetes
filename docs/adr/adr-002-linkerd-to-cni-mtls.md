@@ -2,11 +2,12 @@
 
 ## Status
 
-Superseded by [ADR-008](adr-008-cni-native-mtls.md) (2026-11-17; D0 research
-complete, D1 PoC files added; evidence pending). This decision describes the previously planned Linkerd
-CNI plugin, which was never enabled: `infrastructure/linkerd/values-base.yaml`
-sets `cniEnabled: false`, so the deployed mesh uses the `proxy-init` init
-container. Linkerd remains deployed until ADR-008's D3/D4 cutover.
+Superseded by [ADR-008](adr-008-cni-native-mtls.md) and closed by the D4 removal
+(2026-11-20). This decision described the previously planned Linkerd CNI plugin,
+which was never enabled: its values set `cniEnabled: false`, so the removed mesh
+used the `proxy-init` init container. See ADR-008 for the accepted replacement
+and [ADR-009](adr-009-calico-wireguard-fallback.md) for the selected Calico
+fallback.
 
 ## Context
 

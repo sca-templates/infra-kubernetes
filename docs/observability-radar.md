@@ -6,6 +6,12 @@ kube-prometheus-stack lands in Phase 14. See [architecture.md](architecture.md)
 for its sync-wave (60) and [workflow.md](workflow.md) for the prod deploy
 window it serves.
 
+The design has no service-mesh golden-signal dependency: the selected Calico +
+WireGuard substrate authenticates node-to-node transport but exposes no
+per-workload identity or L7 request metrics. Phase 14 therefore scrapes native
+component and Kubernetes targets only; Felix/WireGuard metrics remain substrate
+telemetry, not workload SLOs. See [ADR-008](adr/adr-008-cni-native-mtls.md).
+
 ## Pipeline
 
 ```mermaid

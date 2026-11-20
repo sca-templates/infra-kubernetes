@@ -45,20 +45,21 @@ Docs and history:
 - `docs/adr/adr-001-no-consul.md`, `docs/adr/adr-002-linkerd-to-cni-mtls.md`,
   Work Log rows and `CHANGELOG.md` remain as the decision and migration
   history; do not rewrite them as if Linkerd had never been deployed.
-- [ADR-008](adr/adr-008-cni-native-mtls.md) is the source of truth for the
-  proposed replacement; [ADR-009](adr/adr-009-calico-wireguard-fallback.md)
-  owns the fallback after the Cilium D2 gate failed; `status.md` keeps the
-  deployed/until-cutover state.
+- [ADR-008](adr/adr-008-cni-native-mtls.md) records the accepted replacement
+  decision and the D0–D5 closeout; [ADR-009](adr/adr-009-calico-wireguard-fallback.md)
+  records the selected Calico fallback; `status.md` reports the current CNI
+  substrate.
 
 **Action**: D0 complete (research only). D1 added the disposable
 [Cilium PoC harness](../poc/cni-mtls/README.md); D2 failed on Cilium and passed
 on the [Calico PoC harness](../poc/calico-wireguard/README.md). D3 has landed the
 chosen CNI substrate as bootstrap tooling (`bootstrap/cni-emulator.sh`,
 `envs/<env>/cni.yaml`, `bootstrap/smoke-cni.sh`), with its fresh-cluster
-substrate gate passed on 2026-11-20; D4 removes the runtime surfaces above and
-D5 closes the docs.
-Service repositories are outside this repo and must drop their own injection
-annotations at D4.
+substrate gate passed on 2026-11-20; D4 removed the runtime surfaces above and
+D5 closed the docs.
+Service repositories are outside this repo; the only in-repo injection surface
+was the service template, removed in D4, and downstream annotation removal is an
+out-of-band follow-up.
 
 ## 3. Kafka/Strimzi References (203 total found)
 
