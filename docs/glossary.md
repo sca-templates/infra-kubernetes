@@ -28,7 +28,6 @@ live in [architecture.md](architecture.md).
 | **cert-manager**              | Issues in-cluster TLS certificates (issuers, `Certificate` CR). Phase 1 (deployed) |
 | **Vault**                     | Secrets SSOT: KV-v2 + kubernetes auth; HA raft. Phase 2 (deployed) |
 | **External Secrets Operator** | Projects Vault KV → native `Secret`s. Phase 3 (deployed) |
-| **Linkerd**                   | Service mesh: mTLS identity, golden signals. CRDs deployed (Phase 4), control plane Phase 9 |
 | **CloudNativePG (CNPG)**      | PostgreSQL operator (`Cluster` CR). Phase 5, `postgres-app`/`keycloak-db` Phase 10         |
 | **NATS JetStream**            | Event backbone (ADR-005); idle tier (no `Stream`/`Consumer` CRs), optional per env. NATS migration C1–C4; see [messaging.md](messaging.md) |
 | **NACK**                      | NATS Controller for Kubernetes: installs the `Stream`/`Consumer` CRDs and reconciles them. NATS migration C1–C4; see [messaging.md](messaging.md) |

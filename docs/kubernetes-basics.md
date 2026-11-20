@@ -58,7 +58,6 @@ Official: [ArgoCD Concepts](https://argo-cd.readthedocs.io/en/stable/core_concep
 
 - **Ingress / Gateway** — L7 entry; this platform routes through Kong (Phase 8)
   instead of a stock ingress controller.
-- **Service mesh (Linkerd)** — mTLS between pods + golden signals (Phases 4/9).
 - **ServiceMonitors** — Prometheus operators' scrape config (Phase 14).
 
 Official: [Kubernetes Network Concepts](https://kubernetes.io/docs/concepts/services-networking/service/),
@@ -78,7 +77,7 @@ Official: [Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persi
 - **ServiceAccounts** — pod identity, used by Vault k8s auth
   ([secrets.md](secrets.md)).
 - **RBAC** — who may do what against the API.
-- **NetworkPolicy / mTLS** — pod-communication control (Linkerd).
+- **NetworkPolicy / mTLS** — pod-communication control (Calico + WireGuard L3/L4).
 
 Official: [Authenticating](https://kubernetes.io/docs/reference/access-authn-authz/authentication/).
 

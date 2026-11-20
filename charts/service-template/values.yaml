@@ -14,9 +14,6 @@ image:
 imagePullSecrets: []
 podAnnotations: {}
 
-# -- Linkerd sidecar injection (set false for init jobs, etc.)
-linkerdInject: true
-
 # -- Pod security context
 podSecurityContext:
   runAsNonRoot: true

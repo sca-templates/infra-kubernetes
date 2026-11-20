@@ -73,7 +73,7 @@ configs:
     # of its CRDs is not yet Established ("CRD is not established",
     # argoproj/argo-cd#26346). On a cold test cluster that establishment window
     # makes the smoke gate flaky for every CRD-shipping component
-    # (cloudnative-pg, cert-manager, linkerd-crds — later redis-operator,
+    # (cloudnative-pg, cert-manager — later redis-operator,
     # kube-prometheus-stack, ...). Override: report Progressing until the CRD is
     # Established, keep the genuine Degraded signals (NamesAccepted=False,
     # NonStructuralSchema=True). The smokes still assert CRD Establishment.

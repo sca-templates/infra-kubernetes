@@ -27,10 +27,6 @@
     "fullnameOverride": {
       "type": "string"
     },
-    "linkerdInject": {
-      "type": "boolean",
-      "default": true
-    },
     "resources": {
       "type": "object"
     },

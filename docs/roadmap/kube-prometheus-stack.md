@@ -1,7 +1,7 @@
 # Project: Implement kube-prometheus-stack
 
 Area: Observability · Wave 60 · Environments: local→dev→qa→prod
-Depends on: cert-manager (#6) for TLS; linkerd (#14) for mesh golden signals.
+Depends on: cert-manager (#6) for TLS.
 Project done when: Prometheus/Grafana/Alertmanager deployed; radar alerts
 configured per [observability-radar.md](../observability-radar.md); `make
 status` shows no new `Degraded`.
@@ -11,7 +11,7 @@ status` shows no new `Degraded`.
 M1 done when: Prometheus `ProbablyHealthy`, Grafana reachable, Alertmanager ok.
 
 - [ ] Issue #19 · Deploy `kube-prometheus-stack`
-  Depends on: cert-manager (#6), linkerd (#14)
+  Depends on: cert-manager (#6)
   - [ ] `infrastructure/kube-prometheus-stack/` values-base + overlays 4 envs
         - [ ] envs/local, dev, qa, prod
         - Commits: `feat(kube-prometheus-stack): add chart reference and per-env overlays`

@@ -17,7 +17,7 @@ worked in parallel.
 
 ```text
 [01 cert-manager] ──▶ [02 vault] ──▶ [03 external-secrets]
-[04 linkerd-crds] ──────────────────────────────▶ [09 linkerd control plane]
+[04 linkerd-crds] ─╳ retired (ADR-008/009 D4; Linkerd removed)
 [05 cloudnative-pg] ──▶ [10 postgres-app]
 [06 strimzi] ──╳ retired (ADR-005 C3; Kafka/Strimzi removed)
 [11b nats] ───────────▶ [06b nack]   (NATS migration, #105)
@@ -31,8 +31,7 @@ worked in parallel.
 
 - **Wave −20/−10**: security + operator layer — `01`–`05` and `07` install
   first, largely in parallel (each is an operator/CRD or the Vault base).
-- **Wave 0/20/30**: `02` Vault, `08` Kong, `09` linkerd control plane —
-  sequential behind their dependencies.
+- **Wave 0/20**: `02` Vault, `08` Kong — sequential behind their dependencies.
 - **Wave 40**: datastores `10`, `11b` and `12` (clusters/CRs) behind their
   operators; `11b` NATS JetStream is the ADR-005 event backbone, deployed idle.
 - **Wave 50**: `13` Keycloak behind its DB (`10`); `06b` NACK after the NATS
@@ -76,12 +75,12 @@ worked in parallel.
 | [cert-manager](roadmap/cert-manager.md) | Security & Identity | -20 | — | [#6](https://github.com/sca-templates/infra-kubernetes/issues/6) | deployed |
 | [vault](roadmap/vault.md) | Security & Identity | 0 | M1 bootstrap · M2 seed · M2 integration | [#7](https://github.com/sca-templates/infra-kubernetes/issues/7) · [#24](https://github.com/sca-templates/infra-kubernetes/issues/24) · [#25](https://github.com/sca-templates/infra-kubernetes/issues/25) · [#26](https://github.com/sca-templates/infra-kubernetes/issues/26) | deployed |
 | [external-secrets](roadmap/external-secrets.md) | Security & Identity | -10 | — | [#8](https://github.com/sca-templates/infra-kubernetes/issues/8) | deployed |
-| [linkerd-crds](roadmap/linkerd-crds.md) | Edge & Mesh | -10 | — | [#9](https://github.com/sca-templates/infra-kubernetes/issues/9) | deployed |
+| [linkerd-crds](roadmap/linkerd-crds.md) | Edge & Mesh | -10 | — | [#9](https://github.com/sca-templates/infra-kubernetes/issues/9) | removed (ADR-008/009 D4) |
 | [cloudnative-pg](roadmap/cloudnative-pg.md) | Data | -10 | — | [#10](https://github.com/sca-templates/infra-kubernetes/issues/10) | deployed |
 | [strimzi](roadmap/strimzi.md) | Data | -10 | — | [#11](https://github.com/sca-templates/infra-kubernetes/issues/11) | removed (ADR-005 C3) |
 | [redis-operator](roadmap/redis-operator.md) | Data | -10 | — | [#12](https://github.com/sca-templates/infra-kubernetes/issues/12) | deployed |
 | [kong](roadmap/kong.md) | Edge & Mesh | 20 | M1 dedicated app | [#13](https://github.com/sca-templates/infra-kubernetes/issues/13) | deployed |
-| [linkerd](roadmap/linkerd.md) | Edge & Mesh | 30 | M1 control plane · D0 research · D1 PoC · D2 evidence · D3 substrate · D4 removal · D5 closeout | [#14](https://github.com/sca-templates/infra-kubernetes/issues/14) | deployed (replacement under evaluation; Calico D2 passed, D3 implemented — local substrate smoke passed) |
+| [linkerd](roadmap/linkerd.md) | Edge & Mesh | 30 | M1 control plane · D0 research · D1 PoC · D2 evidence · D3 substrate · D4 removal · D5 closeout | [#14](https://github.com/sca-templates/infra-kubernetes/issues/14) | removed (ADR-008/009 D4) |
 | [postgres-app](roadmap/postgres-app.md) | Data | 40 | M1 cluster · M1 keycloak-db | [#15](https://github.com/sca-templates/infra-kubernetes/issues/15) · [#27](https://github.com/sca-templates/infra-kubernetes/issues/27) · [#28](https://github.com/sca-templates/infra-kubernetes/issues/28) | deployed |
 | [kafka](roadmap/kafka.md) | Data | 40 | M1 cluster + SCRAM | [#16](https://github.com/sca-templates/infra-kubernetes/issues/16) | removed (ADR-005 C3) |
 | [nats](roadmap/nats.md) | Data | 40 | C1 idle tier · C2 toggle · C3 cutover · C4 docs | [#105](https://github.com/sca-templates/infra-kubernetes/issues/105) | deployed (NATS migration C1–C4, idle; optional per env) |
@@ -103,6 +102,7 @@ lands (see the Work Log below).
 
 | Date | Project | Gate | Commit | Issue |
 | --- | --- | --- | --- | --- |
+| 2026-11-20 | linkerd → CNI-native mTLS | D4 removed Linkerd — CRDs and control-plane Applications (`linkerd-<env>`, `linkerd-crds`), identity PKI manifests, per-env overlays, `make smoke COMPONENT=linkerd{,-crds}` targets, `linkerdInject` in the service template, Vault/ArgoCD/tooling wiring and current-state docs; ADRs and Work Log remain as history. Rollback is a revert plus `make bootstrap ENV=local` and the D3 smokes | branch (PR) | [#14](https://github.com/sca-templates/infra-kubernetes/issues/14) |
 | 2026-11-20 | linkerd → CNI-native mTLS | D3 full-platform gate passed — after `--conntrack-max-per-core=0`, the internal `kubernetes.default.svc` ClusterIP probe and the finalizer fallback, a fresh `make eks-up && make smoke COMPONENT=cni && make bootstrap ENV=local && make validate` converged 13/13 local Applications `Synced`/`Healthy`; the full component smoke sweep was green, with `nats`/`nack` reporting `[SKIP]` because the optional messaging tier is absent on `main`. `smoke-nats.sh`/`smoke-nack.sh` now skip when their Application is absent, matching `smoke-ci.sh`; no rollback | branch (PR) | [#14](https://github.com/sca-templates/infra-kubernetes/issues/14) |
 | 2026-11-18 | linkerd → CNI-native mTLS | D3 substrate implementation landed (pending local smoke) — `bootstrap/cni-emulator.sh` installs checksum-verified Calico `v3.31.7` (iptables + VXLAN + WireGuard, `MTU=1440`, `interface=eth0`) and pinned `registry.k8s.io/kube-proxy:v1.34.1` after Floci starts with its bundled CNI disabled; k3s is pinned to `v1.34.1-k3s1`; `envs/<env>/cni.yaml` profiles, preflight/render, `make cni-*`, `bootstrap/smoke-cni.sh`, CI path filters and static manifest validation added. Linkerd stays deployed; rollback is a D3 revert plus `make eks-down` | branch (PR) | [#14](https://github.com/sca-templates/infra-kubernetes/issues/14) |
 | 2026-11-20 | linkerd → CNI-native mTLS | D3 local substrate gate passed — fresh `make eks-up` reached node `Ready` with Calico `v3.31.7`, pinned kube-proxy `v1.34.1` and WireGuard on; `make smoke COMPONENT=cni` reported `[OK] smoke(cni)` with Felix WireGuard interface metrics and pod networking; the full platform gate passed after the fix recorded above | branch (PR) | [#14](https://github.com/sca-templates/infra-kubernetes/issues/14) |
@@ -203,7 +203,7 @@ The following epics are planned for cost optimization:
 | --- | --- | --- | --- | --- |
 | Replace Keycloak with Zitadel | Security & Identity | High | Proposed | Complete replacement. Inventory dependencies first. |
 | Replace Kafka/Strimzi with NATS JetStream | Data | Medium | Done (C1–C4) | NATS + NACK deployed idle behind the optional `messaging-<env>` ApplicationSet; remove the descriptors for SNS/SQS mode, contract in `secret/messaging/<env>`. Kafka/Strimzi removed in C3; the C4 runbook in [messaging.md](messaging.md) covers the toggle and service-owned topology. No consumers currently. |
-| Replace Linkerd with CNI-native mTLS | Edge & Mesh | High | Calico D2 passed; D3 implemented (full platform gate passed) | [ADR-009](adr/adr-009-calico-wireguard-fallback.md) selects the [Calico PoC harness](../poc/calico-wireguard/README.md) after the Cilium gate failed; D3 adds the bootstrap-managed substrate, not a catalog Application; loss of L7 features remains accepted. |
+| Replace Linkerd with CNI-native mTLS | Edge & Mesh | High | D4 removed Linkerd (D2/D3 full platform gate passed) | [ADR-009](adr/adr-009-calico-wireguard-fallback.md) selects the [Calico PoC harness](../poc/calico-wireguard/README.md) after the Cilium gate failed; D3 adds the bootstrap-managed substrate, not a catalog Application; loss of L7 features remains accepted. |
 | Prioritize Velero + Backups (CNPG + Vault) | Delivery & Resilience | **Critical** | Done | Live restore validation passed on 2026-11-14; see [backups.md](backups.md#validation-status). |
 | Validate CNPG as RDS replacement | Data | High | Done | PITR + latest-backup restore passed live on 2026-11-14. |
 

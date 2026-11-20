@@ -1,6 +1,6 @@
-# Project: Implement Linkerd control plane
+# Project: Implement Linkerd control plane (removed in D4)
 
-Area: Edge & Mesh · Wave 30 · Environments: local→dev→qa→prod
+Area: Edge & Mesh · Wave 30 · Environments: local→dev→qa→prod · Historical record
 Depends on: linkerd-crds (#9) — CRDs must be present first. Deployed as a
 **dedicated ArgoCD Application** per env (`argocd/linkerd-<env>.yaml`, chart
 `linkerd/linkerd-control-plane`), **not** by the `linkerd install` script: the CI
@@ -46,13 +46,12 @@ fallback with the [Calico PoC harness](../../poc/calico-wireguard/README.md),
 whose D2 gate passed on 2026-11-17 with cross-node HTTP and WireGuard
 peer/handshake/counter evidence on both nodes. D3 now lands the bootstrap-managed
 CNI substrate (Calico + WireGuard + pinned kube-proxy, per-env profiles and a
-single-node smoke); its fresh-cluster substrate gate passed on 2026-11-20. The
-full platform gate remains pending. D4 removes the
-control plane and every wiring surface inventoried in
-[migration-inventory-phase-a.md](../migration-inventory-phase-a.md), and D5
-closes the docs. Do not describe WireGuard as workload mTLS: ADR-008 records
-the identity and L7 trade-offs. No ArgoCD catalog or chart wiring changed in
-this project.
+single-node smoke); its fresh-cluster substrate gate and the full platform gate
+passed on 2026-11-20. D4 removed the control plane and every wiring surface
+inventoried in [migration-inventory-phase-a.md](../migration-inventory-phase-a.md);
+D5 closes the docs. Do not describe WireGuard as workload mTLS: ADR-008 records
+the identity and L7 trade-offs. The D4 Work Log row records the repository and
+local-cluster cleanup.
 
 No natural further phases under M1 → the retirement checkpoints are tracked by
 ADR-008, ADR-009 and the global Work Log.

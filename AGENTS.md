@@ -13,7 +13,7 @@ repo.
   in its own repo (app-repo-as-source, [docs/onboarding-new-service.md](docs/onboarding-new-service.md)).
 - ArgoCD app-of-apps: `make bootstrap` seeds the platform catalog
   (`apps-<env>.yaml` ApplicationSet + the optional `messaging-<env>.yaml`
-  ApplicationSet + the dedicated `kong-<env>.yaml`, `linkerd-<env>.yaml` and
+  ApplicationSet + the dedicated `kong-<env>.yaml` and
   `postgres-app-<env>.yaml` Applications) with
   `{{GIT_REPO_URL}}`/`{{GIT_TARGET_BRANCH}}` resolved host-side; the root
   Application (`root-app-<env>.yaml`, `dev`/`qa`/`prod` only) owns the services
@@ -53,7 +53,7 @@ and qa ([docs/workflow.md](docs/workflow.md#services-app-repo-as-source)).
 
 ## 3. Component catalog
 
-**18 components + ArgoCD.** Status column is the source of truth
+**16 components + ArgoCD.** Status column is the source of truth
 (`planned (Phase N)` until the phase lands;
 `deployed` from then on). Chart and image pins are set inside each phase and
 live under `infrastructure/<component>/` + `envs/<env>/`.
@@ -63,11 +63,9 @@ live under `infrastructure/<component>/` + `envs/<env>/`.
 | cert-manager | `cert-manager` | jetstack/cert-manager | In-cluster TLS issuers | — | **deployed** (Phase 1) |
 | Vault | `vault` | hashicorp/vault | Secrets SSOT (KV-v2 + k8s auth) | [infra-vault](https://github.com/sca-templates/infra-vault) | **deployed** (Phase 2) |
 | External Secrets | `external-secrets` | external-secrets/external-secrets | Projects Vault KV → native Secrets | — | **deployed** (Phase 3) |
-| linkerd-crds | `linkerd` | linkerd/linkerd-crds | Mesh CRDs | [infra-linkerd](https://github.com/sca-templates/infra-linkerd) | **deployed** (Phase 4) |
 | CloudNativePG | `cloudnative-pg` | cloudnative-pg/cloudnative-pg | PostgreSQL operator | — | **deployed** (Phase 5) |
 | redis-operator | `data` | ot-container-kit/redis-operator | Redis operator | [infra-redis](https://github.com/sca-templates/infra-redis) | **deployed** (Phase 7) |
 | Kong | `kong` | kong/kong (DB-less) | Edge gateway, dedicated Application, no SSA | [infra-kong](https://github.com/sca-templates/infra-kong) | **deployed** (Phase 8) |
-| Linkerd control plane | `linkerd` | linkerd/linkerd-control-plane | mTLS identity, golden signals | [infra-linkerd](https://github.com/sca-templates/infra-linkerd) | **deployed** (Phase 9) |
 | postgres-app (+ keycloak-db) | `data` | CNPG `Cluster` CRs (raw) | App + Keycloak databases; all 4 envs | [infra-postgres](https://github.com/sca-templates/infra-postgres) | **deployed** (Phase 10) |
 | NATS JetStream | `data` | nats/nats (JetStream) | Event backbone (idle; no Stream/Consumer CRs); optional per env | — | **deployed** (NATS migration C1–C4) |
 | NACK | `nats` | nats/nack | JetStream controller (Stream/Consumer CRDs); optional per env | — | **deployed** (NATS migration C1–C4) |
@@ -81,9 +79,8 @@ live under `infrastructure/<component>/` + `envs/<env>/`.
 | ArgoCD | `argocd` | argoproj/argo-cd (Makefile) | GitOps engine | — | **deployed** (Phase 0.0) |
 
 **Intentional exclusions** (per the restart plan): no Consul in-cluster
-(ADR-001; native DNS + Linkerd replace it), no MinIO, no Unleash, no
-KafkaConnect/Debezium, no kafka-ui, no linkerd-viz in-cluster, no cloud
-in-cluster. No `latest` tags; this repo builds nothing. **Services are not part
+(ADR-001; native DNS replaces it), no MinIO, no Unleash, no
+KafkaConnect/Debezium, no kafka-ui, no cloud in-cluster. No `latest` tags; this repo builds nothing. **Services are not part
 of this catalog** — each service owns its `deploy/` and is registered in
 `argocd/services-<env>.yaml`
 ([docs/onboarding-new-service.md](docs/onboarding-new-service.md)). The cloud
@@ -101,11 +98,10 @@ before CRs; Vault before ESO syncs; datastores before consumers.
 | --- | --- |
 | -30 | Root Application per env |
 | -20 | ApplicationSet, namespaces, cert-manager (+CRDs) |
-| -10 | Pure operators/CRDs: external-secrets, linkerd-crds, cloudnative-pg, redis-operator |
+| -10 | Pure operators/CRDs: external-secrets, cloudnative-pg, redis-operator |
 | 0 | Vault |
 | 10 | Vault seeded by `bootstrap/seed-vault.sh` after pod `Running` (CI/manual, not an ArgoCD hook) |
 | 20 | Kong |
-| 30 | Linkerd control plane (dedicated `linkerd-<env>` Application) |
 | 40 | Datastores: postgres-app, keycloak-db (CNPG), nats (JetStream), redis CRs |
 | 50 | Consumers: keycloak; nack (JetStream controller, after `nats` at 40) |
 | 60 | Observability: kube-prometheus-stack, loki, alloy, tempo |
