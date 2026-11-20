@@ -26,13 +26,6 @@ spec:
             targetRevision: 2.10.0
             wave: "-10"
             path: external-secrets/manifests
-          - name: linkerd-crds
-            namespace: linkerd
-            chartRepo: https://helm.linkerd.io/stable
-            chart: linkerd-crds
-            targetRevision: 1.8.0
-            wave: "-10"
-            path: linkerd-crds/manifests
           - name: cloudnative-pg
             namespace: cloudnative-pg
             chartRepo: https://cloudnative-pg.github.io/charts

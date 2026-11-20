@@ -65,7 +65,7 @@ bootstrap: argocd-up ## Install ArgoCD and apply the Applications for ENV=$(ENV)
 	# The Makefile seeds the catalog wiring: argocd/apps-$(ENV).yaml (the platform
 	# ApplicationSet), argocd/messaging-$(ENV).yaml (the optional NATS/NACK
 	# ApplicationSet toggled by argocd/messaging/$(ENV)/*.yaml), and the dedicated
-	# Applications argocd/kong-$(ENV).yaml, argocd/linkerd-$(ENV).yaml,
+	# Applications argocd/kong-$(ENV).yaml,
 	# argocd/postgres-app-$(ENV).yaml, argocd/redis-$(ENV).yaml,
 	# argocd/keycloak-$(ENV).yaml and argocd/vault-backup-$(ENV).yaml are applied with
 	# {{GIT_REPO_URL}}/{{GIT_TARGET_BRANCH}} resolved here, so the generated
@@ -78,7 +78,6 @@ bootstrap: argocd-up ## Install ArgoCD and apply the Applications for ENV=$(ENV)
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/apps-$(ENV).yaml" | kubectl apply -f -
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/messaging-$(ENV).yaml" | kubectl apply -f -
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/kong-$(ENV).yaml" | kubectl apply -f -
-	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/linkerd-$(ENV).yaml" | kubectl apply -f -
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/postgres-app-$(ENV).yaml" | kubectl apply -f -
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/redis-$(ENV).yaml" | kubectl apply -f -
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/keycloak-$(ENV).yaml" | kubectl apply -f -
@@ -168,7 +167,7 @@ cni-status: ## Report bootstrap-managed CNI DaemonSets, WireGuard config and nod
 
 .PHONY: smoke
 smoke: ## Smoke a deployed component: make smoke COMPONENT=cert-manager
-	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cni, cert-manager, vault, external-secrets, linkerd-crds, linkerd, cloudnative-pg, redis-operator, kong, postgres-app, redis, nack, nats, keycloak, velero, cloud, eks)'; exit 1; }
+	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cni, cert-manager, vault, external-secrets, cloudnative-pg, redis-operator, kong, postgres-app, redis, nack, nats, keycloak, velero, cloud, eks)'; exit 1; }
 	bootstrap/smoke-target.sh "$(COMPONENT)"
 
 ##@ Local Git serve

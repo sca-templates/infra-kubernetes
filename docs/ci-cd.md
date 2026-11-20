@@ -392,9 +392,9 @@ Floci's EKS backing, not ArgoCD-managed).
   ArgoCD manifests' `repoURL`/`targetRevision` to the PR head via the `sed` seam),
   after which ArgoCD reconciles the **real app-of-apps** (ApplicationSet
   `platform-local` → the optional `messaging-local`, the dedicated `kong-local`,
-  `linkerd-local`, `postgres-app-local`, `redis-local` and
+  `postgres-app-local`, `redis-local` and
   `keycloak-local`), gates every platform Application (`<name>-local`, plus
-  NATS/NACK when their descriptors exist; Kong and Linkerd included), seeds Vault
+  NATS/NACK when their descriptors exist; Kong included), seeds Vault
   (it is born sealed, so
   it can only report `Healthy` once `seed-vault.sh` ran), then gates the whole
   catalog on `Synced/Healthy`, runs the touched component smoke(s), the EKS check
@@ -404,7 +404,7 @@ Floci's EKS backing, not ArgoCD-managed).
   substrate and installs the D3 CNI substrate, `make smoke COMPONENT=cni`
   verifies it before anything is rendered, `make bootstrap ENV=local` seeds the platform `ApplicationSet`, the
   optional `messaging-local` ApplicationSet and the dedicated
-  `kong-local`/`linkerd-local`/`postgres-app-local`/
+  `kong-local`/`postgres-app-local`/
   `redis-local`/`keycloak-local` apps from the PR head and applies the
   catalog, the
   catalog is gated `Synced` → Vault seeded → `Synced/Healthy`, and the touched
@@ -447,40 +447,6 @@ identity plane, not just that the pod is up:
   `userinfo` accepts it. The smoke credential comes from
   `secret/keycloak/test-user/<env>` (run `bootstrap/seed-vault.sh` once on an
   older local cluster; it is idempotent).
-
-### Linkerd mesh smoke (data plane)
-
-`make smoke COMPONENT=linkerd` (`bootstrap/smoke-linkerd.sh`) proves the mesh
-carries traffic, not just that the control plane is up:
-
-- **Preflight (clock/TTL)** — before the rollout gate, it port-forwards each
-  control-plane proxy's admin endpoint (`:4191`) and reads
-  `identity_cert_expiration_timestamp_seconds`. A leaf with less than 1h left
-  fails with a pointer to the emulator clock. The controller containers are
-  distroless, so the read is a host-side port-forward, not an `exec`.
-- **Injected workload** — a throwaway namespace (`linkerd-smoke`, deleted on
-  exit; `LINKERD_SMOKE_KEEP=1` keeps it for debugging) is annotated
-  `linkerd.io/inject: enabled`; a pinned
-  `nginx-unprivileged` server (`:8080`) and a `curlimages/curl` Job exercise the
-  data plane. The smoke asserts both pods carry the `linkerd-proxy` container
-  and the `linkerd.io/created-by=linkerd/proxy-injector` /
-  `linkerd.io/proxy-version` annotations — a silently skipped injection
-  (`failurePolicy: Ignore`) is a hard failure.
-- **Real request** — the client `curl`s the server's Service through the mesh
-  (200 + a known body), checks `/ready` and its own live identity leaf, and both
-  proxies must report `response_total{classification="success"}` for `direction`
-  `outbound` and `inbound`. When the proxy exposes a `tls` label it is asserted
-  `tls="true"`; otherwise mTLS is proven by both proxies holding live leaves
-  and the request traversing both.
-- **Clock/TTL caveat** — the emulated EKS node's clock can advance past the
-  chart's 24h identity leaf lifetime, leaving new proxies with `Expired`
-  certificates (old pods keep serving, so ArgoCD still says `Healthy`). The
-  `local` overlay raises `identity.issuer.issuanceLifetime` to `168h0m0s`;
-  dev/qa/prod keep the default. CI always boots a fresh cluster (<24h), so it is
-  not affected. If it happens on a long-lived local cluster, delete the linkerd
-  pods to re-issue leaves.
-- **Pins** — `LINKERD_SMOKE_SERVER_IMAGE` and `LINKERD_SMOKE_CLIENT_IMAGE` live
-  in `bootstrap/versions.sh`, covered by the pin guards.
 
 ### Environment profile: `local` (not `qa`)
 

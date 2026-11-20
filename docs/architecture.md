@@ -3,9 +3,9 @@
 Reference for the `sca` platform on Kubernetes: layers, the component catalog,
 sync-waves, namespaces, the secret flow and the environment model. This is a
 **state document** — how the platform *is*. Beyond ArgoCD, cert-manager
-(Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4),
-cloudnative-pg (Phase 5), redis-operator (Phase 7), Kong (Phase 8), the Linkerd
-control plane (Phase 9), postgres-app/keycloak-db (Phase 10), Redis (Phase 12),
+(Phase 1), Vault (Phase 2), external-secrets (Phase 3),
+cloudnative-pg (Phase 5), redis-operator (Phase 7), Kong (Phase 8),
+postgres-app/keycloak-db (Phase 10), Redis (Phase 12),
 Keycloak (Phase 13), NATS/NACK (ADR-005) and Velero (Phase 18) are deployed;
 the observability components (Phases 14-16) remain `planned`. For how changes *flow* through the platform, see
 [workflow.md](workflow.md); for
@@ -69,7 +69,6 @@ graph TD
     end
     subgraph Edge["Edge & Mesh"]
         D --> D1[Kong]
-        D --> D2[Linkerd control plane]
     end
     subgraph Data["Data"]
         E --> E1[CloudNativePG / postgres-app + keycloak-db]
@@ -91,13 +90,13 @@ both. This repository builds no images.
 
 ## Component catalog
 
-The catalog has **18 components** plus ArgoCD. Each row shows its intended
+The catalog has **16 components** plus ArgoCD. Each row shows its intended
 namespace, upstream chart, ArgoCD sync-wave and roadmap phase. Chart and image
 pins are set per component when that phase lands (values live under
 `infrastructure/<component>/` and `envs/<env>/` from Phase 1 on); in the table
 ArgoCD, cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3),
-linkerd-crds (Phase 4), cloudnative-pg (Phase 5), redis-operator (Phase 7),
-Kong (Phase 8), the Linkerd control plane (Phase 9),
+cloudnative-pg (Phase 5), redis-operator (Phase 7),
+Kong (Phase 8),
 postgres-app/keycloak-db (Phase 10), Redis (Phase 12), Keycloak (Phase 13),
 NACK/NATS (NATS migration C1–C4) and Velero (Phase 18) are
 deployed; the observability components (Phases 14-16) remain `planned`.
@@ -112,11 +111,9 @@ their own repositories — see
 | cert-manager | `cert-manager` | jetstack/cert-manager | -20 | 1 | deployed (Phase 1) |
 | vault | `vault` | hashicorp/vault | 0 | 2 | deployed (Phase 2) |
 | external-secrets | `external-secrets` | external-secrets/external-secrets | -10 | 3 | deployed (Phase 3) |
-| linkerd-crds | `linkerd` | linkerd/linkerd-crds | -10 | 4 | deployed (Phase 4) |
 | cloudnative-pg | `cloudnative-pg` | cloudnative-pg/cloudnative-pg | -10 | 5 | deployed (Phase 5) |
 | redis-operator | `data` | ot-container-kit/redis-operator | -10 | 7 | deployed (Phase 7) |
 | kong | `kong` | kong/kong (DB-less) | 20 | 8 | deployed (Phase 8) |
-| linkerd control plane | `linkerd` | linkerd/linkerd-control-plane | 30 | 9 | deployed (Phase 9) |
 | postgres-app (+ keycloak-db) | `data` | CNPG `Cluster` CRs (raw) | 40 | 10 | deployed (Phase 10) |
 | nats (JetStream) | `data` | nats/nats (JetStream) | 40 | — | deployed (NATS migration C1–C4, idle; optional per env) |
 | nack (JetStream controller) | `nats` | nats/nack | 50 | — | deployed (NATS migration C1–C4; optional per env) |
@@ -133,9 +130,9 @@ Notes:
 
 - **Status column** is the source of truth for "is it live?". ArgoCD,
   cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3),
-  linkerd-crds (Phase 4), cloudnative-pg (Phase 5),
-  redis-operator (Phase 7), Kong (Phase 8), the Linkerd control plane
-  (Phase 9), postgres-app/keycloak-db (Phase 10), Redis (Phase 12),
+  cloudnative-pg (Phase 5),
+  redis-operator (Phase 7), Kong (Phase 8),
+  postgres-app/keycloak-db (Phase 10), Redis (Phase 12),
   Keycloak (Phase 13), NACK/NATS (NATS migration C1–C4) and Velero (Phase 18) are
   deployed; the observability components (Phases 14-16) remain `planned (Phase N)`. The
   CNPG scheduled backups and Vault Raft snapshot CronJob are **backup
@@ -178,11 +175,6 @@ Notes:
   (`ingressClassName: kong`) plus the `Kong*` CRs the bundled Ingress
   Controller programs into Kong; the proxy serves TLS from a cert-manager leaf
   (`sca-ca`). See [Deviations log](#deviations-log).
-- The Linkerd control plane **is** an ArgoCD app — a dedicated `Application`
-  (`argocd/linkerd-<env>.yaml`, wave 30), not the `linkerd install` script. helm
-  chart `linkerd/linkerd-control-plane` after cert-manager and linkerd-crds are
-  up; its identity PKI is provided in-cluster (cert-manager owns the issuer).
-  See [Deviations log](#deviations-log).
 - `local` is the only environment running the full catalog including the
   observability stack; Velero, CNPG backups, and Vault Raft snapshots are
   **configured in all four** environments (local on Floci S3, external S3
@@ -213,7 +205,6 @@ graph LR
     end
     subgraph W-10["-10 Operators/CRDs"]
         D[external-secrets]
-        E[linkerd-crds]
         F[cloudnative-pg]
         H[redis-operator]
     end
@@ -225,9 +216,6 @@ graph LR
     end
     subgraph W20["20"]
         K[Kong]
-    end
-    subgraph W30["30"]
-        L[Linkerd control plane]
     end
     subgraph W40["40"]
         M[postgres-app / keycloak-db]
@@ -254,8 +242,7 @@ graph LR
     C --> D
     D --> I
     J --> K
-    K --> L
-    L --> M
+    K --> M
     M --> P
     P --> Q
     D --> W
@@ -313,7 +300,6 @@ Full inventory and runbooks: [secrets.md](secrets.md).
 | `cert-manager` | TLS certificate management |
 | `vault` | Secrets SSOT |
 | `external-secrets` | Secret projection from Vault |
-| `linkerd` | Service mesh CRDs and control plane |
 | `cloudnative-pg` | PostgreSQL operator |
 | `kong` | API gateway |
 | `data` | Datastores: postgres-app, keycloak-db, NATS JetStream, Redis — plus the redis-operator (Phase 7) |
@@ -380,8 +366,7 @@ as each component lands; the log always explains *why*, never just *what*.
 | nats + nack | Both are optional elements of a dedicated `messaging-<env>` `ApplicationSet` (not the platform list); NACK is pinned at wave 50 (after the NATS server at 40), NATS ships "ready but idle" with no `Stream`/`Consumer` CRs, and the tier has no client auth yet | NACK connects to NATS at startup; the platform Applications are not children of a root app, so cross-Application sync-waves are not enforced, and placing NACK after NATS keeps the logical order while the controller retries until the server answers. Idle avoids committing streams before the toggle and the consumers exist (ADR-005); once the first consumer lands, NATS accounts/credentials are wired through Vault/ESO. Both use upstream charts, so the ApplicationSet covers them without dedicated app files. See [messaging.md](messaging.md) for the toggle and service-owned topology |
 | Messaging toggle (NATS/NACK) | A dedicated `argocd/messaging-<env>.yaml` `ApplicationSet` (git files generator over `argocd/messaging/<env>/*.yaml`) owns the optional NATS/NACK Applications; the descriptors exist in NATS mode and are removed for SNS/SQS mode. The app template sets `resources-finalizer.argocd.argoproj.io`, so removing a descriptor deletes the Application and its resources. The per-env values overlays (`envs/<env>/{nats,nack}.yaml`) remain in both modes | The platform list generator cannot express "this component is optional per environment". A git files generator is declarative and needs no values-flag conditionals: the file set in git *is* the mode. Keeping the values overlays makes switching back a descriptor-only change, while the finalizer guarantees SNS/SQS mode leaves no NATS pods behind (the idle tier has no data worth preserving). The app names stay `nats-<env>`/`nack-<env>`, so the existing smokes and catalog discovery are unchanged. Vault's `secret/messaging/<env>` is the runtime contract (`mode` + endpoints); the descriptor set is the deployment gate |
 | Messaging contract | `secret/messaging/<env>` is the single KV-v2 contract: `mode` (`nats`/`sns-sqs`), `nats_url`, and the SNS/SQS coordinates (`sns_topic_arn`, `sqs_queue_url`, `aws_region`, optional endpoint/credentials). `bootstrap/seed-vault.sh` seeds local `mode=nats`; external environments provision the path out of band | Consumers must switch backends without code changes, and Vault is the secrets SSOT. A per-service copy would drift; a platform ConfigMap would not carry credentials. Keeping the contract in Vault lets every service project it with its own ESO scope. No consumer exists yet, so the idle tier remains unauthenticated |
-| Linkerd | Control plane deployed as a **dedicated ArgoCD `Application`** (`argocd/linkerd-<env>.yaml`), **not** by the `linkerd install` script, and with **no `linkerd-viz`** | The script model cannot be validated by the cluster smoke, which discovers the catalog from `infrastructure/*/` and requires every entry to be an ArgoCD `Application` `<name>-<env>` that converges (`bootstrap/smoke-ci.sh`); the dedicated-Application pattern (same shape as Kong) makes the control plane a normal, reviewable, `git`-driven catalog entry. `linkerd-viz` stays out (headless mesh): the golden signals are scraped by the Phase 14 observability stack |
-| Linkerd | The identity PKI (trust anchor + issuer) is provided **in-cluster** — `identity.externalCA=true` + `identity.issuer.scheme=kubernetes.io/tls` — with cert-manager issuing the issuer `Certificate` and the mesh's public root CA committed as a `Secret` (`linkerd-identity-anchor`, used by a `type: CA` `Issuer`) plus the public cert in the `linkerd-identity-trust-roots` `ConfigMap` | The linkerd-control-plane Helm chart does **not** generate the identity PKI (only the `linkerd install` CLI does): it takes it by `--set-file`, which ArgoCD cannot do without committing certs, or references pre-existing resources. cert-manager can own the issuer `Secret` declaratively but cannot write a `ConfigMap`, so the trust anchor cannot be projected without an extra component (trust-manager/ESO) that is not in the catalog. The anchor is a self-signed mesh root with no external trust relationship, so committing its key (used only by cert-manager to sign the issuer) is the accepted trade — the issuer's private key never enters `git`. The chart-generated webhook certs (`genSelfSignedCert`, random per render) are handled with `ignoreDifferences` on their Secrets + webhook `caBundle`s, like Kong's admission webhook. A path-scoped allowlist in `.gitleaks.toml` exempts exactly that one file from the `private-key` rule so the Security gate stays green (everything else still fails on any leak) |
+| Linkerd removal (D4) | Linkerd CRDs, control plane, identity PKI, smokes, service-template annotation and repository wiring were removed after the Calico `v3.31.7` + WireGuard D2/D3 gates | The CNI substrate now provides authenticated node-to-node transport; the Linkerd golden signals and L7 features are consciously dropped (ADR-008/ADR-009). The removed committed trust anchor also eliminates the former `.gitleaks.toml` exception |
 | ESO | Short `refreshInterval` (~5 min) in local | Avoids the ExternalSecret wedge that wedged the previous attempt; restarts only ever manual after bootstrap |
 | Vault | `local` runs the **full HA raft trio** (`server.ha.replicas: 3`) rather than the "1 replica local" profile the pre-Phase-2 docs implied; each env overlay now declares `server.ha.replicas` explicitly (local/qa/prod = 3, dev = 1), and `replicaCount` (a no-op for raft HA) is dropped | The user keeps HA in local on purpose: the raft quorum + standby→leader redirect (`vault-active`) must be exercised on the same path the smoke and qa/prod exercise, so `make smoke COMPONENT=vault` validates real HA, not a single-node special case; dev stays single-node to keep the shared integration light |
 | Vault | The jetstack `hashicorp/vault` chart defaults to `global.tlsDisable: true`, which injects plain-http probe addresses that break against the TLS listener; we set `global.tlsDisable: false` and add `retry_join` with `leader_ca_cert_file` in the raft storage block | The chart ships no `retry_join` and no HTTPS probe wiring; without these the readiness probe (`vault status`) spoke HTTP to an HTTPS listener and the raft peers failed to join (`certificate signed by unknown authority` until the CA file was passed) |
@@ -419,7 +404,7 @@ The following migrations are planned to optimize costs while maintaining service
 | --- | --- | --- |
 | Keycloak → Zitadel | **Proposed** | Complete replacement, no parallel long-term deployment. All OIDC clients must be migrated. |
 | Kafka/Strimzi → NATS JetStream | **Done (C1–C4)** | NATS + NACK deployed idle (no `Stream`/`Consumer` CRs) behind the optional `messaging-<env>` ApplicationSet; remove `argocd/messaging/<env>/{nats,nack}.yaml` for SNS/SQS mode (nothing in-cluster). Contract `secret/messaging/<env>` carries `mode` + endpoints. Kafka/Strimzi removed in C3; the C4 toggle runbook and service-owned stream/consumer guide are in [messaging.md](messaging.md). No current consumers. |
-| Linkerd → CNI-native mTLS | **Calico D2 passed; D3 implemented (local substrate smoke passed)** | D0 evaluated Cilium + WireGuard (primary), Calico + WireGuard (fallback) and k3s Flannel WireGuard-native / IPsec (not selected). [poc/cni-mtls](../poc/cni-mtls/README.md) records the failed Cilium `1.20.5` D2 gate. [ADR-009](adr/adr-009-calico-wireguard-fallback.md) and [poc/calico-wireguard](../poc/calico-wireguard/README.md) pin Calico `v3.31.7` with WireGuard; its D2 gate passed on 2026-11-17 with both nodes Ready, cross-node HTTP, one peer per node, recent handshake and positive byte counters. D3 adds the bootstrap-managed Calico + WireGuard + pinned kube-proxy substrate with `envs/<env>/cni.yaml` profiles and `bootstrap/smoke-cni.sh`; it is not an ArgoCD Application and has no sync-wave. WireGuard is authenticated node-to-node transport encryption, not workload mTLS; L7 retries/timeouts/traffic split and per-workload identity are lost. Linkerd stays deployed until D4; gates and inventory live in [ADR-008](adr/adr-008-cni-native-mtls.md). |
+| Linkerd → CNI-native mTLS | **D4 removed Linkerd (D2/D3 full platform gate passed)** | D0 evaluated Cilium + WireGuard (primary), Calico + WireGuard (fallback) and k3s Flannel WireGuard-native / IPsec (not selected). [poc/cni-mtls](../poc/cni-mtls/README.md) records the failed Cilium `1.20.5` D2 gate. [ADR-009](adr/adr-009-calico-wireguard-fallback.md) and [poc/calico-wireguard](../poc/calico-wireguard/README.md) pin Calico `v3.31.7` with WireGuard; its D2 gate passed on 2026-11-17 with both nodes Ready, cross-node HTTP, one peer per node, recent handshake and positive byte counters. D3 adds the bootstrap-managed Calico + WireGuard + pinned kube-proxy substrate with `envs/<env>/cni.yaml` profiles and `bootstrap/smoke-cni.sh`; it is not an ArgoCD Application and has no sync-wave. WireGuard is authenticated node-to-node transport encryption, not workload mTLS; L7 retries/timeouts/traffic split and per-workload identity are lost. D4 removes Linkerd; gates and inventory live in [ADR-008](adr/adr-008-cni-native-mtls.md). |
 | CNPG as RDS replacement | **Done** | Backups/PITR and the restore smoke passed live on 2026-11-14, closing the gate. |
 | Vault hardening | **Landed (live restore validated 2026-11-14)** | Raft snapshots to object storage are implemented in all four environments; see [backups.md](backups.md). |
 | Velero priority | **Done** | Velero, CNPG backups, and Vault snapshots passed live restore validation on 2026-11-14. |

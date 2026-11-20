@@ -24,11 +24,9 @@ raft trio with TLS via a cert-manager leaf, an idempotent HA-aware seed, and a
 green smoke. **Phase 3** lands External Secrets Operator: it projects Vault KV
 into native Kubernetes `Secret`s through the `ClusterSecretStore vault`
 (k8s-auth, TLS via the `vault-tls` leaf) with a short ~5 min refresh, and ships
-a smoke proving a projected secret reaches `SecretSynced`. **Phase 4** lands
-linkerd-crds — the service-mesh CRDs (`linkerd.io` + `policy.linkerd.io`, plus
-the chart-default gateway `HTTPRoute`) in the `linkerd` namespace — a CRD-only
-Application with no workloads; it is the base the Linkerd control plane
-(Phase 9, wave 30) installs against. **Phase 5** lands CloudNativePG — the
+a smoke proving a projected secret reaches `SecretSynced`. **Phase 4** landed
+linkerd-crds, a CRD-only mesh base that was removed in D4 after the CNI-native
+mTLS cutover. **Phase 5** lands CloudNativePG — the
 PostgreSQL operator — at wave -10 in the `cloudnative-pg` namespace: chart
 pinned 0.29.0 (operator 1.30.0), cluster-wide watch (`config.clusterWide`) so
 the datastores can run in `data` at Phase 10, monitoring off until Phase 14,
@@ -57,11 +55,9 @@ per env. Routing is declarative in git (`infrastructure/kong/manifests/`: an
 `Ingress` on `ingressClassName: kong` plus a `request-termination` `KongPlugin`)
 and the proxy serves TLS from a cert-manager leaf (`kong-proxy` /
 `kong-proxy-cert` off the `sca-ca` ClusterIssuer). See
-[ci-cd.md](ci-cd.md) for the smoke design. **Phase 9** lands the Linkerd
-control plane as another **dedicated `Application` per environment**
-(`linkerd-<env>`) at wave 30, with in-cluster identity PKI (cert-manager-issued
-issuer anchored by the committed mesh root) and a data-plane end-to-end smoke;
-no `linkerd-viz` (headless mesh). **Phase 10** lands the PostgreSQL
+[ci-cd.md](ci-cd.md) for the smoke design. **Phase 9** landed the Linkerd
+control plane as a dedicated `Application` per environment with an in-cluster
+identity PKI; both it and its CRDs were removed in D4. **Phase 10** lands the PostgreSQL
 datastores: two CNPG `Cluster`s in `data` at wave 40 across **all four**
 environments — `postgres-app` (`app`/`app`) and `keycloak-db`
 (`keycloak`/`keycloak`) on official
@@ -131,7 +127,7 @@ C3, taking their CRs, dedicated Applications, values and smokes with them.
 cluster-wide watch) and `make smoke COMPONENT=nats` (JetStream enabled, zero
 streams) are the convergence gates.
 
-**Linkerd replacement (Calico D2 passed, D3 implemented; substrate smoke passed).** The
+**Linkerd replacement (Calico D2/D3 passed; D4 removes Linkerd).** The
 static inventory and option evaluation are complete in
 [ADR-008](adr/adr-008-cni-native-mtls.md). D1 added the
 [Cilium PoC harness](../poc/cni-mtls/README.md); D2 ran it seven times and
@@ -147,26 +143,24 @@ and a single-node smoke; `make eks-up` and `make smoke COMPONENT=cni` passed on
 2026-11-20. The full platform gate also passed that day via `make bootstrap
 ENV=local` and `make validate`: all 13 local Applications converged
 `Synced`/`Healthy` and the full component smoke sweep was green (`nats`/`nack`
-reported `[SKIP]` because the optional messaging tier is absent on `main`). No
-ArgoCD catalog or chart wiring changed; Linkerd remains deployed until the D4
-cutover.
+reported `[SKIP]` because the optional messaging tier is absent on `main`). D4
+now removes the Linkerd Applications, CRDs, identity PKI, smokes, annotations
+and repository wiring; the expected local catalog is 11 Applications.
 WireGuard is node-to-node transport encryption, not workload mTLS.
 
 | Fact | Value |
 | --- | --- |
 | Repository | `infra-kubernetes` (local, fully-local git serve; published to GitHub before promotion) |
-| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg (Phase 5), redis-operator (Phase 7), Kong (Phase 8), Linkerd control plane (Phase 9), postgres-app/keycloak-db (Phase 10), Redis (Phase 12), Keycloak (Phase 13), NACK/NATS (NATS migration C1–C4, idle, optional per env), Velero (Phase 18; backup layer expanded in Phase B, live restore-validated 2026-11-14) |
-| `platform-root-local` | not used — `local` runs no services, so there is no root Application; `make bootstrap ENV=local` seeds the catalog wiring (`apps-local` + `messaging-local` + `kong-local` + `linkerd-local` + `postgres-app-local` + `redis-local` + `keycloak-local`) host-side |
-| `platform-local` ApplicationSet | present, seven mandatory elements (`cert-manager` wave -20, `external-secrets` + `linkerd-crds` + `cloudnative-pg` + `redis-operator` wave -10, `vault` wave 0, `velero` wave 80) |
+| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), cloudnative-pg (Phase 5), redis-operator (Phase 7), Kong (Phase 8), postgres-app/keycloak-db (Phase 10), Redis (Phase 12), Keycloak (Phase 13), NACK/NATS (NATS migration C1–C4, idle, optional per env), Velero (Phase 18; backup layer expanded in Phase B, live restore-validated 2026-11-14) |
+| `platform-root-local` | not used — `local` runs no services, so there is no root Application; `make bootstrap ENV=local` seeds the catalog wiring (`apps-local` + `messaging-local` + `kong-local` + `postgres-app-local` + `redis-local` + `keycloak-local`) host-side |
+| `platform-local` ApplicationSet | present, six mandatory elements (`cert-manager` wave -20, `external-secrets` + `cloudnative-pg` + `redis-operator` wave -10, `vault` wave 0, `velero` wave 80) |
 | `messaging-local` ApplicationSet | present, optional `nats` (wave 40) + `nack` (wave 50) generated by the git files generator over `argocd/messaging/local/*.yaml`; remove the two descriptors for SNS/SQS mode |
 | cert-manager app | `cert-manager-local` `Synced` + `Healthy`; `sca-ca` ClusterIssuer `Ready`; leaf Certificate smoke green |
 | vault app | `vault-local` `Synced` + `Healthy`; HA raft trio, TLS via `vault-tls` leaf; `make smoke COMPONENT=vault` → initialized=true sealed=false; seed idempotent and HA-aware |
 | external-secrets app | `external-secrets-local` `Synced` + `Healthy`; `ClusterSecretStore vault` Ready (k8s-auth `external-secrets`, TLS via `vault-tls`); short `refreshInterval` (5m); `make smoke COMPONENT=external-secrets` → throwaway ExternalSecret `SecretSynced` + data verified |
-| linkerd-crds app | `linkerd-crds-local` `Synced`, namespace `linkerd` present, CRD-only app (no workloads); `servers`/`serverauthorizations`/`serviceprofiles` + policy group all `Established`; `make smoke COMPONENT=linkerd-crds` green |
 | cloudnative-pg app | `cloudnative-pg-local` `Synced` + `Healthy`; operator Deployment `cloudnative-pg` Ready (chart 0.29.0 / operator 1.30.0); 11 `postgresql.cnpg.io` CRDs present + `Established`; `make smoke COMPONENT=cloudnative-pg` green |
 | redis-operator app | `redis-operator-local` `Synced` + `Healthy` in namespace `data`; operator Deployment `redis-operator` Ready (chart 0.26.1 / operator 0.26.0); watches all namespaces (no `WATCH_NAMESPACE` env); 4 `redis.redis.opstreelabs.in` CRDs present + `Established`; `make smoke COMPONENT=redis-operator` → throwaway `Redis` CR honored (StatefulSet ready + `PING` → `PONG`) |
 | kong app | `kong-local` `Synced` + `Healthy` in namespace `kong` (dedicated Application, **no SSA**); chart 3.4.1, gateway Deployment `kong` Ready (containers `ingress-controller` KIC 3.5.5 + `proxy` kong 3.9.4), DB-less (`KONG_DATABASE=off`); IngressClass `kong`; `configuration.konghq.com` CRDs `Established`; `Certificate/kong-proxy` Ready (leaf off `sca-ca`); declarative `Ingress kong-demo` + `KongPlugin demo-termination`; `make smoke COMPONENT=kong` → `GET https://kong.local/demo` → 200 |
-| linkerd app | `linkerd-local` `Synced` + `Healthy` (dedicated Application); chart `linkerd/linkerd-control-plane` 1.16.11 (`stable-2.14.10`); control-plane Deployments `linkerd-identity`/`linkerd-destination`/`linkerd-proxy-injector` Ready; identity PKI in-cluster (ConfigMap `linkerd-identity-trust-roots` + cert-manager-issued Secret `linkerd-identity-issuer`, chain to `root.linkerd.cluster.local` verified); 3 admission webhooks wired; `make smoke COMPONENT=linkerd` green, including **data plane end-to-end**: preflight of the control-plane identity-leaf TTL, an injected `nginx-unprivileged`+`curl` workload (both pods carry `linkerd-proxy`), HTTP 200 through the mesh, live identity leaves and inbound+outbound success metrics; `local` raises `identity.issuer.issuanceLifetime` to `168h0m0s` (emulator clock skew; dev/qa/prod keep 24h) |
 | postgres-app app | `postgres-app-local` `Synced` + `Healthy` (dedicated Application, raw CRs); CNPG `Cluster postgres-app` Ready (1 instance local; image `18.4-system-trixie`), `keycloak-db` Ready (1 instance local); ESO `postgres-app-credentials` + `keycloak-db-credentials` `SecretSynced`; `pg_stat_statements` + `vector` + `wal_level=logical` verified through `app@app`; `make smoke COMPONENT=postgres-app` green |
 | nats app | `nats-local` `Synced` + `Healthy` (optional `messaging-local` ApplicationSet element); chart/appVersion `nats/nats` 2.15.2 with JetStream enabled and a file-store PVC (1 node local/dev, 3-node JetStream cluster qa/prod); no `Stream`/`Consumer` CRs; `make smoke COMPONENT=nats` → server Ready, JetStream enabled, zero streams |
 | nack app | `nack-local` `Synced` + `Healthy` (optional `messaging-local` ApplicationSet element, namespace `nats`); chart `nats/nack` 0.35.0 / controller 0.24.0; six `*.jetstream.nats.io` CRDs `Established`; watches all namespaces; `make smoke COMPONENT=nack` green |
@@ -195,11 +189,11 @@ WireGuard is node-to-node transport encryption, not workload mTLS.
 
 ## Intentional exclusions
 
-- **No MinIO, no Unleash, no KafkaConnect/Debezium, no kafka-ui, no
-  linkerd-viz in-cluster.** They are deliberate scope cuts of the restart plan;
-  Velero's local backend is the Floci S3 emulator.
-- **No Consul and no Consul-k8s in-cluster** (ADR-001): native Kubernetes DNS +
-  Linkerd replace it.
+- **No MinIO, no Unleash, no KafkaConnect/Debezium, no kafka-ui in-cluster.**
+  They are deliberate scope cuts of the restart plan; Velero's local backend is
+  the Floci S3 emulator.
+- **No Consul and no Consul-k8s in-cluster** (ADR-001): native Kubernetes DNS
+  replaces it.
 - **No `latest` tags, no image builds**: infrastructure pins upstream
   releases; this repo builds nothing.
 - **No cloud in-cluster.** The cloud emulator (Floci) is smoke/CI tooling
@@ -224,7 +218,7 @@ WireGuard is node-to-node transport encryption, not workload mTLS.
 | --- | --- | --- |
 | Keycloak → Zitadel | **Planned** | Complete replacement. Inventory in progress. |
 | Kafka/Strimzi → NATS JetStream | **Done (C1–C4)** | NATS + NACK deployed idle (no `Stream`/`Consumer` CRs) via the optional `messaging-<env>` ApplicationSet; remove `argocd/messaging/<env>/{nats,nack}.yaml` for SNS/SQS mode. Contract `secret/messaging/<env>` carries `mode` + endpoints. Kafka/Strimzi removed in C3; the C4 runbook for the toggle and service-owned topology is in [messaging.md](messaging.md). |
-| Linkerd → CNI-native mTLS | **Calico D2 passed; D3 implemented (full platform gate passed)** | Static inventory and option evaluation in [ADR-008](adr/adr-008-cni-native-mtls.md); [poc/cni-mtls](../poc/cni-mtls/README.md) records the failed Cilium `1.20.5` gate. [ADR-009](adr/adr-009-calico-wireguard-fallback.md) and [poc/calico-wireguard](../poc/calico-wireguard/README.md) pin the Calico `v3.31.7` fallback, whose D2 gate passed on 2026-11-17 with cross-node HTTP and WireGuard peer/handshake/counter evidence. D3 adds `bootstrap/cni-emulator.sh`, `envs/<env>/cni.yaml` and `bootstrap/smoke-cni.sh` as bootstrap substrate (not a catalog Application); Linkerd stays deployed until D4. |
+| Linkerd → CNI-native mTLS | **D4 removed Linkerd (D2/D3 full platform gate passed)** | Static inventory and option evaluation in [ADR-008](adr/adr-008-cni-native-mtls.md); [poc/cni-mtls](../poc/cni-mtls/README.md) records the failed Cilium `1.20.5` gate. [ADR-009](adr/adr-009-calico-wireguard-fallback.md) and [poc/calico-wireguard](../poc/calico-wireguard/README.md) pin the Calico `v3.31.7` fallback, whose D2 gate passed on 2026-11-17 with cross-node HTTP and WireGuard peer/handshake/counter evidence. D3 adds `bootstrap/cni-emulator.sh`, `envs/<env>/cni.yaml` and `bootstrap/smoke-cni.sh` as bootstrap substrate (not a catalog Application); D4 removes Linkerd and keeps the ADRs as history. |
 | Velero + Backups | **Done** | The three layers are implemented and live restore-validated on 2026-11-14: Velero scheduled backups, CNPG Barman base backups + WAL/PITR, and Vault Raft snapshot CronJob. `local` uses Floci S3; `dev`/`qa`/`prod` expect external buckets and Vault-provisioned credentials. See [backups.md](backups.md#validation-status). |
 | CNPG RDS replacement | **Done** | The PITR + latest-backup restore smoke (`bootstrap/smoke-postgres-app.sh`) passed live on 2026-11-14, closing the RDS replacement gate. |
 
