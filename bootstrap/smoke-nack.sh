@@ -16,6 +16,12 @@ set -euo pipefail
 NAMESPACE="${NACK_NS:-nats}"
 DEPLOYMENT="${NACK_DEPLOYMENT:-nack}"
 TIMEOUT="${SMOKE_TIMEOUT:-120s}"
+APP="${NACK_APP:-nack-local}"
+
+if ! kubectl get application "${APP}" -n argocd >/dev/null 2>&1; then
+  echo "[SKIP] smoke(nack): Application ${APP} is not deployed (optional messaging tier)"
+  exit 0
+fi
 
 # CRD set shipped by the nats/nack chart 0.35.0 (appVersion 0.24.0), all in the
 # `jetstream.nats.io` group.

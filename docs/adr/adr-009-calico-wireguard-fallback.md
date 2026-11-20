@@ -148,14 +148,16 @@ make smoke COMPONENT=eks
 
 The gate passes only when the fresh single-node substrate reaches full platform
 health with Linkerd still deployed and `smoke-cni.sh` reports
-`[OK] smoke(cni)`. On 2026-11-20 the substrate portion passed: `make eks-up`
-reached node `Ready` and `make smoke COMPONENT=cni` reported
-`[OK] smoke(cni)`. The full platform portion is still pending; multi-node
-peer/handshake evidence remains the D2 gate and is not re-run here. The first
-full attempt failed at ArgoCD's `argocd-redis-secret-init` pre-install hook
-because D3's own kube-proxy crashed on `nf_conntrack_max: permission denied`,
-leaving ClusterIP routing down. The `--conntrack-max-per-core=0` flag and the
-internal API probe above close that gap; the rerun is pending.
+`[OK] smoke(cni)`. On 2026-11-20 the full gate passed: `make eks-up` reached node
+`Ready`, `make smoke COMPONENT=cni` reported `[OK] smoke(cni)`, `make bootstrap
+ENV=local` + `make validate` converged all 13 local Applications
+`Synced`/`Healthy`, and the component smoke sweep was green (`nats`/`nack`
+reported `[SKIP]` because the optional messaging tier is absent on `main`).
+Multi-node peer/handshake evidence remains the D2 gate and is not re-run here.
+The first full attempt failed at ArgoCD's `argocd-redis-secret-init` pre-install
+hook because D3's own kube-proxy crashed on `nf_conntrack_max: permission
+denied`, leaving ClusterIP routing down; `--conntrack-max-per-core=0` and the
+internal API probe above closed that gap without a rollback.
 
 ### Rollback
 
