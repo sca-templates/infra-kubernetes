@@ -160,7 +160,7 @@ wait_for_felix_config() {
 
 check_kubernetes_service() {
   local pod="cni-kubernetes-probe"
-  local attempt phase overrides probe node
+  local attempt phase overrides probe node cluster_ip
 
   node="$(kube get nodes --no-headers -o custom-columns=NAME:.metadata.name | awk 'NR == 1 { print; exit }')"
   [ -n "${node}" ] || {
@@ -168,9 +168,15 @@ check_kubernetes_service() {
     return 1
   }
 
+  cluster_ip="$(kube get service kubernetes -o jsonpath='{.spec.clusterIP}' 2>/dev/null || true)"
+  [ -n "${cluster_ip}" ] || {
+    echo "ERROR: cannot resolve the kubernetes Service ClusterIP" >&2
+    return 1
+  }
+
   kube -n kube-system delete pod "${pod}" --ignore-not-found >/dev/null 2>&1 || true
 
-  probe='curl -fsS --max-time 10 --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt -H "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" https://kubernetes.default.svc.cluster.local/version'
+  probe="curl -fsS --max-time 10 --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt --resolve kubernetes.default.svc.cluster.local:443:${cluster_ip} -H \"Authorization: Bearer \$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)\" https://kubernetes.default.svc.cluster.local/version"
   overrides="$(printf '{"spec":{"nodeName":"%s","hostNetwork":true,"automountServiceAccountToken":true,"containers":[{"name":"curl","image":"%s","command":["sh","-c","%s"]}]}}' \
     "${node}" "${CNI_SMOKE_CLIENT_IMAGE}" "${probe//\"/\\\"}")"
 
