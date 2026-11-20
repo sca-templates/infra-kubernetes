@@ -60,11 +60,11 @@ jobs:
       - name: Validate static manifests
         run: |
           set -euo pipefail
-          if ls infrastructure/*/manifests/*.yaml infrastructure/*/shared/*.yaml >/dev/null 2>&1; then
+          if ls infrastructure/*/manifests/*.yaml infrastructure/*/shared/*.yaml bootstrap/cni/manifests/*.yaml >/dev/null 2>&1; then
             kubeconform -strict -ignore-missing-schemas \
-              infrastructure/*/manifests/*.yaml infrastructure/*/shared/*.yaml
+              infrastructure/*/manifests/*.yaml infrastructure/*/shared/*.yaml bootstrap/cni/manifests/*.yaml
           else
-            echo "No infrastructure/ manifests yet; activates with Phase 1."
+            echo "No manifests yet; activates with Phase 1."
           fi
       - name: Validate rendered service template
         run: |
@@ -99,11 +99,11 @@ jobs:
           else
             echo "No service template yet; kube-linter activates with Phase 6."
           fi
-      - name: kube-linter infrastructure manifests when present
+      - name: kube-linter infrastructure and CNI substrate manifests when present
         run: |
           set -euo pipefail
-          if ls infrastructure/*/manifests/*.yaml infrastructure/*/shared/*.yaml >/dev/null 2>&1; then
-            kube-linter lint infrastructure/*/manifests/*.yaml infrastructure/*/shared/*.yaml
+          if ls infrastructure/*/manifests/*.yaml infrastructure/*/shared/*.yaml bootstrap/cni/manifests/*.yaml >/dev/null 2>&1; then
+            kube-linter lint infrastructure/*/manifests/*.yaml infrastructure/*/shared/*.yaml bootstrap/cni/manifests/*.yaml
           else
-            echo "No infrastructure/ manifests yet; activates with Phase 1."
+            echo "No manifests yet; activates with Phase 1."
           fi

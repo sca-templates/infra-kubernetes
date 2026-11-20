@@ -149,14 +149,26 @@ eks-down: ## Delete the emulated EKS cluster, IAM user and kubeconfig context
 	bootstrap/eks-emulator.sh down
 
 .PHONY: eks-status
-eks-status: ## Report the emulated EKS cluster status and its nodes
+eks-status: ## Report the emulated EKS cluster status, its nodes and CNI substrate
 	bootstrap/eks-emulator.sh status
+
+.PHONY: cni-up
+cni-up: ## Install the bootstrap-managed Calico + WireGuard + kube-proxy substrate in the emulated EKS cluster
+	bootstrap/cni-emulator.sh up
+
+.PHONY: cni-down
+cni-down: ## Remove the bootstrap-managed CNI resources from the emulated EKS cluster
+	bootstrap/cni-emulator.sh down
+
+.PHONY: cni-status
+cni-status: ## Report bootstrap-managed CNI DaemonSets, WireGuard config and node keys
+	bootstrap/cni-emulator.sh status
 
 ##@ Smoke
 
 .PHONY: smoke
 smoke: ## Smoke a deployed component: make smoke COMPONENT=cert-manager
-	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cert-manager, vault, external-secrets, linkerd-crds, linkerd, cloudnative-pg, redis-operator, kong, postgres-app, redis, nack, nats, keycloak, velero, cloud, eks)'; exit 1; }
+	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cni, cert-manager, vault, external-secrets, linkerd-crds, linkerd, cloudnative-pg, redis-operator, kong, postgres-app, redis, nack, nats, keycloak, velero, cloud, eks)'; exit 1; }
 	bootstrap/smoke-target.sh "$(COMPONENT)"
 
 ##@ Local Git serve

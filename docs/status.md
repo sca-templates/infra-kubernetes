@@ -131,17 +131,22 @@ C3, taking their CRs, dedicated Applications, values and smokes with them.
 cluster-wide watch) and `make smoke COMPONENT=nats` (JetStream enabled, zero
 streams) are the convergence gates.
 
-**Linkerd replacement (Calico D2 passed).** The static inventory and option
-evaluation are complete in [ADR-008](adr/adr-008-cni-native-mtls.md). D1 added
-the [Cilium PoC harness](../poc/cni-mtls/README.md); D2 ran it seven times and
+**Linkerd replacement (Calico D2 passed, D3 implemented; substrate smoke passed).** The
+static inventory and option evaluation are complete in
+[ADR-008](adr/adr-008-cni-native-mtls.md). D1 added the
+[Cilium PoC harness](../poc/cni-mtls/README.md); D2 ran it seven times and
 stabilized the substrate, chart source, values and BPF mount, but cross-node
 HTTP still timed out with no WireGuard handshake or tunnel traffic. Both tunnel
 and native routing were tried. [ADR-009](adr/adr-009-calico-wireguard-fallback.md)
 opened the Calico fallback and the
 [Calico PoC harness](../poc/calico-wireguard/README.md) passed its D2 gate on
 2026-11-17: both nodes Ready, cross-node HTTP, one WireGuard peer per node, a
-recent handshake and positive byte counters. No cluster, ArgoCD, chart or
-platform wiring changed; Linkerd remains deployed until the D3/D4 cutover.
+recent handshake and positive byte counters. D3 adds the bootstrap-managed
+Calico `v3.31.7` + WireGuard + pinned kube-proxy substrate, per-env CNI profiles
+and a single-node smoke; `make eks-up` and `make smoke COMPONENT=cni` passed on
+2026-11-20. The full platform gate (`make bootstrap` + `make validate`) is still
+pending. No ArgoCD
+catalog or chart wiring changed; Linkerd remains deployed until the D4 cutover.
 WireGuard is node-to-node transport encryption, not workload mTLS.
 
 | Fact | Value |
@@ -166,9 +171,10 @@ WireGuard is node-to-node transport encryption, not workload mTLS.
 | redis app | `redis-local` `Synced` + `Healthy` (dedicated Application, raw CRs); `RedisReplication/redis` (1 replica local/dev) with embedded Sentinel only in qa/prod (3/3, mymaster); password from ESO `redis-password` via `secret/redis/<env>`; AOF on PVC, `redisExporter` enabled; `make smoke COMPONENT=redis` → PING/SET/GET and AOF verified; Sentinel checked in qa/prod |
 | keycloak app | `keycloak-local` `Synced` + `Healthy` (dedicated multi-source Application); chart `codecentric/keycloakx` 7.4.0 / Keycloak 26.8.1; StatefulSet `keycloak` Ready; `ExternalSecret/keycloak-admin` + `keycloak-db-credentials` + `keycloak-test-user` `SecretSynced`; realm `sca` imported from `ConfigMap/keycloak-realm-sca`; `Certificate/keycloak-tls` Ready; Kong Ingress `keycloak.local`; `make smoke COMPONENT=keycloak` → discovery issuer, `login_required` redirect, password-grant token + userinfo green |
 | git-local-serve | in-cluster git daemon (`git://<node>:9418/sca-infra.git`) `Ready` |
-| Observability / smoke CI | cluster smoke `pr-cluster.yml` **shipped** (Phase 1): selective on PRs as the **required `Smoke` check** on `main` + manual `workflow_dispatch`; no `push` smoke. Multi-component PRs smoke every touched component in one run (one boot/cloud/teardown); changes to the smoke framework (`bootstrap/smoke-*`, `argocd/**`, `Makefile`) resolve to `cert-manager` so the machinery is self-validated; the pinned toolchain is cached (`actions/cache`, keyed on `versions.sh`) (see [ci-cd.md](ci-cd.md)) |
+| Observability / smoke CI | cluster smoke `pr-cluster.yml` **shipped** (Phase 1): selective on PRs as the **required `Smoke` check** on `main` + manual `workflow_dispatch`; no `push` smoke. Multi-component PRs smoke every touched component in one run (one boot/cloud/teardown); changes to the smoke framework (`bootstrap/smoke-*`, `argocd/**`, `Makefile`) resolve to `cert-manager` so the machinery is self-validated; CNI substrate changes resolve to `cni`; the pinned toolchain is cached (`actions/cache`, keyed on `versions.sh`) (see [ci-cd.md](ci-cd.md)) |
+| CNI substrate (dev/CI tooling) | D3 implementation landed with **local substrate smoke passed** on 2026-11-20: `make eks-up` starts Floci with bundled CNI disabled and k3s pinned to `v1.34.1-k3s1`, then `bootstrap/cni-emulator.sh` installs Calico `v3.31.7` (iptables + VXLAN + WireGuard, `MTU=1440`) and pinned kube-proxy `v1.34.1` with `--conntrack-max-per-core=0`; `make smoke COMPONENT=cni` runs before `make bootstrap` on every smoke. The first full-platform attempt failed because the D3 kube-proxy tried to write read-only `/proc/sys/net/netfilter`, breaking ClusterIP and the ArgoCD pre-install hook; the internal API probe now fails fast on that condition. `envs/<env>/cni.yaml` enforces `local` and documents the external contract. **Not a catalog Application**; rollback is a D3 revert plus `make eks-down` (see [ci-cd.md](ci-cd.md)) |
 | Cloud integration smoke | every smoke run also proves the cluster reaches the local cloud emulator (Floci): `make cloud-up` / `make smoke COMPONENT=cloud` green — bucket created and object round-tripped from an in-cluster Job; on by default, `--no-cloud` / `SMOKE_CLOUD=0` opts out. **Dev/CI tooling, not a platform component** (see [ci-cd.md](ci-cd.md)) |
-| EKS substrate smoke | the required `Smoke` job boots the **full platform** on Floci's emulated **EKS** (real single-node k3s + ECR), the platform's only cluster substrate: `make eks-up` → `make bootstrap ENV=local` → Vault seeded before the health gate → every `<name>-local` Application `Synced`/`Healthy` → `make smoke COMPONENT=eks` green (ECR push + in-cluster pull round-trip via the node registry mirror) → endpoint smoke. Proves EKS integration (IAM kubeconfig) + the ECR image path. **Dev/CI tooling, not a platform component** (see [ci-cd.md](ci-cd.md)) |
+| EKS substrate smoke | the required `Smoke` job boots the **full platform** on Floci's emulated **EKS** (real single-node k3s + ECR), the platform's only cluster substrate: `make eks-up` → `make smoke COMPONENT=cni` (substrate gate) → `make bootstrap ENV=local` → Vault seeded before the health gate → every `<name>-local` Application `Synced`/`Healthy` → `make smoke COMPONENT=eks` green (ECR push + in-cluster pull round-trip via the node registry mirror) → endpoint smoke. Proves EKS integration (IAM kubeconfig) + the ECR image path. **Dev/CI tooling, not a platform component** (see [ci-cd.md](ci-cd.md)) |
 | Security CI | checkov **baseline gate** active (Phase 1): `.github/checkov-baseline.json` documents the local-git-server pod findings; new IaC findings fail the PR; re-evaluated at Phase 18 (see [security.md](security.md)) |
 | Release automation | **path-scoped** triggers active (see [versioning.md](versioning.md)): only `feat`/`fix` commits touching the platform surface open release PRs (`exclude-paths` in `.release-please-config.json`); release-please runs on `push: main` only via the shared `shared-release-flow.yml` wrapper; tag signing runs when a release is created (manual dispatch re-sign removed) |
 | Release promotion | tags are cut automatically and the release goes out as a **full release held off `latest`**; `release-publish.yml` (manual) is the only step that moves the `latest` pointer, on a human go/no-go (see [versioning.md](versioning.md)) |
@@ -215,7 +221,7 @@ WireGuard is node-to-node transport encryption, not workload mTLS.
 | --- | --- | --- |
 | Keycloak → Zitadel | **Planned** | Complete replacement. Inventory in progress. |
 | Kafka/Strimzi → NATS JetStream | **Done (C1–C4)** | NATS + NACK deployed idle (no `Stream`/`Consumer` CRs) via the optional `messaging-<env>` ApplicationSet; remove `argocd/messaging/<env>/{nats,nack}.yaml` for SNS/SQS mode. Contract `secret/messaging/<env>` carries `mode` + endpoints. Kafka/Strimzi removed in C3; the C4 runbook for the toggle and service-owned topology is in [messaging.md](messaging.md). |
-| Linkerd → CNI-native mTLS | **Calico D2 passed (D3 pending)** | Static inventory and option evaluation in [ADR-008](adr/adr-008-cni-native-mtls.md); [poc/cni-mtls](../poc/cni-mtls/README.md) records the failed Cilium `1.20.5` gate. [ADR-009](adr/adr-009-calico-wireguard-fallback.md) and [poc/calico-wireguard](../poc/calico-wireguard/README.md) pin the Calico `v3.31.7` fallback, whose D2 gate passed on 2026-11-17 with cross-node HTTP and WireGuard peer/handshake/counter evidence. Linkerd stays deployed until D4; no runtime or platform wiring change. |
+| Linkerd → CNI-native mTLS | **Calico D2 passed; D3 implemented (local substrate smoke passed)** | Static inventory and option evaluation in [ADR-008](adr/adr-008-cni-native-mtls.md); [poc/cni-mtls](../poc/cni-mtls/README.md) records the failed Cilium `1.20.5` gate. [ADR-009](adr/adr-009-calico-wireguard-fallback.md) and [poc/calico-wireguard](../poc/calico-wireguard/README.md) pin the Calico `v3.31.7` fallback, whose D2 gate passed on 2026-11-17 with cross-node HTTP and WireGuard peer/handshake/counter evidence. D3 adds `bootstrap/cni-emulator.sh`, `envs/<env>/cni.yaml` and `bootstrap/smoke-cni.sh` as bootstrap substrate (not a catalog Application); Linkerd stays deployed until D4. |
 | Velero + Backups | **Done** | The three layers are implemented and live restore-validated on 2026-11-14: Velero scheduled backups, CNPG Barman base backups + WAL/PITR, and Vault Raft snapshot CronJob. `local` uses Floci S3; `dev`/`qa`/`prod` expect external buckets and Vault-provisioned credentials. See [backups.md](backups.md#validation-status). |
 | CNPG RDS replacement | **Done** | The PITR + latest-backup restore smoke (`bootstrap/smoke-postgres-app.sh`) passed live on 2026-11-14, closing the RDS replacement gate. |
 

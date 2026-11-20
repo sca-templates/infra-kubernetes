@@ -52,9 +52,11 @@ Docs and history:
 
 **Action**: D0 complete (research only). D1 added the disposable
 [Cilium PoC harness](../poc/cni-mtls/README.md); D2 failed on Cilium and passed
-on the [Calico PoC harness](../poc/calico-wireguard/README.md), D3 lands the
-chosen CNI substrate, D4 removes the runtime surfaces above and D5 closes
-the docs.
+on the [Calico PoC harness](../poc/calico-wireguard/README.md). D3 has landed the
+chosen CNI substrate as bootstrap tooling (`bootstrap/cni-emulator.sh`,
+`envs/<env>/cni.yaml`, `bootstrap/smoke-cni.sh`), with its fresh-cluster
+substrate gate passed on 2026-11-20; D4 removes the runtime surfaces above and
+D5 closes the docs.
 Service repositories are outside this repo and must drop their own injection
 annotations at D4.
 

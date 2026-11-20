@@ -85,7 +85,7 @@ HAS_CLOUD=0
 for c in "${COMPONENTS[@]}"; do
   case "$c" in
     cloud) HAS_CLOUD=1 ;;
-    eks) ;;
+    cni | eks) ;;
     *) APP_COMPONENTS+=("$c") ;;
   esac
 done
@@ -298,6 +298,15 @@ fi
 # shellcheck disable=SC1091
 . ".secrets/eks-admin.env"
 export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+
+# CNI is substrate, not a catalog Application: verify it before ArgoCD renders
+# anything, so a broken dataplane fails the smoke without burning the platform
+# convergence timeout. This runs on every smoke, regardless of touched paths.
+echo "── verify bootstrap CNI substrate: make smoke COMPONENT=cni"
+if ! make smoke COMPONENT=cni; then
+  diagnose
+  exit 1
+fi
 
 # Wait for an Application to become Synced (any health). Health is deliberately
 # NOT a gate here: stateful components (e.g. Vault) are born sealed/uninitialized

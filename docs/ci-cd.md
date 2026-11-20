@@ -129,8 +129,9 @@ checks.
 cluster-smoke CI had become a stack of hacks (trimmed manifests, self-heal
 disabled) and burned a week in `fix` churn. It lands at **Phase 1** with
 cert-manager, so each subsequent component is validated incrementally on a
-live Floci emulated EKS substrate as it ships, and the deployed baseline is continuously
-monitored. See the [roadmap](roadmap.md) for the Phase 1 gate and its smoke.
+live Floci emulated EKS substrate with the bootstrap-managed CNI described below,
+and the deployed baseline is continuously monitored. See the
+[roadmap](roadmap.md) for the Phase 1 gate and its smoke.
 
 **Triggers:**
 
@@ -180,9 +181,11 @@ component and smokes the whole set: `infrastructure/<c>/…` and
 `envs/<env>/<c>.yaml` → `<c>`; `argocd/<c>-<env>.yaml` → `<c>` when
 `infrastructure/<c>/` exists (so a dedicated app change smokes its component);
 `bootstrap/smoke-<c>*.sh` → `<c>` (the `smoke-cloud*` scripts → `cloud`;
-`smoke-eks.sh` → `cert-manager`, exercised by the always-on EKS step);
-`bootstrap/seed-vault.sh` → `vault`; `bootstrap/cloud-emulator.sh` → `cloud`;
-`bootstrap/eks-emulator.sh` → `cert-manager` (exercised by the EKS substrate). Changes to the smoke's own machinery — `bootstrap/smoke-ci.sh`,
+`smoke-eks.sh` → `cert-manager`, exercised by the always-on EKS step;
+`smoke-cni.sh` → `cni`); `envs/<env>/cni.yaml`, `bootstrap/cni-emulator.sh` and
+`bootstrap/cni/**` → `cni`; `bootstrap/seed-vault.sh` → `vault`;
+`bootstrap/cloud-emulator.sh` → `cloud`; `bootstrap/eks-emulator.sh` →
+`cert-manager` (exercised by the EKS substrate). Changes to the smoke's own machinery — `bootstrap/smoke-ci.sh`,
 `smoke-target.sh`, `render-served-apps.sh`, `sca.sh`, `versions.sh`,
 `local-git-*`, `preload-chart-images.sh`,
 `collect-argocd-diagnostics.sh`, `argocd/**` and the `Makefile` — resolve to
@@ -306,8 +309,9 @@ rendered by ArgoCD — it exists only for the duration of a smoke run.
   tooling (`bootstrap/cloud-emulator.sh`, `bootstrap/smoke-cloud*.sh`) resolves
   to the `cloud` component, so the tooling is self-validated in CI; `cloud` is
   also selectable via `workflow_dispatch`.
-- **Pins** — the emulator and CLI images are pinned in
-  `bootstrap/versions.sh` (`FLOCI_IMAGE`, `AWS_CLI_IMAGE`), covered by the
+- **Pins** — the emulator, CLI and bootstrap CNI images are pinned in
+  `bootstrap/versions.sh` (`FLOCI_IMAGE`, `AWS_CLI_IMAGE`,
+  `FLOCI_EKS_K3S_IMAGE`, `CALICO_VERSION`, `KUBE_PROXY_IMAGE`), covered by the
   pin guards ([security.md](security.md)), and overridable via `.env`.
 - **Adding a cloud** means a provider case in `cloud-emulator.sh` plus a
   `bootstrap/smoke-cloud-<provider>.sh` — nothing else changes.
@@ -349,6 +353,31 @@ Floci's EKS backing, not ArgoCD-managed).
    kubectl dump. On a node failure it dumps that kubectl dump, the emulator
    logs and the Docker container list (the k3s node included) to `.generated/`
    so the uploaded artifacts show what the substrate did.
+- **CNI substrate (D3)** — Floci is started with
+  `FLOCI_SERVICES_EKS_DISABLE_CNI=true` and a pinned
+  `FLOCI_SERVICES_EKS_DEFAULT_IMAGE` (`rancher/k3s:v1.34.1-k3s1`; the
+  `create-cluster --kubernetes-version` is derived as `1.34`, the last Floci
+  pin compatible with the cgroup v1 WSL2 host). Once the node object appears,
+  `bootstrap/cni-emulator.sh up` renders the checksum-verified Calico
+  `v3.31.7` VXLAN manifest (iptables dataplane, WireGuard, `MTU=1440`,
+  `interface=eth0`), installs a pinned `registry.k8s.io/kube-proxy:v1.34.1`
+  DaemonSet first with `--conntrack-max-per-core=0` (Floci's disable flag also
+  removes its bundled kube-proxy, which already used that flag for the read-only
+  host `/proc/sys`), probes `kubernetes.default.svc` before applying Calico,
+  then points Calico at the real API endpoint via the
+  `kubernetes-services-endpoint` ConfigMap so `install-cni` does not depend on
+  ClusterIP routing, applies the eBPF/securityfs substrate patches validated in
+  D2 and patches `FelixConfiguration/default` **before** the rollout.
+  `bootstrap/smoke-cni.sh` (`make smoke COMPONENT=cni`) runs before `make
+  bootstrap` and gates on both DaemonSets, WireGuard config, per-node public-key
+  annotations, Felix metrics scraped over `hostNetwork` (WireGuard interface
+  metrics only where peers exist), and pod-to-pod HTTP. A scratch namespace left
+  `Terminating` by a broken API endpoint is cleared by dropping its finalizers
+  before the next run. Profiles live in
+  `envs/<env>/cni.yaml` (`local` enforced, `dev`/`qa`/`prod` as an external
+  contract); the CNI is substrate, so it stays out of the catalog and has no
+  Application or sync-wave. Rollback is a revert of the D3 change plus
+  `make eks-down` (recreating with Floci's bundled CNI/kube-proxy).
 - **The check** — `bootstrap/smoke-eks.sh` (driven by `make smoke
   COMPONENT=eks`): asserts a `Ready` node on context `floci-eks`, pushes the
   pinned `AWS_CLI_IMAGE` to `${account}.dkr.ecr.${region}.localhost:4566` via
@@ -372,7 +401,8 @@ Floci's EKS backing, not ArgoCD-managed).
   and the endpoint check. It is the most complete test in the repo: the same
   GitOps path `dev`/`qa`/`prod` use, on an EKS-shaped cluster.
 - **Wiring** — `smoke-ci.sh` has a single path: `make eks-up` boots the EKS
-  substrate, `make bootstrap ENV=local` seeds the platform `ApplicationSet`, the
+  substrate and installs the D3 CNI substrate, `make smoke COMPONENT=cni`
+  verifies it before anything is rendered, `make bootstrap ENV=local` seeds the platform `ApplicationSet`, the
   optional `messaging-local` ApplicationSet and the dedicated
   `kong-local`/`linkerd-local`/`postgres-app-local`/
   `redis-local`/`keycloak-local` apps from the PR head and applies the

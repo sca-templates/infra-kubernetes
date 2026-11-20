@@ -185,11 +185,13 @@ ensure_iam_admin() {
     # shellcheck disable=SC1090,SC1091
     . "${EKS_ADMIN_FILE}"
     if [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${AWS_SECRET_ACCESS_KEY:-}" ]; then
-      echo "  reusing saved admin access key for '${IAM_USER}'"
-      # `get-token` runs in a child process: sourced variables are not exported
-      # by default, so without this the kubeconfig has no IAM credentials.
       export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
-      return 0
+      if aws_cli sts get-caller-identity >/dev/null 2>&1; then
+        echo "  reusing saved admin access key for '${IAM_USER}'"
+        return 0
+      fi
+      echo "── eks: saved admin access key is stale; minting a fresh one"
+      unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
     fi
   fi
 
@@ -430,13 +432,26 @@ create_cluster() {
   # cluster it just registered (the original CI failure). The create verdict is
   # not a source of truth — converge on the cluster state instead.
   echo "── eks: creating cluster '${EKS_CLUSTER}' (role ${EKS_ROLE_ARN})"
-  local create_err
+  local create_err k8s_version
+  # Floci maps EKS --kubernetes-version to the k3s image; derive it from the
+  # pinned k3s tag (v1.34.1-k3s1 -> 1.34) instead of leaving the cluster on
+  # latest. Do NOT use --version here: that is the AWS CLI's global version
+  # flag, which prints the CLI version and exits 0 without calling the API.
+  k8s_version="${FLOCI_EKS_K3S_VERSION#v}"
+  k8s_version="${k8s_version%%-*}"
+  k8s_version="${k8s_version%.*}"
   AWS_CLI_ENV=(-e AWS_MAX_ATTEMPTS=1)
   if ! create_err="$(aws_cli eks create-cluster \
         --name "${EKS_CLUSTER}" \
         --role-arn "${EKS_ROLE_ARN}" \
+        --kubernetes-version "${k8s_version}" \
         --resources-vpc-config "subnetIds=${EKS_SUBNET}" 2>&1)"; then
     printf '%s\n' "${create_err}" | sed 's/^/  /' >&2
+    if printf '%s' "${create_err}" | grep -q 'InvalidParameterException'; then
+      echo "ERROR: create-cluster rejected a required parameter; not converging" >&2
+      AWS_CLI_ENV=()
+      return 1
+    fi
     echo "  create-cluster returned an error; converging on the cluster state" >&2
   fi
   AWS_CLI_ENV=()
@@ -505,6 +520,9 @@ eks_up() {
     recreate=0
   done
 
+  echo "── eks: installing bootstrap-managed CNI substrate (Calico + WireGuard + kube-proxy)"
+  "${SELF_DIR}/cni-emulator.sh" up
+
   wait_for_nodes
 
   echo "── eks: publishing cloud emulator into the EKS cluster"
@@ -516,6 +534,16 @@ eks_up() {
 }
 
 eks_down() {
+  if [ -f "${EKS_ADMIN_FILE}" ]; then
+    # shellcheck disable=SC1090,SC1091
+    . "${EKS_ADMIN_FILE}"
+    export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+  fi
+  if kubectl --context "${EKS_CONTEXT}" get nodes >/dev/null 2>&1; then
+    echo "── eks: removing bootstrap-managed CNI substrate"
+    "${SELF_DIR}/cni-emulator.sh" down || true
+  fi
+
   echo "── eks: deleting cluster '${EKS_CLUSTER}'"
   aws_cli eks delete-cluster --name "${EKS_CLUSTER}" >/dev/null 2>&1 || true
 
@@ -528,7 +556,7 @@ eks_down() {
       | tr '\t' '\n' | while read -r kid; do
         [ -n "${kid}" ] || continue
         aws_cli iam delete-access-key --user-name "${IAM_USER}" --access-key-id "${kid}" >/dev/null 2>&1 || true
-      done
+      done || true
     aws_cli iam delete-user --user-name "${IAM_USER}" >/dev/null 2>&1 || true
     rm -f "${EKS_ADMIN_FILE}"
   fi
@@ -562,6 +590,7 @@ eks_status() {
   echo "  context: ${EKS_CONTEXT}"
   if kubectl --context "${EKS_CONTEXT}" get nodes >/dev/null 2>&1; then
     kubectl --context "${EKS_CONTEXT}" get nodes -o wide
+    "${SELF_DIR}/cni-emulator.sh" status || true
   else
     echo "  nodes: context '${EKS_CONTEXT}' not reachable" >&2
     return 1

@@ -156,6 +156,9 @@ red), the response is **rollback, not forward-churn**:
 
 - **Platform component**: revert the offending commit (or the environment's
   view of it via the overlay), merge the revert, let ArgoCD reconcile it back.
+- **CNI substrate (D3, local/CI tooling)**: revert the D3 commit and run
+  `make eks-down`; the next `make eks-up` starts Floci with its bundled
+  Flannel/kube-proxy again. There is no in-place flip between CNI dataplanes.
 - **Service**: re-run the `promote` workflow pointing the dev/qa app back at
   the previous known-good commit (a new sync is the rollback — no new commit
   needed); for prod, revert the `chore(services)` pin bump so the registry

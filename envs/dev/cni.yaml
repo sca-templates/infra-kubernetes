@@ -1,0 +1,13 @@
+provider: calico
+version: v3.31.7
+dataplane: iptables
+enforced: false
+wireguardEnabled: true
+wireguardPort: 51820
+vxlanMode: Always
+ipipMode: Never
+mtu: 1440
+podCIDR: 10.42.0.0/16
+serviceCIDR: 10.100.0.0/16
+ipDetectionMethod: interface=eth0
+kubeProxyImage: registry.k8s.io/kube-proxy:v1.34.1
