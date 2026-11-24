@@ -148,10 +148,22 @@ db_query() {
   psql_in "$PRIMARY" "$USERNAME" "$PASSWORD" "$DATABASE" "$1"
 }
 
+use_cluster_credentials() {
+  local cluster="$1" secret="$2" database="$3"
+  PRIMARY="$(primary_for "$cluster")"
+  USERNAME="$(secret_value "$secret" username)"
+  PASSWORD="$(secret_value "$secret" password)"
+  DATABASE="$database"
+  [ -n "$PRIMARY" ] && [ -n "$USERNAME" ] && [ -n "$PASSWORD" ] || {
+    echo "FAIL: no primary or empty credentials for ${cluster}" >&2
+    exit 1
+  }
+}
+
 verify_cluster() {
   local cluster="$1" secret="$2" database="$3" expected_identity="$4"
   local expected_extensions="${5:-}" check_wal="${6:-0}"
-  local primary identity wal_level extensions
+  local identity wal_level extensions
 
   wait_externalsecret "$secret"
 
@@ -164,14 +176,7 @@ verify_cluster() {
 
   wait_continuous_archiving "$cluster"
 
-  primary="$(primary_for "$cluster")"
-  [ -n "$primary" ] || { echo "FAIL: no primary pod for ${cluster}" >&2; exit 1; }
-
-  PRIMARY="$primary"
-  USERNAME="$(secret_value "$secret" username)"
-  PASSWORD="$(secret_value "$secret" password)"
-  DATABASE="$database"
-  [ -n "$USERNAME" ] && [ -n "$PASSWORD" ] || { echo "FAIL: projected credentials are empty" >&2; exit 1; }
+  use_cluster_credentials "$cluster" "$secret" "$database"
 
   echo "── smoke(postgres-app): ${cluster} application connection"
   identity="$(db_query "select current_user || '@' || current_database()")"
@@ -368,6 +373,8 @@ run_pitr_test() {
   fi
 
   echo "── smoke(postgres-app): PITR round-trip on postgres-app"
+  wait_externalsecret postgres-app-credentials
+  use_cluster_credentials postgres-app postgres-app-credentials app
   wait_externalsecret cnpg-backup-credentials
   reset_smoke_table
   db_query "insert into platform_backup_smoke(marker) values ('${marker_a}')" >/dev/null
@@ -405,10 +412,15 @@ run_latest_restore_test() {
   local backup_a="smoke-latest-a-${SUFFIX}"
   local backup_b="smoke-latest-b-${SUFFIX}"
   local restore="smoke-restore-latest-${SUFFIX}"
-  local count
+  local count restore_user restore_pass restore_db
 
   echo "── smoke(postgres-app): latest-backup restore on keycloak-db"
+  wait_externalsecret keycloak-db-credentials
   wait_externalsecret cnpg-backup-credentials
+  use_cluster_credentials keycloak-db keycloak-db-credentials keycloak
+  restore_user="$USERNAME"
+  restore_pass="$PASSWORD"
+  restore_db="$DATABASE"
   reset_smoke_table
   db_query "insert into platform_backup_smoke(marker) values ('${marker_a}')" >/dev/null
 
@@ -422,9 +434,9 @@ run_latest_restore_test() {
 
   create_restore_cluster "$restore" keycloak-db "$backup_b" keycloak-db-credentials
 
-  count="$(restore_marker_count "$restore" "$USERNAME" "$PASSWORD" "$DATABASE" "$marker_a")"
+  count="$(restore_marker_count "$restore" "$restore_user" "$restore_pass" "$restore_db" "$marker_a")"
   [ "$count" = "1" ] || { echo "FAIL: latest restore is missing marker A (count=${count})" >&2; exit 1; }
-  count="$(restore_marker_count "$restore" "$USERNAME" "$PASSWORD" "$DATABASE" "$marker_b")"
+  count="$(restore_marker_count "$restore" "$restore_user" "$restore_pass" "$restore_db" "$marker_b")"
   [ "$count" = "1" ] || { echo "FAIL: latest restore is missing marker B (count=${count})" >&2; exit 1; }
 
   delete_restore_cluster "$restore"
