@@ -1,8 +1,7 @@
 # zitadel-local — OIDC identity provider, DEDICATED Application.
 #
 # Multi-source: zitadel/zitadel chart 10.5.0 + `$values` (base + env overlay) +
-# the per-env ExternalSecrets. No Ingress: E1 keeps h2c inside the cluster and
-# defers the Kong/TLS edge to E2.
+# the per-env ExternalSecrets and the shared Certificate/Ingress edge.
 #
 # Wave 50: after the CNPG `zitadel-db` cluster (wave 40, namespace `data`).
 # The ExternalSecrets carry wave -10 inside this Application.
@@ -35,6 +34,11 @@ spec:
       directory:
         recurse: true
         include: "*-local.yaml"
+    - repoURL: "{{GIT_REPO_URL}}"
+      targetRevision: "{{GIT_TARGET_BRANCH}}"
+      path: infrastructure/zitadel/shared
+      directory:
+        recurse: true
   destination:
     server: https://kubernetes.default.svc
     namespace: zitadel

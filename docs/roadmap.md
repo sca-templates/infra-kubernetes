@@ -88,7 +88,7 @@ worked in parallel.
 | [nack](roadmap/nack.md) | Data | 50 | C1 controller · C2 toggle · C3 cutover · C4 docs | [#105](https://github.com/sca-templates/infra-kubernetes/issues/105) | deployed (NATS migration C1–C4; optional per env) |
 | [redis](roadmap/redis.md) | Data | 40 | — | [#17](https://github.com/sca-templates/infra-kubernetes/issues/17) | deployed (Phase 12) |
 | [keycloak](roadmap/keycloak.md) | Security & Identity | 50 | M1 deploy | [#18](https://github.com/sca-templates/infra-kubernetes/issues/18) | deployed (Phase 13) |
-| zitadel | Security & Identity | 50 | E1 internal · E2 edge · E3 cutover | — | deployed (E1 internal-only; edge deferred to E2) |
+| zitadel | Security & Identity | 50 | E1 internal · E2 edge · E3 cutover | — | deployed (E1 internal; E2 edge implemented, live gate pending) |
 | [kube-prometheus-stack](roadmap/kube-prometheus-stack.md) | Observability | 60 | M1 stack · M2 radar | [#19](https://github.com/sca-templates/infra-kubernetes/issues/19) · [#29](https://github.com/sca-templates/infra-kubernetes/issues/29) | pending |
 | [loki](roadmap/loki.md) | Observability | 60 | M1 loki · M2 alloy | [#20](https://github.com/sca-templates/infra-kubernetes/issues/20) | pending |
 | [tempo](roadmap/tempo.md) | Observability | 60 | — | [#21](https://github.com/sca-templates/infra-kubernetes/issues/21) | pending |

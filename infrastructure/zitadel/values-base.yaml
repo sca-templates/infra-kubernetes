@@ -1,8 +1,9 @@
 # Zitadel — shared chart values for all environments.
 #
 # Chart: https://charts.zitadel.com, `zitadel` 10.5.0 (appVersion v4.19.2).
-# E1 is internal-only: no Ingress and no edge TLS; h2c stays inside the cluster.
-# The database is the CNPG cluster `zitadel-db` (wave 40, namespace `data`).
+# The E2 edge is an Ingress in Kong with TLS terminated by sca-ca; the upstream
+# stays h2c through Kong's gRPC Service protocol. The database is the CNPG
+# cluster `zitadel-db` (wave 40, namespace `data`).
 # Secrets are projected by ExternalSecret from `secret/zitadel/${ENV}` and
 # `secret/zitadel-db/${ENV}`; nothing is stored in git.
 imageRegistry: docker.io
@@ -23,7 +24,8 @@ securityContext: {}
 service:
   type: ClusterIP
   port: 8080
-  annotations: {}
+  annotations:
+    konghq.com/protocol: grpc
 ingress:
   enabled: false
 resources:

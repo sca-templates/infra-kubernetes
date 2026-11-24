@@ -449,26 +449,31 @@ identity plane, not just that the pod is up:
   `secret/keycloak/test-user/<env>` (run `bootstrap/seed-vault.sh` once on an
   older local cluster; it is idempotent).
 
-### Zitadel internal smoke (E1)
+### Zitadel smoke (E1/E2)
 
 `make smoke COMPONENT=zitadel` (`bootstrap/smoke-zitadel.sh`) proves the
-internal-only identity plane before the E2 edge gate:
+identity plane and the real Kong/TLS edge:
 
 - **Secrets** — the three ExternalSecrets (`zitadel-masterkey`,
   `zitadel-db-credentials`, `zitadel-login-session`) reach `SecretSynced`; the
   DSN names `dbname=zitadel` and the Login cookie secret is at least 32 bytes.
 - **Bootstrap** — `Job/zitadel-init` and `Job/zitadel-setup` complete, then both
   `Deployment/zitadel` and `Deployment/zitadel-login` roll out.
-- **No edge** — the smoke fails if any Ingress appears in `zitadel`, because E1
-  deliberately keeps h2c inside the cluster (see [ADR-004](adr/adr-004-keycloak-to-zitadel.md)).
-- **Discovery** — port-forward `svc/zitadel` to `ZITADEL_SMOKE_PORT` (default
-  `18080`) and request `/.well-known/openid-configuration` with
-  `Host: zitadel.local`; the expected issuer uses `ExternalDomain` and
-  `ExternalSecure`, with `ExternalPort: 443` canonicalized to
-  `https://zitadel.local` (non-standard ports are ignored by Zitadel `v4.19.2`,
-  see the [Deviations log](architecture.md#deviations-log)), and
-  `authorization_endpoint`, `token_endpoint` and `jwks_uri` must be present.
-  Client login flows remain in the Keycloak smoke until E3.
+- **Edge TLS** — `Certificate/zitadel-tls` is Ready from `sca-ca`; the Kong
+  Ingresses `zitadel-api` and `zitadel-login` use class `kong` and bind that
+  Secret. `zitadel-api` advertises protocols `https,grpcs`, and the `zitadel`
+  Service advertises `konghq.com/protocol: grpc` so Kong reaches the h2c
+  upstream. The provider decision is in
+  [ADR-004](adr/adr-004-keycloak-to-zitadel.md).
+- **Discovery** — port-forward `kong-proxy` TLS to `ZITADEL_SMOKE_PORT`
+  (default `19443`), resolve `zitadel.local` locally and verify the served chain
+  with the CA from `secret/zitadel-tls`. The issuer must be canonical
+  `https://zitadel.local` (`ExternalPort: 443`; non-standard ports are ignored
+  by Zitadel `v4.19.2`, see the [Deviations log](architecture.md#deviations-log)),
+  and `authorization_endpoint`, `token_endpoint` and `jwks_uri` must be present.
+- **Login UI** — `/ui/v2/login/ready` returns through the dedicated
+  `zitadel-login` Ingress. Service-side OIDC client flows are covered by the
+  [E3 cutover runbook](zitadel-cutover.md).
 
 ### Environment profile: `local` (not `qa`)
 

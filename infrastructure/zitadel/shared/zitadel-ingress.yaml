@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: zitadel-api
+  namespace: zitadel
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    konghq.com/protocols: "https,grpcs"
+spec:
+  ingressClassName: kong
+  tls:
+    - hosts:
+        - zitadel.local
+      secretName: zitadel-tls
+  rules:
+    - host: zitadel.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: zitadel
+                port:
+                  number: 8080

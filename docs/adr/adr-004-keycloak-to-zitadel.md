@@ -2,8 +2,8 @@
 
 ## Status
 
-Accepted — E1 (internal deployment) validated; E2 (edge) and E3 (service cutover)
-are pending.
+Accepted — E1 (internal deployment) validated; E2 (Kong/TLS edge) implemented and
+awaiting the live smoke gate; E3 runbook ready, service cutover pending.
 
 ## Context
 
@@ -29,8 +29,14 @@ Replace Keycloak with Zitadel. Keycloak will be completely removed from the plat
   with a dedicated CNPG `zitadel-db` at wave 40, Vault/ESO secrets and an
   internal-only h2c smoke. No Ingress or edge TLS yet; see
   [architecture.md](../architecture.md#deviations-log),
-  [status.md](../status.md) and [ci-cd.md](../ci-cd.md#zitadel-internal-smoke-e1).
-- **E2 — edge**: expose Zitadel with an h2c-capable proxy and TLS, then port the
-  smoke to the real discovery URL.
-- **E3 — cutover**: migrate OIDC clients/configuration from Keycloak, update all
-  services, then remove Keycloak and `keycloak-db` completely.
+  [status.md](../status.md) and [ci-cd.md](../ci-cd.md#zitadel-smoke-e1e2).
+- **E2 — edge (implemented, live gate pending)**: Kong Ingresses at wave 50 route
+  `https://zitadel.local` to the h2c `zitadel` Service via
+  `konghq.com/protocol: grpc`; `cert-manager` issues `zitadel-tls` from `sca-ca`,
+  and a separate Ingress routes the `/ui/v2/login` UI to `zitadel-login`. The
+  smoke now asserts discovery through the real Kong/TLS edge; see
+  [ci-cd.md](../ci-cd.md#zitadel-smoke-e1e2).
+- **E3 — cutover (runbook ready)**: [zitadel-cutover.md](../zitadel-cutover.md)
+  defines the per-client migration sheet, dev/qa promotion and prod version-pin
+  gate, validation, rollback and the Keycloak retirement gate. Service repos own
+  the actual client changes.

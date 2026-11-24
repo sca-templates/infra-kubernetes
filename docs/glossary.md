@@ -34,7 +34,7 @@ live in [architecture.md](architecture.md).
 | **redis-operator**            | Redis operator (`Redis` CR). Phases 7/12                                                   |
 | **Kong**                      | API gateway (DB-less, dedicated `Application`, no SSA). Phase 8                            |
 | **Keycloak**                  | OIDC IdP (realm `sca`). Phase 13; being replaced per [ADR-004](adr/adr-004-keycloak-to-zitadel.md) |
-| **Zitadel**                   | OIDC IdP replacing Keycloak; E1 internal-only h2c with `zitadel-db`, edge deferred to E2   |
+| **Zitadel**                   | OIDC IdP replacing Keycloak; internal h2c with `zitadel-db` and a Kong/TLS edge, service cutover tracked in E3 |
 | **kube-prometheus-stack**     | Prometheus + Grafana + Alertmanager + the `ServiceMonitor`/`PrometheusRule` CRDs. Phase 14 |
 | **Loki / Alloy / Tempo**      | Log aggregation / pod-log shipping / distributed tracing (OTLP). Phases 15/16              |
 | **Floci S3**                  | Local S3 emulator in the cloud/EKS tooling; Velero's local backup backend                   |
