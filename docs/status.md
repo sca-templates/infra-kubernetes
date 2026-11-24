@@ -118,8 +118,10 @@ namespace `data`) and Vault paths `secret/zitadel/<env>` (masterkey + login
 session secret) and `secret/zitadel-db/<env>` (username/password + DSN). There
 is deliberately **no Ingress or edge TLS**: the h2c service stays internal and
 the smoke port-forwards `svc/zitadel` with `Host: zitadel.local`, asserting OIDC
-discovery but not client login flows. Profiles: 1 replica local/dev, 3 qa/prod
-with PDB and preferred anti-affinity. The edge and service cutover are E2/E3;
+discovery but not client login flows. The issuer is the canonical
+`https://zitadel.local` (port 443); Zitadel `v4.19.2` ignores non-standard
+`ExternalPort` in discovery (`zitadel#11380`). Profiles: 1 replica local/dev, 3
+qa/prod with PDB and preferred anti-affinity. The edge and service cutover are E2/E3;
 the live smoke gate remains with the operator.
 
 **NATS migration (C1–C4).**

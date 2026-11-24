@@ -1,7 +1,7 @@
-# zitadel local — 1 replica and the high port used by the port-forward smoke.
+# zitadel local — 1 replica; E1 keeps the canonical HTTPS issuer without an edge.
 zitadel:
   configmapConfig:
-    ExternalPort: 8443
+    ExternalPort: 443
 resources:
   requests:
     cpu: 100m

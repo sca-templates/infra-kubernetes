@@ -463,8 +463,10 @@ internal-only identity plane before the E2 edge gate:
   deliberately keeps h2c inside the cluster (see [ADR-004](adr/adr-004-keycloak-to-zitadel.md)).
 - **Discovery** — port-forward `svc/zitadel` to `ZITADEL_SMOKE_PORT` (default
   `18080`) and request `/.well-known/openid-configuration` with
-  `Host: zitadel.local`; the issuer is derived from `ConfigMap/zitadel-config-yaml`
-  (`ExternalDomain`, `ExternalPort`, `ExternalSecure`), and
+  `Host: zitadel.local`; the expected issuer uses `ExternalDomain` and
+  `ExternalSecure`, with `ExternalPort: 443` canonicalized to
+  `https://zitadel.local` (non-standard ports are ignored by Zitadel `v4.19.2`,
+  see the [Deviations log](architecture.md#deviations-log)), and
   `authorization_endpoint`, `token_endpoint` and `jwks_uri` must be present.
   Client login flows remain in the Keycloak smoke until E3.
 
