@@ -158,11 +158,15 @@ jobs:
               'argocd/kong-*.yaml',
               'argocd/redis-*.yaml',
               'argocd/keycloak-*.yaml',
+              'argocd/zitadel-*.yaml',
+              'argocd/postgres-app-*.yaml',
               'envs/local/*.yaml',
               'infrastructure/*/values-base.yaml',
               'infrastructure/redis/manifests/*.yaml',
               'infrastructure/keycloak/manifests/*.yaml',
               'infrastructure/keycloak/shared/*.yaml',
+              'infrastructure/zitadel/manifests/*.yaml',
+              'infrastructure/postgres-app/manifests/*.yaml',
               'bootstrap/preload-chart-images.sh'
             ) }}
           restore-keys: |

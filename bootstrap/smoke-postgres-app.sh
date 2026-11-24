@@ -437,6 +437,7 @@ run_latest_restore_test() {
 verify_cluster postgres-app postgres-app-credentials app "app@app" "pg_stat_statements,vector" 1
 run_pitr_test
 verify_cluster keycloak-db keycloak-db-credentials keycloak "keycloak@keycloak"
+verify_cluster zitadel-db zitadel-db-credentials zitadel "zitadel@zitadel"
 run_latest_restore_test
 
-echo "[OK] smoke(postgres-app): postgres-app + keycloak-db Ready, WAL archiving green, backups restored"
+echo "[OK] smoke(postgres-app): postgres-app + keycloak-db + zitadel-db Ready, WAL archiving green, backups restored"

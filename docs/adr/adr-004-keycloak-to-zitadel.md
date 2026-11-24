@@ -2,7 +2,8 @@
 
 ## Status
 
-Proposed
+Accepted — E1 (internal deployment) landed; E2 (edge) and E3 (service cutover)
+are pending.
 
 ## Context
 
@@ -22,7 +23,14 @@ Replace Keycloak with Zitadel. Keycloak will be completely removed from the plat
 
 ## Implementation
 
-- Deploy Zitadel in parallel initially
-- Migrate configuration
-- Update all services
-- Remove Keycloak completely
+- **E0 — inventory (closed)**: [migration-inventory-phase-a.md](../migration-inventory-phase-a.md)
+  records the current Keycloak dependencies.
+- **E1 — internal deployment (landed)**: `zitadel-<env>` Applications at wave 50
+  with a dedicated CNPG `zitadel-db` at wave 40, Vault/ESO secrets and an
+  internal-only h2c smoke. No Ingress or edge TLS yet; see
+  [architecture.md](../architecture.md#deviations-log),
+  [status.md](../status.md) and [ci-cd.md](../ci-cd.md#zitadel-internal-smoke-e1).
+- **E2 — edge**: expose Zitadel with an h2c-capable proxy and TLS, then port the
+  smoke to the real discovery URL.
+- **E3 — cutover**: migrate OIDC clients/configuration from Keycloak, update all
+  services, then remove Keycloak and `keycloak-db` completely.

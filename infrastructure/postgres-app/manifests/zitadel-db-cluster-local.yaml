@@ -1,0 +1,69 @@
+# zitadel-db local — CloudNativePG Cluster (ADR-004, E1).
+# Credentials are projected by the sibling ExternalSecret from
+# `secret/zitadel-db/local`; see `zitadel-db-credentials-local.yaml`.
+#
+# Zitadel connects here with a DSN from the same Vault path. Database and owner
+# are both `zitadel`, matching the chart's DSN contract.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: zitadel-db
+  namespace: data
+  annotations:
+    # After the ExternalSecret (wave 0) that creates the bootstrap credentials.
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie
+  env:
+    - name: AWS_REQUEST_CHECKSUM_CALCULATION
+      value: when_required
+    - name: AWS_RESPONSE_CHECKSUM_VALIDATION
+      value: when_required
+  backup:
+    target: prefer-standby
+    retentionPolicy: "7d"
+    barmanObjectStore:
+      destinationPath: s3://cnpg-backups/zitadel-db
+      endpointURL: http://floci.cloud.svc.cluster.local:4566
+      s3Credentials:
+        accessKeyId:
+          name: cnpg-backup-credentials
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: cnpg-backup-credentials
+          key: ACCESS_SECRET_KEY
+        region:
+          name: cnpg-backup-credentials
+          key: AWS_REGION
+      wal:
+        compression: gzip
+        maxParallel: 2
+      data:
+        compression: gzip
+  bootstrap:
+    initdb:
+      database: zitadel
+      owner: zitadel
+      secret:
+        name: zitadel-db-credentials
+      dataChecksums: true
+      encoding: UTF8
+      localeCollate: C
+      localeCType: C
+  postgresql:
+    parameters:
+      # Bound the WAL archive lag for the restore smoke.
+      archive_timeout: "60s"
+  storage:
+    size: 1Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  affinity:
+    # Single-node local profile: never block scheduling on anti-affinity.
+    enablePodAntiAffinity: false

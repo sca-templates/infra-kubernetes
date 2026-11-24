@@ -151,7 +151,8 @@ and the deployed baseline is continuously monitored. See the
   [architecture.md](architecture.md#deviations-log)). The backup smokes are
   part of the same gate: Velero creates a real `Backup`, deletes a scratch
   namespace, restores it and verifies the marker; CNPG proves a PITR restore on
-  `postgres-app` and a latest-backup restore on `keycloak-db`; Vault triggers
+  `postgres-app` and a latest-backup restore on `keycloak-db`, plus connectivity
+  on `zitadel-db`; Vault triggers
   its Raft snapshot CronJob and asserts the saved/inspected/uploaded markers.
   The `floci-buckets` Job creates `velero`, `cnpg-backups`, and
   `vault-snapshots` using Floci's fixed dummy credentials and therefore does
@@ -447,6 +448,25 @@ identity plane, not just that the pod is up:
   `userinfo` accepts it. The smoke credential comes from
   `secret/keycloak/test-user/<env>` (run `bootstrap/seed-vault.sh` once on an
   older local cluster; it is idempotent).
+
+### Zitadel internal smoke (E1)
+
+`make smoke COMPONENT=zitadel` (`bootstrap/smoke-zitadel.sh`) proves the
+internal-only identity plane before the E2 edge gate:
+
+- **Secrets** — the three ExternalSecrets (`zitadel-masterkey`,
+  `zitadel-db-credentials`, `zitadel-login-session`) reach `SecretSynced`; the
+  DSN names `dbname=zitadel` and the Login cookie secret is at least 32 bytes.
+- **Bootstrap** — `Job/zitadel-init` and `Job/zitadel-setup` complete, then both
+  `Deployment/zitadel` and `Deployment/zitadel-login` roll out.
+- **No edge** — the smoke fails if any Ingress appears in `zitadel`, because E1
+  deliberately keeps h2c inside the cluster (see [ADR-004](adr/adr-004-keycloak-to-zitadel.md)).
+- **Discovery** — port-forward `svc/zitadel` to `ZITADEL_SMOKE_PORT` (default
+  `18080`) and request `/.well-known/openid-configuration` with
+  `Host: zitadel.local`; the issuer is derived from `ConfigMap/zitadel-config-yaml`
+  (`ExternalDomain`, `ExternalPort`, `ExternalSecure`), and
+  `authorization_endpoint`, `token_endpoint` and `jwks_uri` must be present.
+  Client login flows remain in the Keycloak smoke until E3.
 
 ### Environment profile: `local` (not `qa`)
 

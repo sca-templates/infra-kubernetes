@@ -6,7 +6,8 @@ sync-waves, namespaces, the secret flow and the environment model. This is a
 (Phase 1), Vault (Phase 2), external-secrets (Phase 3),
 cloudnative-pg (Phase 5), redis-operator (Phase 7), Kong (Phase 8),
 postgres-app/keycloak-db (Phase 10), Redis (Phase 12),
-Keycloak (Phase 13), NATS/NACK (ADR-005) and Velero (Phase 18) are deployed;
+Keycloak (Phase 13), Zitadel (ADR-004 E1, internal-only), NATS/NACK (ADR-005) and
+Velero (Phase 18) are deployed;
 the observability components (Phases 14-16) remain `planned`. For how changes *flow* through the platform, see
 [workflow.md](workflow.md); for
 what is done and what is next, see [status.md](status.md).
@@ -90,7 +91,7 @@ both. This repository builds no images.
 
 ## Component catalog
 
-The catalog has **16 components** plus ArgoCD. Each row shows its intended
+The catalog has **17 components** plus ArgoCD. Each row shows its intended
 namespace, upstream chart, ArgoCD sync-wave and roadmap phase. Chart and image
 pins are set per component when that phase lands (values live under
 `infrastructure/<component>/` and `envs/<env>/` from Phase 1 on); in the table
@@ -98,7 +99,8 @@ ArgoCD, cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3),
 cloudnative-pg (Phase 5), redis-operator (Phase 7),
 Kong (Phase 8),
 postgres-app/keycloak-db (Phase 10), Redis (Phase 12), Keycloak (Phase 13),
-NACK/NATS (NATS migration C1–C4) and Velero (Phase 18) are
+Zitadel (ADR-004 E1, internal-only), NACK/NATS (NATS migration C1–C4) and Velero
+(Phase 18) are
 deployed; the observability components (Phases 14-16) remain `planned`.
 
 **Services are not part of this catalog.** They are registered in
@@ -119,6 +121,7 @@ their own repositories — see
 | nack (JetStream controller) | `nats` | nats/nack | 50 | — | deployed (NATS migration C1–C4; optional per env) |
 | redis (CR) | `data` | `RedisReplication` CR | 40 | 12 | deployed (Phase 12) |
 | keycloak | `keycloak` | codecentric/keycloakx (realm import) | 50 | 13 | deployed (Phase 13) |
+| zitadel | `zitadel` | zitadel/zitadel (h2c, internal-only E1) | 50 | — (ADR-004 E1) | deployed (internal-only; edge deferred to E2) |
 | kube-prometheus-stack | `observability` | prometheus-community/kube-prometheus-stack | 60 | 14 | planned (Phase 14) |
 | loki | `loki` | grafana/loki | 60 | 15 | planned (Phase 15) |
 | alloy | `observability` | grafana/alloy | 60 | 15 | planned (Phase 15) |
@@ -141,9 +144,10 @@ Notes:
   to `deployed` inside the phase that lands the component, and `status.md` is
   updated in the same commit.
 - `postgres-app` is a **dedicated raw `Application` per environment** (not in
-  the `ApplicationSet` generator list) and owns both CNPG `Cluster`s in `data`:
-  `postgres-app` (application database, `app`/`app`) and `keycloak-db`
-  (`keycloak`/`keycloak`, consumed by Keycloak in Phase 13). Both run in every
+  the `ApplicationSet` generator list) and owns three CNPG `Cluster`s in `data`:
+  `postgres-app` (application database, `app`/`app`), `keycloak-db`
+  (`keycloak`/`keycloak`, consumed by Keycloak in Phase 13) and `zitadel-db`
+  (`zitadel`/`zitadel`, consumed by Zitadel in ADR-004 E1). All three run in every
   environment at wave 40. The Redis **operator** (wave -10) is installed
   everywhere; its **custom resources** live in `data` at wave 40 — Redis is
   deployed at Phase 12. redis-operator shares the `data` namespace with the CRs
@@ -168,6 +172,12 @@ Notes:
   shared realm/TLS manifests reconcile as one app. It uses the Phase 10
   `keycloak-db`, imports realm `sca` from a ConfigMap, and is served by Kong
   with a cert-manager leaf. See [Deviations log](#deviations-log).
+- `zitadel` is a **dedicated multi-source `Application` per environment**
+  (`zitadel-<env>`, wave 50): chart `zitadel/zitadel` 10.5.0, the `$values` refs
+  and three per-env ExternalSecrets reconcile as one app. E1 uses the wave-40
+  `zitadel-db`, keeps h2c inside the cluster with no Ingress, and is verified by
+  the internal discovery smoke; the edge is E2. See
+  [Deviations log](#deviations-log).
 - `kong` is a dedicated `Application` per environment (not via the
   `ApplicationSet`): flat-schema CRDs break ArgoCD's structured-merge diff
   under `ServerSideApply=true`, so it runs DB-less with `installCRDs: false`
@@ -302,9 +312,10 @@ Full inventory and runbooks: [secrets.md](secrets.md).
 | `external-secrets` | Secret projection from Vault |
 | `cloudnative-pg` | PostgreSQL operator |
 | `kong` | API gateway |
-| `data` | Datastores: postgres-app, keycloak-db, NATS JetStream, Redis — plus the redis-operator (Phase 7) |
+| `data` | Datastores: postgres-app, keycloak-db, zitadel-db, NATS JetStream, Redis — plus the redis-operator (Phase 7) |
 | `nats` | NACK JetStream controller |
-| `keycloak` | OIDC identity provider |
+| `keycloak` | OIDC identity provider (legacy until the E2/E3 cutover) |
+| `zitadel` | OIDC identity provider (ADR-004 E1, internal-only h2c) |
 | `observability` | Metrics + Grafana + Alertmanager, Alloy log collection |
 | `loki` | Log aggregation (named after the chart, unlike the observability ns) |
 | `tempo` | Distributed tracing |
@@ -337,8 +348,10 @@ lands — through the NATS migration, C1):
 | redis | 1 | 1 | 3 | 3 |
 | kong (gateway + controller, one Deployment) | 1 | 1 | 2 | 2 |
 | keycloak | 1 | 2 | 3 | 3 |
+| zitadel (API + login) | 1 | 1 | 3 | 3 |
 | postgres-app | 1 | 1 | 3 | 3 |
 | keycloak-db | 1 | 1 | 3 | 3 |
+| zitadel-db | 1 | 1 | 3 | 3 |
 | nats (JetStream nodes) | 1 | 1 | 3 | 3 |
 | nack (controller) | 1 | 1 | 1 | 1 |
 
@@ -363,6 +376,7 @@ as each component lands; the log always explains *why*, never just *what*.
 | Kong | DB-less (`database: off`), `ingressController.installCRDs: false`, managed as a dedicated `Application`, no SSA | Kong ships flat-schema CRDs; structured-merge diff breaks under `ServerSideApply=true`, and `--include-crds` re-emits CRDs twice |
 | postgres-app | Dedicated raw `Application` per environment (`postgres-app-<env>`), not in the `ApplicationSet` generator list; one shared manifest directory with `directory.include: "*-<env>.yaml"` | The datastores are raw CNPG `Cluster` CRs, so the Helm-chart generator cannot render them. They run in **all four** environments (app DB + Keycloak DB), and the per-env `include` keeps a single source directory while selecting only that environment's CRs. Like Kong, the dedicated app is also what the cluster smoke discovers as `postgres-app-<env>` |
 | Keycloak | `codecentric/keycloakx` 7.4.0 / Keycloak 26.8.1 instead of the planned `bitnami/keycloak`; dedicated **multi-source** `Application` per environment (`keycloak-<env>`) with chart + `$values` + per-env ExternalSecrets + shared realm/TLS, realm imported at startup (`--import-realm`), preferred anti-affinity in every env | The `bitnami/keycloak` chart referenced by the original roadmap is no longer a viable pin, while `keycloakx` tracks the official Keycloak 26 image and exposes the startup knobs this deployment needs. Multi-source is required because the component owns both a Helm release and raw resources (three ExternalSecrets, the realm ConfigMap, the TLS Certificate); keeping them in one dedicated app gives one owner and the same `keycloak-<env>` convergence gate the smoke expects. Importing the realm from git makes the realm reviewable without an Admin API sidecar, and `--import-realm` is a no-op once `sca` exists (the StatefulSet is `OrderedReady`, so replicas do not race on first import). `preferred` anti-affinity keeps the 3-replica qa/prod profile schedulable on the single-node promote substrate |
+| Zitadel (ADR-004 E1) | Dedicated multi-source `Application` per environment (`zitadel-<env>`, wave 50) with chart + `$values` + per-env ExternalSecrets; **no Ingress, Certificate or edge TLS**; the h2c service is reached by port-forward during the smoke, and the DSN points at a new CNPG `zitadel-db` cluster rather than `keycloak-db` | The Kong ingress controller cannot proxy a generic h2c upstream (`Kong/kong#8767`, `Kong/kubernetes-ingress-controller#2473`), while Zitadel requires h2c for gRPC and the console (`zitadel.com/docs/self-hosting/manage/http2`); terminating TLS at Kong and re-encoding to h2c is an E2 gate. Keeping E1 internal unblocks the identity-plane deployment without inventing a new edge. The DSN mode is used because CNPG creates the database/owner at bootstrap, so the chart's default `CREATE DATABASE` init command would fail; `initJob.command: zitadel` runs only ZITADEL's own initialization. See [ADR-004](adr/adr-004-keycloak-to-zitadel.md) |
 | nats + nack | Both are optional elements of a dedicated `messaging-<env>` `ApplicationSet` (not the platform list); NACK is pinned at wave 50 (after the NATS server at 40), NATS ships "ready but idle" with no `Stream`/`Consumer` CRs, and the tier has no client auth yet | NACK connects to NATS at startup; the platform Applications are not children of a root app, so cross-Application sync-waves are not enforced, and placing NACK after NATS keeps the logical order while the controller retries until the server answers. Idle avoids committing streams before the toggle and the consumers exist (ADR-005); once the first consumer lands, NATS accounts/credentials are wired through Vault/ESO. Both use upstream charts, so the ApplicationSet covers them without dedicated app files. See [messaging.md](messaging.md) for the toggle and service-owned topology |
 | Messaging toggle (NATS/NACK) | A dedicated `argocd/messaging-<env>.yaml` `ApplicationSet` (git files generator over `argocd/messaging/<env>/*.yaml`) owns the optional NATS/NACK Applications; the descriptors exist in NATS mode and are removed for SNS/SQS mode. The app template sets `resources-finalizer.argocd.argoproj.io`, so removing a descriptor deletes the Application and its resources. The per-env values overlays (`envs/<env>/{nats,nack}.yaml`) remain in both modes | The platform list generator cannot express "this component is optional per environment". A git files generator is declarative and needs no values-flag conditionals: the file set in git *is* the mode. Keeping the values overlays makes switching back a descriptor-only change, while the finalizer guarantees SNS/SQS mode leaves no NATS pods behind (the idle tier has no data worth preserving). The app names stay `nats-<env>`/`nack-<env>`, so the existing smokes and catalog discovery are unchanged. Vault's `secret/messaging/<env>` is the runtime contract (`mode` + endpoints); the descriptor set is the deployment gate |
 | Messaging contract | `secret/messaging/<env>` is the single KV-v2 contract: `mode` (`nats`/`sns-sqs`), `nats_url`, and the SNS/SQS coordinates (`sns_topic_arn`, `sqs_queue_url`, `aws_region`, optional endpoint/credentials). `bootstrap/seed-vault.sh` seeds local `mode=nats`; external environments provision the path out of band | Consumers must switch backends without code changes, and Vault is the secrets SSOT. A per-service copy would drift; a platform ConfigMap would not carry credentials. Keeping the contract in Vault lets every service project it with its own ESO scope. No consumer exists yet, so the idle tier remains unauthenticated |
@@ -383,7 +397,7 @@ as each component lands; the log always explains *why*, never just *what*.
 | EKS substrate (dev/CI tooling) | The `Smoke` job runs on Floci's emulated **EKS** — the platform's only cluster substrate (a real single-node k3s container + OCI ECR registry): `bootstrap/eks-emulator.sh` mints a throwaway IAM user/key, creates the cluster, writes a `floci-eks` kube-context, and the smoke boots the **full platform** on it via the real `make bootstrap` app-of-apps — **not** as an ArgoCD Application, with no sync-wave and no catalog entry | It proves the two EKS-specific paths a plain local cluster does not — an IAM-authenticated kubeconfig to a live API server, and an image pulled in-cluster from the emulated ECR via the node's registry mirror — while running the whole catalog through the same GitOps path `dev`/`qa`/`prod` use. The cluster and IAM key are throwaway (deleted on `make eks-down`), so it stays out of the platform catalog like the endpoint emulator |
 | Bootstrap-managed CNI substrate (dev/CI tooling) | The emulated EKS node runs Calico `v3.31.7` (iptables + VXLAN + WireGuard, MTU `1440`) and a pinned `registry.k8s.io/kube-proxy:v1.34.1` DaemonSet installed by `bootstrap/cni-emulator.sh` before ArgoCD bootstraps the platform — **not** as an ArgoCD Application, with no sync-wave and no catalog entry | Floci's bundled CNI is single-node Flannel and its disable flag also removes kube-proxy; D2 validated the Calico + kube-proxy dataplane, so D3 keeps that same forwarding path instead of moving to Calico eBPF (which would need a new gate on this WSL2 substrate). Pinning k3s `v1.34.1-k3s1` keeps the node compatible with the cgroup v1 WSL2 host and removes the `rancher/k3s:latest` float; `1.35` was rejected by kubelet on this substrate. `envs/<env>/cni.yaml` enforces `local` and documents the external contract; `bootstrap/smoke-cni.sh` runs before the catalog gate. Rollback is a D3 revert plus `make eks-down` to restore Floci's bundled networking |
 | Velero + Floci S3 (local) | Velero's Vault-dependent `ExternalSecret` sits in the Application's **final** sync wave. The backup backend is Floci's S3 emulator (dev/CI tooling, not a catalog component), and a plain `floci-buckets` Job creates the `velero` bucket with Floci's fixed dummy credentials. | ArgoCD v3 health-gates **intermediate** sync waves: a resource that needs a sealed Vault at wave `-5`/`0` deadlocks the whole sync, because `smoke-ci.sh` seeds Vault only after every Application reports `Synced`. Keeping the Velero credentials projection in the final wave lets the app report `Synced` while Vault is sealed; the post-seed `Synced/Healthy` gate then asserts real health. Floci is already up for every smoke/local EKS run, so using it removes the in-cluster object-store component (and its unavailable upstream image) while keeping the backup path real. The bucket Job uses the same dummy `test/test` pair as the cloud smoke, so it does not wait on Vault/ESO; `seed-vault.sh` pins the Velero credential path to that pair on existing clusters. CNPG scheduled backups and Vault Raft snapshots were deferred in Phase 18; Phase B lands them as tested-in-git resources with restore smokes; live restore validation completed on 2026-11-14. |
-| CNPG backups + PITR | Both `Cluster`s carry `spec.backup.barmanObjectStore`; `ScheduledBackup`s run daily with environment retention, and the backup credentials are projected by ESO from `secret/cnpg/<env>` at the same wave as the clusters | Native CNPG backups are the restore path for PostgreSQL data; Velero only covers the Kubernetes objects. Keeping the credentials `ExternalSecret` and `ScheduledBackup`s at the datastore wave avoids an intermediate ArgoCD health gate while Vault is sealed. The local profile sets `archive_timeout: 60s` so the PITR smoke does not wait for a full WAL segment. `bootstrap/smoke-postgres-app.sh` exercises both a PITR restore and a latest-backup restore. |
+| CNPG backups + PITR | All three `Cluster`s (`postgres-app`, `keycloak-db`, `zitadel-db`) carry `spec.backup.barmanObjectStore`; `ScheduledBackup`s run daily with environment retention, and the backup credentials are projected by ESO from `secret/cnpg/<env>` at the same wave as the clusters | Native CNPG backups are the restore path for PostgreSQL data; Velero only covers the Kubernetes objects. Keeping the credentials `ExternalSecret` and `ScheduledBackup`s at the datastore wave avoids an intermediate ArgoCD health gate while Vault is sealed. The local profile sets `archive_timeout: 60s` so the PITR smoke does not wait for a full WAL segment. `bootstrap/smoke-postgres-app.sh` exercises a PITR restore on `postgres-app`, a latest-backup restore on `keycloak-db`, and verifies `zitadel-db` connectivity. |
 | CNPG operand image | All `Cluster`s use `ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie` instead of the `standard`/`minimal` flavors | Native `spec.backup.barmanObjectStore` invokes `barman-cloud-check-wal-archive` and the other `barman-cloud-*` helpers from `$PATH`; only the `system` flavor installs them (`standard` is intended for the Barman Cloud Plugin). With `standard`, WAL archiving fails with `executable file not found in $PATH`. The `system` flavor is deprecated and removed in CNPG 1.32, so the follow-up is the plugin migration before the operator upgrade. |
 | Vault Raft snapshots | A dedicated `Application` per environment (`vault-backup-<env>`, wave 90) owns the CronJob and credentials; the shared ServiceAccount and upload script live in the Vault Application. The CronJob validates the snapshot with `vault operator raft snapshot inspect` before uploading and applies age-based retention | Raft snapshots are the authoritative Vault restore path and are complementary to Velero. The dedicated app keeps the Vault-dependent `ExternalSecret` and Job out of the Vault chart's health gate; the CronJob is dormant until its schedule or a smoke triggers it, so a sealed Vault cannot deadlock the initial sync. The Kubernetes-auth role/policy is seeded by `bootstrap/seed-vault.sh` and the smoke forces an ESO refresh after seeding. |
 | Backup bucket bootstrap (local) | The `floci-buckets` Job creates `velero`, `cnpg-backups`, and `vault-snapshots` as a Velero `PreSync` hook; external environments skip it when Floci is unreachable. The Job declares explicit zero requests (Kubernetes otherwise defaults requests to limits) with kube-linter exemptions and a checkov baseline entry for the two request checks, and tolerates the control-plane taint | Floci has no pre-created buckets, and the Velero Job already owns the local object-store bootstrap. The single-node local profile can have its CPU request budget fully allocated; omitting requests would make Kubernetes copy the limits (200m/128Mi) and leave the Job Pending. The explicit zero requests keep it schedulable while the limits still cap usage; the `unset-cpu-requirements`/`unset-memory-requirements` checks are suppressed with a rationale and the matching checkov request checks are baselined. The tolerations cover a control-plane-only emulated node. CNPG retries WAL/base-backup uploads until the bucket exists; the restore smoke waits for `ContinuousArchiving=True` before asserting, so a short bucket race is absorbed. The Vault smoke also waits for `floci-buckets` to complete before triggering the Raft snapshot, because the dedicated `vault-backup-<env>` Application can be ready before Velero's first sync finishes. External buckets are created out of band. |
@@ -402,7 +416,7 @@ The following migrations are planned to optimize costs while maintaining service
 
 | Migration | Status | Notes |
 | --- | --- | --- |
-| Keycloak → Zitadel | **Proposed** | Complete replacement, no parallel long-term deployment. All OIDC clients must be migrated. |
+| Keycloak → Zitadel | **In progress (E1 landed)** | E0 closed; E1 deployed Zitadel internally with a dedicated `zitadel-db`, no edge and no service cutover yet. E2 will expose the edge and E3 will migrate all OIDC clients before Keycloak is retired. See [ADR-004](adr/adr-004-keycloak-to-zitadel.md). |
 | Kafka/Strimzi → NATS JetStream | **Done (C1–C4)** | NATS + NACK deployed idle (no `Stream`/`Consumer` CRs) behind the optional `messaging-<env>` ApplicationSet; remove `argocd/messaging/<env>/{nats,nack}.yaml` for SNS/SQS mode (nothing in-cluster). Contract `secret/messaging/<env>` carries `mode` + endpoints. Kafka/Strimzi removed in C3; the C4 toggle runbook and service-owned stream/consumer guide are in [messaging.md](messaging.md). No current consumers. |
 | Linkerd → CNI-native mTLS | **Done (D0–D5)** | D0 evaluated Cilium + WireGuard (primary), Calico + WireGuard (fallback) and k3s Flannel WireGuard-native / IPsec (not selected). [poc/cni-mtls](../poc/cni-mtls/README.md) records the failed Cilium `1.20.5` D2 gate. [ADR-009](adr/adr-009-calico-wireguard-fallback.md) and [poc/calico-wireguard](../poc/calico-wireguard/README.md) pin Calico `v3.31.7` with WireGuard; its D2 gate passed on 2026-11-17 with both nodes Ready, cross-node HTTP, one peer per node, recent handshake and positive byte counters. D3 landed the bootstrap-managed Calico + WireGuard + pinned kube-proxy substrate with `envs/<env>/cni.yaml` profiles and `bootstrap/smoke-cni.sh`; it is not an ArgoCD Application and has no sync-wave. WireGuard is authenticated node-to-node transport encryption, not workload mTLS; L7 retries/timeouts/traffic split and per-workload identity are lost. D4 removed Linkerd and D5 closed the docs; gates and inventory live in [ADR-008](adr/adr-008-cni-native-mtls.md). |
 | CNPG as RDS replacement | **Done** | Backups/PITR and the restore smoke passed live on 2026-11-14, closing the gate. |

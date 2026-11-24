@@ -278,6 +278,17 @@ kv_seed secret/keycloak/admin username=admin password="$(openssl rand -hex 24)"
 kv_seed "secret/keycloak/test-user/${ENV}" username=smoke password="$(openssl rand -hex 24)"
 kv_seed "secret/postgres-app/${ENV}" username=app password="$(openssl rand -hex 24)"
 kv_seed "secret/keycloak-db/${ENV}" username=keycloak password="$(openssl rand -hex 24)"
+# ADR-004 E1: Zitadel reads the DSN from the same path that seeds CNPG, so the
+# password must be generated once and reused verbatim. SEED_ROTATE=1 rotates
+# the masterkey and session secret too; do not use it on an initialized Zitadel.
+ZITADEL_DB_PASSWORD="$(openssl rand -hex 24)"
+kv_seed "secret/zitadel/${ENV}" \
+  masterkey="$(openssl rand -hex 16)" \
+  session_cookie_secret="$(openssl rand -hex 24)"
+kv_seed "secret/zitadel-db/${ENV}" \
+  username=zitadel \
+  password="${ZITADEL_DB_PASSWORD}" \
+  dsn="host=zitadel-db-rw.data.svc.cluster.local port=5432 user=zitadel password=${ZITADEL_DB_PASSWORD} dbname=zitadel sslmode=disable"
 # ADR-005 messaging contract. Consumers project this path through ESO; `mode`
 # selects the backend. NATS is the local default; SNS/SQS coordinates and
 # credentials are provisioned out of band when that mode is enabled.

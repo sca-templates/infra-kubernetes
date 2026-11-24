@@ -1,0 +1,63 @@
+# zitadel-db dev — CloudNativePG Cluster (ADR-004, E1).
+# Credentials are projected by the sibling ExternalSecret from
+# `secret/zitadel-db/dev`; see `zitadel-db-credentials-dev.yaml`.
+#
+# Zitadel connects here with a DSN from the same Vault path. Database and owner
+# are both `zitadel`, matching the chart's DSN contract.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: zitadel-db
+  namespace: data
+  annotations:
+    # After the ExternalSecret (wave 0) that creates the bootstrap credentials.
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie
+  backup:
+    target: prefer-standby
+    retentionPolicy: "30d"
+    barmanObjectStore:
+      destinationPath: s3://sca-dev-cnpg/zitadel-db
+      s3Credentials:
+        accessKeyId:
+          name: cnpg-backup-credentials
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: cnpg-backup-credentials
+          key: ACCESS_SECRET_KEY
+        region:
+          name: cnpg-backup-credentials
+          key: AWS_REGION
+      wal:
+        compression: gzip
+        maxParallel: 2
+      data:
+        compression: gzip
+  bootstrap:
+    initdb:
+      database: zitadel
+      owner: zitadel
+      secret:
+        name: zitadel-db-credentials
+      dataChecksums: true
+      encoding: UTF8
+      localeCollate: C
+      localeCType: C
+  postgresql:
+    parameters:
+      # Bound the WAL archive lag for the restore smoke.
+      archive_timeout: "60s"
+  storage:
+    size: 2Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  affinity:
+    # Reduced-HA dev profile: one instance, no anti-affinity constraint.
+    enablePodAntiAffinity: false

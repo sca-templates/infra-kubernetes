@@ -47,6 +47,8 @@ script adapts as components land).
 | `secret/kong/admin` | — (reserved) | **not consumed**: Kong runs DB-less with a plaintext `ClusterIP` admin listener, so no admin credential is projected; the path is reserved for a future admin-auth use |
 | `secret/postgres-app/<env>` | Phase 10 | postgres-app `Cluster` via CNPG |
 | `secret/keycloak-db/<env>` | Phase 10 | keycloak-db `Cluster` via CNPG; Keycloak DB credential via ESO |
+| `secret/zitadel/<env>` | ADR-004 E1 seed | Zitadel `masterkey` + Login `session_cookie_secret` via ESO; do not rotate an initialized masterkey in place |
+| `secret/zitadel-db/<env>` | ADR-004 E1 seed | `zitadel-db` `Cluster` via CNPG (basic-auth) and the Zitadel DSN (`dsn`) via ESO; the password is generated once and reused in both properties |
 | `secret/redis/<env>` | Phase 12 seed (`seed-vault.sh`) | Redis `Secret` auth via ESO → `redis-password` |
 | `secret/messaging/<env>` | NATS migration C2 seed (`local`); out of band elsewhere | Messaging contract: `mode` + `nats_url` or SNS/SQS coordinates, projected by each consumer via ESO; see [messaging.md](messaging.md) |
 | `secret/keycloak/admin` | Phase 13 seed | Keycloak bootstrap admin via ESO |
@@ -106,7 +108,16 @@ Keycloak is the first component with **three** projections: `keycloak-admin`
 same Vault path as the CNPG cluster) and `keycloak-test-user` (smoke user,
 resolved by the realm import). See [roadmap/keycloak.md](roadmap/keycloak.md).
 
-Velero diverges only in *target*: `local` uses Floci's S3 emulator, while
+Zitadel (ADR-004 E1) has **three** projections in the `zitadel` namespace:
+`zitadel-masterkey` (`masterkey`, immutable after first boot),
+`zitadel-login-session` (`ZITADEL_SESSION_COOKIE_SECRET`, Login UI v4.19.2+) and
+`zitadel-db-credentials` (`dsn`, paired with the `zitadel-db` basic-auth Secret
+in `data`). `bootstrap/seed-vault.sh` seeds `secret/zitadel/<env>` and
+`secret/zitadel-db/<env>` from one generated password so the DSN and CNPG
+credentials cannot drift. See [ADR-004](adr/adr-004-keycloak-to-zitadel.md).
+
+Velero diverges only in *target*:
+ `local` uses Floci's S3 emulator, while
 `dev`/`qa`/`prod` use external S3 with credentials injected via Vault/ESO.
 In `local`, `bootstrap/seed-vault.sh` writes the dummy `test/test` pair to
 `secret/velero/credentials`, `secret/cnpg/local`, and

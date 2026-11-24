@@ -82,13 +82,15 @@ and qa. See
 
 ## Platform Components
 
-The catalog is **16 components** plus ArgoCD. `local` runs the full set;
-`dev`/`qa`/`prod` run the operator/security core plus the gateway and Keycloak.
+The catalog is **17 components** plus ArgoCD. `local` runs the full set;
+`dev`/`qa`/`prod` run the operator/security core, the gateway, Keycloak and the
+internal-only Zitadel deployment.
 **Currently deployed: ArgoCD (Phase 0), cert-manager (Phase 1), Vault
 (Phase 2), external-secrets (Phase 3), cloudnative-pg
 (Phase 5), redis-operator (Phase 7), Kong (Phase 8),
-postgres-app/keycloak-db (Phase 10), Redis (Phase 12), Keycloak
-(Phase 13), NATS + NACK (NATS migration C1/C2/C3, idle) and Velero (Phase 18);
+postgres-app/keycloak-db/zitadel-db (Phase 10 + ADR-004 E1), Redis (Phase 12),
+Keycloak (Phase 13), Zitadel (ADR-004 E1, internal-only), NATS + NACK
+(NATS migration C1/C2/C3, idle) and Velero (Phase 18);
 the four observability components (Phases 14-16) are `planned`.**
 The status column in
 [docs/architecture.md](docs/architecture.md) is the source of truth for what is
@@ -96,7 +98,7 @@ live.
 
 | Area | Components |
 | --- | --- |
-| Security and identity | cert-manager (deployed), Vault (deployed), External Secrets Operator (deployed), Keycloak (deployed) |
+| Security and identity | cert-manager (deployed), Vault (deployed), External Secrets Operator (deployed), Keycloak (deployed), Zitadel (deployed internally; edge pending) |
 | Edge and mesh | Kong (deployed) |
 | Data | CloudNativePG (deployed), redis-operator (deployed), postgres-app/keycloak-db (deployed), NATS JetStream (deployed, idle), NACK (deployed), Redis (deployed) |
 | Observability | kube-prometheus-stack, Loki, Tempo, Alloy |

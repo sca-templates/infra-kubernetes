@@ -1,0 +1,118 @@
+# Zitadel — shared chart values for all environments.
+#
+# Chart: https://charts.zitadel.com, `zitadel` 10.5.0 (appVersion v4.19.2).
+# E1 is internal-only: no Ingress and no edge TLS; h2c stays inside the cluster.
+# The database is the CNPG cluster `zitadel-db` (wave 40, namespace `data`).
+# Secrets are projected by ExternalSecret from `secret/zitadel/${ENV}` and
+# `secret/zitadel-db/${ENV}`; nothing is stored in git.
+imageRegistry: docker.io
+nameOverride: ""
+fullnameOverride: zitadel
+replicaCount: 1
+image:
+  repository: ghcr.io/zitadel/zitadel
+  tag: v4.19.2
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+serviceAccount:
+  create: true
+  annotations: {}
+podAnnotations: {}
+podSecurityContext: {}
+securityContext: {}
+service:
+  type: ClusterIP
+  port: 8080
+  annotations: {}
+ingress:
+  enabled: false
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: "2"
+    memory: 2Gi
+pdb:
+  enabled: false
+affinity: {}
+nodeSelector: {}
+tolerations: []
+postgresql:
+  enabled: false
+metrics:
+  enabled: false
+  serviceMonitor:
+    enabled: false
+zitadel:
+  masterkeySecretName: zitadel-masterkey
+  configmapConfig:
+    ExternalDomain: zitadel.local
+    ExternalSecure: true
+    TLS:
+      Enabled: false
+    DefaultInstanceName: sca
+  podSecurityContext: {}
+  securityContext: {}
+env:
+  - name: ZITADEL_DATABASE_POSTGRES_DSN
+    valueFrom:
+      secretKeyRef:
+        name: zitadel-db-credentials
+        key: dsn
+initJob:
+  enabled: true
+  command: zitadel
+  activeDeadlineSeconds: 600
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+setupJob:
+  enabled: true
+  activeDeadlineSeconds: 600
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+login:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ghcr.io/zitadel/zitadel-login
+    tag: v4.19.2
+    pullPolicy: IfNotPresent
+  serviceAccount:
+    create: true
+    annotations: {}
+  ingress:
+    enabled: false
+  sessionCookieSecretName: zitadel-login-session
+  configmapConfig: {}
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  pdb:
+    enabled: false
+  affinity: {}
+  podSecurityContext: {}
+  securityContext: {}
+tools:
+  kubectl:
+    image:
+      repository: alpine/k8s
+      tag: "1.34.1"
+  wait4x:
+    image:
+      repository: wait4x/wait4x
+      tag: "3.6"

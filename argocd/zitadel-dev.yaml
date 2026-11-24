@@ -1,0 +1,53 @@
+# zitadel-dev — OIDC identity provider, DEDICATED Application.
+#
+# Multi-source: zitadel/zitadel chart 10.5.0 + `$values` (base + env overlay) +
+# the per-env ExternalSecrets. No Ingress: E1 keeps h2c inside the cluster and
+# defers the Kong/TLS edge to E2.
+#
+# Wave 50: after the CNPG `zitadel-db` cluster (wave 40, namespace `data`).
+# The ExternalSecrets carry wave -10 inside this Application.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: zitadel-dev
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "50"
+spec:
+  project: default
+  sources:
+    - repoURL: https://charts.zitadel.com
+      chart: zitadel
+      targetRevision: 10.5.0
+      helm:
+        releaseName: zitadel
+        valueFiles:
+          - $values/infrastructure/zitadel/values-base.yaml
+          - $values/envs/dev/zitadel.yaml
+    - repoURL: "{{GIT_REPO_URL}}"
+      targetRevision: "{{GIT_TARGET_BRANCH}}"
+      ref: values
+    - repoURL: "{{GIT_REPO_URL}}"
+      targetRevision: "{{GIT_TARGET_BRANCH}}"
+      path: infrastructure/zitadel/manifests
+      directory:
+        recurse: true
+        include: "*-dev.yaml"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: zitadel
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 10
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true

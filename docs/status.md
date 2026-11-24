@@ -58,9 +58,9 @@ and the proxy serves TLS from a cert-manager leaf (`kong-proxy` /
 [ci-cd.md](ci-cd.md) for the smoke design. **Phase 9** landed the Linkerd
 control plane as a dedicated `Application` per environment with an in-cluster
 identity PKI; both it and its CRDs were removed in D4. **Phase 10** lands the PostgreSQL
-datastores: two CNPG `Cluster`s in `data` at wave 40 across **all four**
-environments — `postgres-app` (`app`/`app`) and `keycloak-db`
-(`keycloak`/`keycloak`) on official
+datastores: three CNPG `Cluster`s in `data` at wave 40 across **all four**
+environments — `postgres-app` (`app`/`app`), `keycloak-db`
+(`keycloak`/`keycloak`) and `zitadel-db` (`zitadel`/`zitadel`, ADR-004 E1) on official
 `ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie` (the `system` flavor
 carries the Barman Cloud binaries required by the native `barmanObjectStore`;
 the operator-side migration to the Barman Cloud Plugin is a Phase B follow-up).
@@ -70,12 +70,14 @@ they ship through a **dedicated `Application` per environment**
 than the Helm `ApplicationSet`; `local`/`dev` run 1 instance, `qa`/`prod` run 3
 with `preferred` anti-affinity (schedulable on the single-node promote
 substrate). ESO projects the bootstrap credentials from
-`secret/postgres-app/<env>` and `secret/keycloak-db/<env>`.
+`secret/postgres-app/<env>`, `secret/keycloak-db/<env>` and
+`secret/zitadel-db/<env>`.
 `postgres-app` carries `pgvector` + `pg_stat_statements` (`pg_stat_statements.track:
 all`; CNPG manages `shared_preload_libraries`) and `wal_level=logical`;
-`keycloak-db` backs Keycloak (Phase 13). The catalog preload resolves the CNPG
-image from the raw manifests, and `make smoke COMPONENT=postgres-app` validates
-both clusters, both projected users, the extensions and logical WAL.
+`keycloak-db` backs Keycloak (Phase 13) and `zitadel-db` backs Zitadel (ADR-004
+E1). The catalog preload resolves the CNPG image from the raw manifests, and
+`make smoke COMPONENT=postgres-app` validates the clusters, projected users, the
+extensions and logical WAL.
 
 **Phase 12** lands the Redis cache: a `RedisReplication` in `data` at wave 40 across all four
 environments — 1 replica in local/dev, 3 in qa/prod with embedded Sentinel 3 (quorum 2,
@@ -108,7 +110,20 @@ now idempotent (`SEED_ROTATE=1` to rotate) and seeds the smoke user; the smoke
 proves the realm import, discovery issuer, `login_required` redirect and a real
 password-grant token accepted by userinfo (`make smoke COMPONENT=keycloak`).
 
-**NATS migration (C1–C4).** NATS and NACK are deployed **idle** as the
+**ADR-004 E1 (Zitadel, internal-only).** Zitadel is deployed as a dedicated
+multi-source Application per env (`argocd/zitadel-<env>.yaml`, wave 50) from
+chart `zitadel/zitadel` 10.5.0 (`ghcr.io/zitadel/zitadel:v4.19.2` and
+`zitadel-login:v4.19.2`). It uses a new CNPG `zitadel-db` cluster (wave 40,
+namespace `data`) and Vault paths `secret/zitadel/<env>` (masterkey + login
+session secret) and `secret/zitadel-db/<env>` (username/password + DSN). There
+is deliberately **no Ingress or edge TLS**: the h2c service stays internal and
+the smoke port-forwards `svc/zitadel` with `Host: zitadel.local`, asserting OIDC
+discovery but not client login flows. Profiles: 1 replica local/dev, 3 qa/prod
+with PDB and preferred anti-affinity. The edge and service cutover are E2/E3;
+the live smoke gate remains with the operator.
+
+**NATS migration (C1–C4).**
+ NATS and NACK are deployed **idle** as the
 ADR-005 event backbone; Kafka and Strimzi were removed in C3. `nats`
 (chart/appVersion `2.15.2`, namespace `data`, wave 40) runs a single JetStream
 node in `local`/`dev` and a 3-node
@@ -152,8 +167,8 @@ mTLS.
 | Fact | Value |
 | --- | --- |
 | Repository | `infra-kubernetes` (local, fully-local git serve; published to GitHub before promotion) |
-| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), cloudnative-pg (Phase 5), redis-operator (Phase 7), Kong (Phase 8), postgres-app/keycloak-db (Phase 10), Redis (Phase 12), Keycloak (Phase 13), NACK/NATS (NATS migration C1–C4, idle, optional per env), Velero (Phase 18; backup layer expanded in Phase B, live restore-validated 2026-11-14) |
-| `platform-root-local` | not used — `local` runs no services, so there is no root Application; `make bootstrap ENV=local` seeds the catalog wiring (`apps-local` + `messaging-local` + `kong-local` + `postgres-app-local` + `redis-local` + `keycloak-local`) host-side |
+| Deployed components | ArgoCD (bootstrap), cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3), cloudnative-pg (Phase 5), redis-operator (Phase 7), Kong (Phase 8), postgres-app/keycloak-db/zitadel-db (Phase 10 + ADR-004 E1), Redis (Phase 12), Keycloak (Phase 13), Zitadel (ADR-004 E1, internal-only), NACK/NATS (NATS migration C1–C4, idle, optional per env), Velero (Phase 18; backup layer expanded in Phase B, live restore-validated 2026-11-14) |
+| `platform-root-local` | not used — `local` runs no services, so there is no root Application; `make bootstrap ENV=local` seeds the catalog wiring (`apps-local` + `messaging-local` + `kong-local` + `postgres-app-local` + `redis-local` + `keycloak-local` + `zitadel-local`) host-side |
 | `platform-local` ApplicationSet | present, six mandatory elements (`cert-manager` wave -20, `external-secrets` + `cloudnative-pg` + `redis-operator` wave -10, `vault` wave 0, `velero` wave 80) |
 | `messaging-local` ApplicationSet | present, optional `nats` (wave 40) + `nack` (wave 50) generated by the git files generator over `argocd/messaging/local/*.yaml`; remove the two descriptors for SNS/SQS mode |
 | cert-manager app | `cert-manager-local` `Synced` + `Healthy`; `sca-ca` ClusterIssuer `Ready`; leaf Certificate smoke green |
@@ -162,12 +177,13 @@ mTLS.
 | cloudnative-pg app | `cloudnative-pg-local` `Synced` + `Healthy`; operator Deployment `cloudnative-pg` Ready (chart 0.29.0 / operator 1.30.0); 11 `postgresql.cnpg.io` CRDs present + `Established`; `make smoke COMPONENT=cloudnative-pg` green |
 | redis-operator app | `redis-operator-local` `Synced` + `Healthy` in namespace `data`; operator Deployment `redis-operator` Ready (chart 0.26.1 / operator 0.26.0); watches all namespaces (no `WATCH_NAMESPACE` env); 4 `redis.redis.opstreelabs.in` CRDs present + `Established`; `make smoke COMPONENT=redis-operator` → throwaway `Redis` CR honored (StatefulSet ready + `PING` → `PONG`) |
 | kong app | `kong-local` `Synced` + `Healthy` in namespace `kong` (dedicated Application, **no SSA**); chart 3.4.1, gateway Deployment `kong` Ready (containers `ingress-controller` KIC 3.5.5 + `proxy` kong 3.9.4), DB-less (`KONG_DATABASE=off`); IngressClass `kong`; `configuration.konghq.com` CRDs `Established`; `Certificate/kong-proxy` Ready (leaf off `sca-ca`); declarative `Ingress kong-demo` + `KongPlugin demo-termination`; `make smoke COMPONENT=kong` → `GET https://kong.local/demo` → 200 |
-| postgres-app app | `postgres-app-local` `Synced` + `Healthy` (dedicated Application, raw CRs); CNPG `Cluster postgres-app` Ready (1 instance local; image `18.4-system-trixie`), `keycloak-db` Ready (1 instance local); ESO `postgres-app-credentials` + `keycloak-db-credentials` `SecretSynced`; `pg_stat_statements` + `vector` + `wal_level=logical` verified through `app@app`; `make smoke COMPONENT=postgres-app` green |
+| postgres-app app | `postgres-app-local` `Synced` + `Healthy` (dedicated Application, raw CRs); CNPG `Cluster postgres-app` Ready (1 instance local; image `18.4-system-trixie`), `keycloak-db` + `zitadel-db` Ready (1 instance each local); ESO `postgres-app-credentials` + `keycloak-db-credentials` + `zitadel-db-credentials` `SecretSynced`; `pg_stat_statements` + `vector` + `wal_level=logical` verified through `app@app`; `make smoke COMPONENT=postgres-app` green |
 | nats app | `nats-local` `Synced` + `Healthy` (optional `messaging-local` ApplicationSet element); chart/appVersion `nats/nats` 2.15.2 with JetStream enabled and a file-store PVC (1 node local/dev, 3-node JetStream cluster qa/prod); no `Stream`/`Consumer` CRs; `make smoke COMPONENT=nats` → server Ready, JetStream enabled, zero streams |
 | nack app | `nack-local` `Synced` + `Healthy` (optional `messaging-local` ApplicationSet element, namespace `nats`); chart `nats/nack` 0.35.0 / controller 0.24.0; six `*.jetstream.nats.io` CRDs `Established`; watches all namespaces; `make smoke COMPONENT=nack` green |
 | messaging contract | Vault KV-v2 `secret/messaging/local` `mode=nats` + `nats_url`; consumers project it through ESO. SNS/SQS coordinates (topic/queue/region, optional endpoint/credentials) are provisioned out of band when that mode is enabled |
 | redis app | `redis-local` `Synced` + `Healthy` (dedicated Application, raw CRs); `RedisReplication/redis` (1 replica local/dev) with embedded Sentinel only in qa/prod (3/3, mymaster); password from ESO `redis-password` via `secret/redis/<env>`; AOF on PVC, `redisExporter` enabled; `make smoke COMPONENT=redis` → PING/SET/GET and AOF verified; Sentinel checked in qa/prod |
 | keycloak app | `keycloak-local` `Synced` + `Healthy` (dedicated multi-source Application); chart `codecentric/keycloakx` 7.4.0 / Keycloak 26.8.1; StatefulSet `keycloak` Ready; `ExternalSecret/keycloak-admin` + `keycloak-db-credentials` + `keycloak-test-user` `SecretSynced`; realm `sca` imported from `ConfigMap/keycloak-realm-sca`; `Certificate/keycloak-tls` Ready; Kong Ingress `keycloak.local`; `make smoke COMPONENT=keycloak` → discovery issuer, `login_required` redirect, password-grant token + userinfo green |
+| zitadel app | `zitadel-local` `Synced` + `Healthy` (dedicated multi-source Application, internal-only E1); chart `zitadel/zitadel` 10.5.0 / app `v4.19.2`; three ExternalSecrets `SecretSynced`; `Job/zitadel-init` + `Job/zitadel-setup` Complete; Deployments `zitadel` + `zitadel-login` Ready; no Ingress; `make smoke COMPONENT=zitadel` → h2c discovery issuer derived from `ConfigMap/zitadel-config-yaml` |
 | git-local-serve | in-cluster git daemon (`git://<node>:9418/sca-infra.git`) `Ready` |
 | Observability / smoke CI | cluster smoke `pr-cluster.yml` **shipped** (Phase 1): selective on PRs as the **required `Smoke` check** on `main` + manual `workflow_dispatch`; no `push` smoke. Multi-component PRs smoke every touched component in one run (one boot/cloud/teardown); changes to the smoke framework (`bootstrap/smoke-*`, `argocd/**`, `Makefile`) resolve to `cert-manager` so the machinery is self-validated; CNI substrate changes resolve to `cni`; the pinned toolchain is cached (`actions/cache`, keyed on `versions.sh`) (see [ci-cd.md](ci-cd.md)) |
 | CNI substrate (dev/CI tooling) | D3 implementation landed with **local substrate smoke passed** on 2026-11-20: `make eks-up` starts Floci with bundled CNI disabled and k3s pinned to `v1.34.1-k3s1`, then `bootstrap/cni-emulator.sh` installs Calico `v3.31.7` (iptables + VXLAN + WireGuard, `MTU=1440`) and pinned kube-proxy `v1.34.1` with `--conntrack-max-per-core=0`; `make smoke COMPONENT=cni` runs before `make bootstrap` on every smoke. The first full-platform attempt failed because the D3 kube-proxy tried to write read-only `/proc/sys/net/netfilter`, breaking ClusterIP and the ArgoCD pre-install hook; the internal API probe now fails fast on that condition. `envs/<env>/cni.yaml` enforces `local` and documents the external contract. **Not a catalog Application**; rollback is a D3 revert plus `make eks-down` (see [ci-cd.md](ci-cd.md)) |
@@ -218,7 +234,7 @@ mTLS.
 
 | Component/Migration | Status | Notes |
 | --- | --- | --- |
-| Keycloak → Zitadel | **Planned** | Complete replacement. Inventory in progress. |
+| Keycloak → Zitadel | **In progress (E1 landed)** | E0 inventoried dependencies; E1 deployed Zitadel internally with a dedicated `zitadel-db` and no edge. E2 (edge) and E3 (service cutover) are pending. See [ADR-004](adr/adr-004-keycloak-to-zitadel.md). |
 | Kafka/Strimzi → NATS JetStream | **Done (C1–C4)** | NATS + NACK deployed idle (no `Stream`/`Consumer` CRs) via the optional `messaging-<env>` ApplicationSet; remove `argocd/messaging/<env>/{nats,nack}.yaml` for SNS/SQS mode. Contract `secret/messaging/<env>` carries `mode` + endpoints. Kafka/Strimzi removed in C3; the C4 runbook for the toggle and service-owned topology is in [messaging.md](messaging.md). |
 | Linkerd → CNI-native mTLS | **Done (D0–D5)** | Static inventory and option evaluation in [ADR-008](adr/adr-008-cni-native-mtls.md); [poc/cni-mtls](../poc/cni-mtls/README.md) records the failed Cilium `1.20.5` gate. [ADR-009](adr/adr-009-calico-wireguard-fallback.md) and [poc/calico-wireguard](../poc/calico-wireguard/README.md) pin the Calico `v3.31.7` fallback, whose D2 gate passed on 2026-11-17 with cross-node HTTP and WireGuard peer/handshake/counter evidence. D3 landed `bootstrap/cni-emulator.sh`, `envs/<env>/cni.yaml` and `bootstrap/smoke-cni.sh` as bootstrap substrate (not a catalog Application); D4 removed Linkerd and D5 closed the docs. |
 | Velero + Backups | **Done** | The three layers are implemented and live restore-validated on 2026-11-14: Velero scheduled backups, CNPG Barman base backups + WAL/PITR, and Vault Raft snapshot CronJob. `local` uses Floci S3; `dev`/`qa`/`prod` expect external buckets and Vault-provisioned credentials. See [backups.md](backups.md#validation-status). |
@@ -229,7 +245,7 @@ mTLS.
 | Component | Namespace | Status | Notes |
 | --- | --- | --- | --- |
 | velero | velero | deployed (schedule + restore live-validated 2026-11-14) | Scheduled Kubernetes-object backup configs in all four envs; `local` uses Floci S3, external environments use their own bucket. The `floci-buckets` Job creates the local buckets. The schedule template re-ran to `Completed` (639 items; `velero-critical-namespaces-manual-20261114154830`) after the Floci bucket was recreated, and `bootstrap/smoke-velero.sh` performs a backup → delete namespace → restore round-trip. |
-| CNPG backups + PITR | data | deployed (live restore validated 2026-11-14) | Both `Cluster`s are configured to write Barman base backups + WAL to object storage; daily `ScheduledBackup`s; credentials via `secret/cnpg/<env>`. `bootstrap/smoke-postgres-app.sh` exercises PITR on `postgres-app` and latest-backup restore on `keycloak-db`. |
+| CNPG backups + PITR | data | deployed (live restore validated 2026-11-14) | All three `Cluster`s (`postgres-app`, `keycloak-db`, `zitadel-db`) are configured to write Barman base backups + WAL to object storage; daily `ScheduledBackup`s; credentials via `secret/cnpg/<env>`. `bootstrap/smoke-postgres-app.sh` exercises PITR on `postgres-app` and latest-backup restore on `keycloak-db`, and also verifies `zitadel-db` connectivity. |
 | Vault Raft snapshots | vault | deployed (restore drill validated 2026-11-14) | `CronJob/vault-raft-snapshot` is configured to save/validate/upload a Raft snapshot and apply retention; credentials via `secret/vault-snapshot/<env>`. `bootstrap/smoke-vault.sh` triggers a real Job and asserts `VAULT_SNAPSHOT_OK` + `VAULT_SNAPSHOT_UPLOADED`; the manual Raft restore drill recovered a canary KV. |
 
 The backup operations, schedules, retention values, and restore runbooks live in
