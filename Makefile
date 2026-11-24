@@ -207,7 +207,7 @@ port-forward: ## Reach a platform UI/API locally: make port-forward APP=argocd|v
 		argocd)     ns=argocd;        svc=argocd-server;                   ports=8443:443; url=https://localhost:8443 ;; \
 		vault)      ns=vault;         svc=vault;                           ports=8200:8200 ;; \
 		keycloak)   ns=kong;          svc=kong-proxy;                      ports=8443:443; url=https://keycloak.local:8443 ;; \
-		zitadel)    ns=zitadel;       svc=zitadel;                         ports=18080:8080; url=http://localhost:18080 ;; \
+		zitadel)    ns=kong;          svc=kong-proxy;                      ports=18443:443; url=https://zitadel.local:18443 ;; \
 		grafana)    ns=observability; svc=kube-prometheus-stack-grafana;   ports=3000:80 ;; \
 		prometheus) ns=observability; svc=kube-prometheus-stack-prometheus; ports=9090:9090 ;; \
 		tempo)      ns=tempo;         svc=tempo;                           ports=3200:3200 ;; \
@@ -218,7 +218,7 @@ port-forward: ## Reach a platform UI/API locally: make port-forward APP=argocd|v
 	url="$${url:-http://localhost:$${ports%%:*}}"; \
 	echo "Forwarding $$ns/$$svc → $$url"; \
 	[ "$(APP)" != keycloak ] || echo "Hint: add '127.0.0.1 keycloak.local' to /etc/hosts; the leaf is signed by the sca-ca ClusterIssuer"; \
-	[ "$(APP)" != zitadel ] || echo "Hint: send Host: zitadel.local (E1 is internal-only h2c; no edge yet)"; \
+	[ "$(APP)" != zitadel ] || echo "Hint: add '127.0.0.1 zitadel.local' to /etc/hosts; the leaf is signed by the sca-ca ClusterIssuer"; \
 	kubectl -n "$$ns" port-forward "svc/$$svc" "$$ports"
 
 ##@ Housekeeping

@@ -71,7 +71,7 @@ live under `infrastructure/<component>/` + `envs/<env>/`.
 | NACK | `nats` | nats/nack | JetStream controller (Stream/Consumer CRDs); optional per env | — | **deployed** (NATS migration C1–C4) |
 | Redis | `data` | `RedisReplication` CR | Cache | [infra-redis](https://github.com/sca-templates/infra-redis) | **deployed** (Phase 12) |
 | Keycloak | `keycloak` | codecentric/keycloakx | OIDC IdP, realm `sca` | [infra-keycloak](https://github.com/sca-templates/infra-keycloak) | **deployed** (Phase 13) |
-| Zitadel | `zitadel` | zitadel/zitadel (internal h2c) | OIDC IdP replacing Keycloak (ADR-004 E1); edge deferred to E2 | — | **deployed** (E1 internal-only) |
+| Zitadel | `zitadel` | zitadel/zitadel (h2c behind Kong TLS) | OIDC IdP replacing Keycloak (ADR-004 E1/E2); edge validated | — | **deployed** (E1/E2 validated) |
 | kube-prometheus-stack | `observability` | prometheus-community/kube-prometheus-stack | Metrics + Grafana + Alertmanager | [infra-prometheus](https://github.com/sca-templates/infra-prometheus) | planned (Phase 14) |
 | Loki | `loki` | grafana/loki | Log aggregation | [infra-loki](https://github.com/sca-templates/infra-loki) | planned (Phase 15) |
 | Alloy | `observability` | grafana/alloy | Ships pod logs to Loki | — | planned (Phase 15) |

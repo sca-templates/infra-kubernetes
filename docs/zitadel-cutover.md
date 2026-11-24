@@ -5,6 +5,12 @@ Keycloak to Zitadel. It does not change service repositories: application
 manifests, client credentials and redirect URIs continue to be owned by each
 service's `deploy/` directory.
 
+## Current state
+
+No OIDC clients or service deployments exist yet, so there is no cutover to
+perform. This runbook is the procedure for the first service that lands; the
+platform-side E1/E2 gates are already green.
+
 ## Scope and preconditions
 
 - **E1** is live: `zitadel-<env>` Applications are `Synced`/`Healthy` with the
