@@ -5,6 +5,14 @@ metadata:
   namespace: kube-system
   labels:
     k8s-app: kube-proxy
+  annotations:
+    ignore-check.kube-linter.io/host-network: "node iptables management requires host networking"
+    ignore-check.kube-linter.io/no-read-only-root-fs: "kube-proxy writes runtime state"
+    ignore-check.kube-linter.io/privilege-escalation-container: "privileged node proxy for the bootstrap CNI substrate"
+    ignore-check.kube-linter.io/privileged-container: "privileged node proxy for the bootstrap CNI substrate"
+    ignore-check.kube-linter.io/run-as-non-root: "host-level networking privileges are required"
+    ignore-check.kube-linter.io/unset-cpu-requirements: "system DaemonSet sizing is managed by bootstrap"
+    ignore-check.kube-linter.io/unset-memory-requirements: "system DaemonSet sizing is managed by bootstrap"
 spec:
   selector:
     matchLabels:

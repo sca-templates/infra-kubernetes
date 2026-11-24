@@ -1,7 +1,19 @@
 # gitleaks configuration.
 #
 # Extends the default ruleset (gitleaks `detect`/`protect` auto-discover this
-# file in the scan root). No allowlist: any committed key or token fails the
-# Security gate.
+# file in the scan root) and allowlists exactly one historical committed secret:
+# the Linkerd mesh **trust anchor** at
+# `infrastructure/linkerd/manifests/identity-anchor.yaml`.
+#
+# Linkerd was removed in D4; gitleaks still scans git history. That anchor was
+# a self-signed root trusted only by the mesh, so its key granted no access
+# outside the cluster. The allowlist is path-scoped: any other key or token
+# anywhere in the repository still fails the Security gate.
 [extend]
 useDefault = true
+
+[[rules]]
+id = "private-key"
+[[rules.allowlists]]
+description = "Historical Linkerd mesh trust anchor (self-signed mesh root removed in D4; no external trust)"
+paths = ['''infrastructure/linkerd/manifests/identity-anchor\.yaml$''', '''identity-anchor\.yaml$''']

@@ -12,10 +12,11 @@
 # every catalog Application, seeds Vault, and then runs the component smokes for
 # the touched components plus the EKS/ECR and cloud integration smokes.
 #
-# Ordering matters for convergence: Applications are gated on `Synced` first
-# (any health), then Vault is seeded/unsealed — it is born sealed, so it can
-# only report Healthy after `make smoke COMPONENT=vault` ran — and only then is
-# the whole platform gated on `Synced/Healthy`.
+# Ordering matters for convergence: Vault is seeded/unsealed as soon as its
+# Application is Synced — it is born sealed and its secrets are a bootstrap
+# prerequisite for consumers such as Zitadel — then every Application is gated
+# on `Synced` (any health), Vault is smoked, and the whole platform is gated on
+# `Synced/Healthy`.
 #
 # More than one component can be smoked in a single run: `<component>` is a
 # comma-separated list, the cluster is booted once, the cloud emulator is
@@ -397,15 +398,20 @@ if ! kubectl get namespace argocd >/dev/null 2>&1; then
   exit 1
 fi
 
+# Vault is born sealed and projected secrets are a prerequisite for consumers
+# whose sync hooks wait on them (Zitadel), so seed it before waiting for the
+# rest of the catalog. seed-vault.sh is idempotent.
+echo "── seed Vault (bootstrap prerequisite): bootstrap/seed-vault.sh"
+wait_for_synced "vault-${APP_SUFFIX}"
+"$(dirname "$0")/seed-vault.sh"
+kubectl annotate clustersecretstore vault force-sync="$(date +%s)" --overwrite >/dev/null 2>&1 || true
+
 echo "── waiting for ${#CATALOG[@]} platform Applications to converge: ${CATALOG[*]}"
 for c in "${CATALOG[@]}"; do
   wait_for_synced "${c}-${APP_SUFFIX}"
 done
 
-# Vault is born sealed: seed/unseal it before the health gate, unconditionally —
-# the platform cannot be Healthy without it regardless of which component the
-# PR touched. seed-vault.sh is idempotent.
-echo "── seed Vault (bootstrap prerequisite for the health gate): make smoke COMPONENT=vault"
+echo "── vault smoke (bootstrap prerequisite for the health gate): make smoke COMPONENT=vault"
 make smoke COMPONENT=vault
 
 for c in "${CATALOG[@]}"; do
