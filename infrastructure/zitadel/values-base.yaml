@@ -63,6 +63,11 @@ env:
 initJob:
   enabled: true
   command: zitadel
+  annotations:
+    helm.sh/hook: null
+    helm.sh/hook-delete-policy: null
+    helm.sh/hook-weight: null
+    argocd.argoproj.io/sync-wave: "-5"
   activeDeadlineSeconds: 600
   resources:
     requests:
@@ -73,6 +78,11 @@ initJob:
       memory: 512Mi
 setupJob:
   enabled: true
+  annotations:
+    helm.sh/hook: null
+    helm.sh/hook-delete-policy: null
+    helm.sh/hook-weight: null
+    argocd.argoproj.io/sync-wave: "-4"
   activeDeadlineSeconds: 600
   resources:
     requests:
