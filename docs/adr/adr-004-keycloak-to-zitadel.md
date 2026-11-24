@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — E1 (internal deployment) landed; E2 (edge) and E3 (service cutover)
+Accepted — E1 (internal deployment) validated; E2 (edge) and E3 (service cutover)
 are pending.
 
 ## Context
