@@ -44,6 +44,12 @@ metrics:
   enabled: false
   serviceMonitor:
     enabled: false
+configMap:
+  annotations:
+    helm.sh/hook: null
+    helm.sh/hook-delete-policy: null
+    helm.sh/hook-weight: null
+    argocd.argoproj.io/sync-wave: "-6"
 zitadel:
   masterkeySecretName: zitadel-masterkey
   configmapConfig:
