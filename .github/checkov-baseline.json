@@ -68,6 +68,12 @@
                         "CKV_K8S_40",
                         "CKV_K8S_43"
                     ]
+                },
+                {
+                    "resource": "Pod.kube-system.kube-proxy.k8s-app-kube-proxy",
+                    "check_ids": [
+                        "CKV2_K8S_6"
+                    ]
                 }
             ]
         },
@@ -92,6 +98,12 @@
                         "CKV_K8S_38",
                         "CKV_K8S_40",
                         "CKV_K8S_43"
+                    ]
+                },
+                {
+                    "resource": "Pod.calico-wg-poc.curl-client.app-curl-client",
+                    "check_ids": [
+                        "CKV2_K8S_6"
                     ]
                 }
             ]
@@ -118,6 +130,12 @@
                         "CKV_K8S_40",
                         "CKV_K8S_43"
                     ]
+                },
+                {
+                    "resource": "Pod.calico-wg-poc.nginx-server.app-nginx-server",
+                    "check_ids": [
+                        "CKV2_K8S_6"
+                    ]
                 }
             ]
         },
@@ -143,6 +161,12 @@
                         "CKV_K8S_40",
                         "CKV_K8S_43"
                     ]
+                },
+                {
+                    "resource": "Pod.cni-mtls-poc.curl-client.app-curl-client",
+                    "check_ids": [
+                        "CKV2_K8S_6"
+                    ]
                 }
             ]
         },
@@ -167,6 +191,12 @@
                         "CKV_K8S_38",
                         "CKV_K8S_40",
                         "CKV_K8S_43"
+                    ]
+                },
+                {
+                    "resource": "Pod.cni-mtls-poc.nginx-server.app-nginx-server",
+                    "check_ids": [
+                        "CKV2_K8S_6"
                     ]
                 }
             ]
