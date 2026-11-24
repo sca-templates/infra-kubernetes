@@ -7,9 +7,11 @@ service's `deploy/` directory.
 
 ## Current state
 
-No OIDC clients or service deployments exist yet, so there is no cutover to
-perform. This runbook is the procedure for the first service that lands; the
-platform-side E1/E2 gates are already green.
+No OIDC clients or service deployments existed when E3 closed, so no cutover was
+performed. E4 subsequently retired Keycloak from the platform; Zitadel is now
+the only identity plane. This runbook remains the historical procedure for any
+service that migrated from Keycloak before retirement, and future services
+onboard directly to Zitadel. The platform-side E1/E2 gates are green.
 
 ## Scope and preconditions
 
@@ -20,8 +22,8 @@ platform-side E1/E2 gates are already green.
   issuer `https://zitadel.local`.
 - The dependency inventory in
   [migration-inventory-phase-a.md](migration-inventory-phase-a.md) is current.
-- Keycloak remains available during the cutover window. It is not retired until
-  every service has been validated on Zitadel and the soak period ends.
+- This is a historical cutover sheet: Keycloak was retired in E4 after E3 closed
+  with no clients. Do not expect a live Keycloak endpoint on the current platform.
 - No change is applied by hand to the cluster. Service promotions follow
   [workflow.md](workflow.md#services-app-repo-as-source); platform changes land
   through reviewed PRs.
@@ -92,23 +94,24 @@ For each migrated client and environment:
    revision in `dev`/`qa`, or revert the version tag pin PR in `prod`.
 2. Restore the service's previous Vault secret projection if the client secret
    was rotated; do not paste secrets into this repository.
-3. Re-run [Validation](#validation) against Keycloak and confirm the service
-   is healthy.
+3. If a legacy client absolutely must return to Keycloak, revert E4 first so the
+   retired identity plane exists again, then re-run [Validation](#validation)
+   against Keycloak and confirm the service is healthy.
 4. Leave Zitadel running. Roll back the client only; do not tear down the new
    identity plane unless ADR-004 itself is reversed.
 
-## Keycloak retirement gate
+## Keycloak retirement gate (executed in E4)
 
-Retire Keycloak only after all inventoried clients are migrated, each has passed
-validation, and the agreed soak period has elapsed without an authentication
-regression. The retirement change is a platform PR under ADR-004 that:
+E3 closed with no OIDC clients to migrate, so the retirement gate was executed by
+ADR-004 E4. The platform PR:
 
-- removes the `keycloak-<env>` Applications and their sync policy entries;
-- removes the `keycloak-db` CNPG clusters from
-  `infrastructure/postgres-app/manifests/`;
-- removes Keycloak TLS/realm manifests and its component catalog row;
-- updates `docs/status.md`, `docs/architecture.md`, `docs/roadmap.md` and this
-  ADR in the same change.
+- removed the `keycloak-<env>` Applications and their Makefile/CI wiring;
+- removed the `keycloak-db` CNPG clusters, credentials and backup schedules;
+- removed Keycloak TLS/realm manifests, Vault seeds/paths, smoke and catalog row;
+- redirected the External Secrets smoke to `secret/postgres-app/<env>` and the
+  CNPG latest-backup restore smoke to `zitadel-db`;
+- updated `docs/status.md`, `docs/architecture.md`, `docs/roadmap.md`, this runbook
+  and [ADR-004](adr/adr-004-keycloak-to-zitadel.md) in the same change.
 
-Until that PR lands, Keycloak and Zitadel coexist only for rollback; Keycloak is
-not the default issuer for any migrated service.
+There is no coexistence window after E4; Zitadel is the only issuer in the
+platform catalog.

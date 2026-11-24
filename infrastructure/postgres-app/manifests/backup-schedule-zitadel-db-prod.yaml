@@ -1,7 +1,7 @@
 # Scheduled CNPG base backup for zitadel-db — prod.
 #
 # CloudNativePG uses a six-field cron expression (seconds first). The schedule
-# is staggered from keycloak-db to avoid overlapping S3 writes.
+# is staggered from postgres-app to avoid overlapping S3 writes.
 apiVersion: postgresql.cnpg.io/v1
 kind: ScheduledBackup
 metadata:

@@ -18,7 +18,7 @@ graph LR
     B --> C[External Secrets Operator]
     C --> D[K8s Secrets]
     D --> E[Application Pods]
-    D --> F[CNPG Clusters / Keycloak / NATS consumers]
+    D --> F[CNPG Clusters / Zitadel / NATS consumers]
 ```
 
 - **Vault**: KV-v2 secrets engine, HA raft storage, sealed/initialized by the
@@ -46,18 +46,19 @@ script adapts as components land).
 | `secret/external-secrets/k8s-auth` | Phase 2 | k8s auth role/SA binding |
 | `secret/kong/admin` | — (reserved) | **not consumed**: Kong runs DB-less with a plaintext `ClusterIP` admin listener, so no admin credential is projected; the path is reserved for a future admin-auth use |
 | `secret/postgres-app/<env>` | Phase 10 | postgres-app `Cluster` via CNPG |
-| `secret/keycloak-db/<env>` | Phase 10 | keycloak-db `Cluster` via CNPG; Keycloak DB credential via ESO |
 | `secret/zitadel/<env>` | ADR-004 E1 seed | Zitadel `masterkey` + Login `session_cookie_secret` via ESO; do not rotate an initialized masterkey in place |
 | `secret/zitadel-db/<env>` | ADR-004 E1 seed | `zitadel-db` `Cluster` via CNPG (basic-auth) and the Zitadel DSN (`dsn`) via ESO; the password is generated once and reused in both properties |
 | `secret/redis/<env>` | Phase 12 seed (`seed-vault.sh`) | Redis `Secret` auth via ESO → `redis-password` |
 | `secret/messaging/<env>` | NATS migration C2 seed (`local`); out of band elsewhere | Messaging contract: `mode` + `nats_url` or SNS/SQS coordinates, projected by each consumer via ESO; see [messaging.md](messaging.md) |
-| `secret/keycloak/admin` | Phase 13 seed | Keycloak bootstrap admin via ESO |
-| `secret/keycloak/test-user/<env>` | Phase 13 seed | Keycloak realm import + smoke user via ESO |
 | `secret/grafana/admin` | Phase 14 | Grafana admin |
 | `secret/velero/credentials` | Phase 18 seed | Velero object-store credentials; `local` pins Floci's dummy `test/test` pair |
 | `secret/cnpg/<env>` | Phase B seed (`local`); out of band elsewhere | CNPG backup credentials (Barman S3 access key, secret key, region) |
 | `secret/vault-snapshot/<env>` | Phase B seed (`local`); out of band elsewhere | Vault Raft snapshot S3 credentials (access key, secret key, region) |
 | `secret/platform/alertmanager` | Phase 14 | Alertmanager routing config (`useExistingSecret`) |
+
+Former Keycloak paths (`secret/keycloak/*` and `secret/keycloak-db/*`) were
+removed from the seed inventory in ADR-004 E4; any residual live paths are
+cluster cleanup, not part of this catalog.
 
 Nothing above is written by Vault itself yet — Vault arrives at Phase 2 and
 `bootstrap/seed-vault.sh` populates the catalog's placeholder secrets on the
@@ -102,11 +103,6 @@ Each phase that consumes secrets ships, next to the component, exactly one
 3. Pods reference the projected `Secret` by name; the raw value never appears
    in a manifest.
 4. DoD for that phase includes `make status` showing `SecretSynced`.
-
-Keycloak is the first component with **three** projections: `keycloak-admin`
-(bootstrap admin), `keycloak-db-credentials` (`kubernetes.io/basic-auth`, the
-same Vault path as the CNPG cluster) and `keycloak-test-user` (smoke user,
-resolved by the realm import). See [roadmap/keycloak.md](roadmap/keycloak.md).
 
 Zitadel (ADR-004 E1) has **three** projections in the `zitadel` namespace:
 `zitadel-masterkey` (`masterkey`, immutable after first boot),

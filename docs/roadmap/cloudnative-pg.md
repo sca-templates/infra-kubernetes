@@ -27,12 +27,12 @@ Phase B deliverable, tracked in [backups.md](../backups.md) and the global Work
 Log.
 
 - [x] `barmanObjectStore` + continuous WAL archiving on `postgres-app` and
-      `keycloak-db` (all four envs)
+      `zitadel-db` (all four envs; the former `keycloak-db` was removed in ADR-004 E4)
 - [x] daily `ScheduledBackup`s with environment retention (local `7d`,
       dev/qa `30d`, prod `90d`)
 - [x] backup credentials projected by ESO from `secret/cnpg/<env>`
 - [x] `bootstrap/smoke-postgres-app.sh`: PITR restore on `postgres-app` and
-      latest-backup restore on `keycloak-db`
+      latest-backup restore on `zitadel-db`
 - [x] live green run of the restore smoke on the Floci EKS substrate (2026-11-14)
 
 Rollout note (local, one-off cluster hygiene): the orphaned `postgresql.cnpg.io`

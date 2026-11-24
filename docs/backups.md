@@ -6,7 +6,7 @@ things and are not interchangeable:
 | Layer | Protects | Mechanism | Source of truth |
 | --- | --- | --- | --- |
 | Velero | Kubernetes API objects (and PVs where a CSI driver exists) | Scheduled `Backup` to object storage | `infrastructure/velero/`, `envs/<env>/velero.yaml`, `argocd/apps-<env>.yaml` |
-| CloudNativePG | `postgres-app`, `keycloak-db` and `zitadel-db` data | Barman base backups + WAL archiving; PITR | `infrastructure/postgres-app/manifests/` |
+| CloudNativePG | `postgres-app` and `zitadel-db` data | Barman base backups + WAL archiving; PITR | `infrastructure/postgres-app/manifests/` |
 | Vault | The Raft datastore (secrets SSOT) | `vault operator raft snapshot` CronJob to object storage | `infrastructure/vault/manifests/`, `infrastructure/vault/backup/manifests/` |
 
 The datastore-native layers are the authoritative restore path for their data.
@@ -66,7 +66,6 @@ backup jobs to run. See [secrets.md](secrets.md).
 | --- | --- | --- |
 | Velero critical namespaces | `Schedule/velero-critical-namespaces` | `0 2 * * *` |
 | `postgres-app` base backup | `ScheduledBackup/postgres-app-daily` | `0 30 1 * * *` (six-field CNPG cron) |
-| `keycloak-db` base backup | `ScheduledBackup/keycloak-db-daily` | `0 45 1 * * *` (six-field CNPG cron) |
 | `zitadel-db` base backup | `ScheduledBackup/zitadel-db-daily` | `0 15 2 * * *` (six-field CNPG cron) |
 | Vault Raft snapshot | `CronJob/vault-raft-snapshot` | `30 1 * * *` |
 
@@ -92,7 +91,7 @@ kubectl -n data get cluster postgres-app \
 
 ## Velero: backup and restore
 
-Velero's schedule covers `data`, `vault`, `keycloak`, `kong`, and
+Velero's schedule covers `data`, `vault`, `zitadel`, `kong`, and
 `cert-manager`. In `local` it backs up Kubernetes objects only
 (`snapshotVolumes: false`); on a CSI-capable cluster the environment overlay
 enables volume snapshots.
@@ -162,7 +161,7 @@ kubectl -n data get backup \
 
 Use this when the wanted base backup is present in the `data` namespace. Set
 `database` and `owner` to match the source (`app`/`app` for `postgres-app`,
-`keycloak`/`keycloak` for `keycloak-db`, `zitadel`/`zitadel` for `zitadel-db`).
+`zitadel`/`zitadel` for `zitadel-db`).
 
 ```bash
 kubectl -n data apply -f - <<'EOF'
@@ -233,9 +232,8 @@ EOF
 ```
 
 For `local`, add the Floci `endpointURL` and use the `cnpg-backups` bucket.
-For `keycloak-db`, use `source: keycloak-db`, its bucket path, and
-`database: keycloak`/`owner: keycloak`; for `zitadel-db`, use `source: zitadel-db`
-and `database: zitadel`/`owner: zitadel`.
+For `zitadel-db`, use `source: zitadel-db`, its bucket path, and
+`database: zitadel`/`owner: zitadel`.
 
 After the restore cluster is `Ready`, connect to its primary and verify the
 expected rows before switching consumers:
@@ -249,8 +247,7 @@ Remove the restore cluster and its PVCs when validation is complete. Never
 delete the source cluster or its object-store prefix as part of a test.
 
 `bootstrap/smoke-postgres-app.sh` automates both paths: a PITR round-trip on
-`postgres-app` and a latest-backup restore on `keycloak-db`, then verifies
-`zitadel-db` connectivity. Set
+`postgres-app` and a latest-backup restore on `zitadel-db`. Set
 `SMOKE_CNPG_PITR=0` to skip the PITR half.
 
 ## Vault: Raft snapshot and restore
@@ -329,7 +326,7 @@ Live restore validation passed on the Floci emulated EKS substrate on
 | --- | --- | --- |
 | Velero | `make smoke COMPONENT=velero` | `Backup` and `Restore` `Completed`; the deleted namespace and its marker were recovered |
 | Velero schedule template | `Backup` from `Schedule/velero-critical-namespaces` | `Completed` (639 items, 0 errors) on 2026-11-14; backup `velero-critical-namespaces-manual-20261114154830` |
-| CNPG | `make smoke COMPONENT=postgres-app` | PITR with A/B markers on `postgres-app`, latest-backup restore on `keycloak-db`, connectivity on `zitadel-db` |
+| CNPG | `make smoke COMPONENT=postgres-app` | PITR with A/B markers on `postgres-app`, latest-backup restore on `zitadel-db`; the 2026-11-14 historical run also restored `keycloak-db`, which E4 later removed |
 | Vault snapshot | `make smoke COMPONENT=vault` | `VAULT_SNAPSHOT_OK` + `VAULT_SNAPSHOT_UPLOADED` |
 | Vault restore drill | manual, per the runbook above | Canary KV written, snapshot taken, canary deleted, Raft snapshot restored on the active node; the canary was recovered and ExternalSecrets stayed `SecretSynced` |
 

@@ -6,7 +6,7 @@
 # point-in-time restore produce the expected data:
 #   - postgres-app: backup -> marker A -> WAL archive -> target -> marker C;
 #     restore to the target must contain A but not C (PITR).
-#   - keycloak-db: backup -> marker A -> marker B -> second backup; restoring
+#   - zitadel-db: backup -> marker A -> marker B -> second backup; restoring
 #     the latest backup must contain both markers.
 #
 # `postgres-app` must also carry the platform extensions (pgvector +
@@ -414,25 +414,25 @@ run_latest_restore_test() {
   local restore="smoke-restore-latest-${SUFFIX}"
   local count restore_user restore_pass restore_db
 
-  echo "── smoke(postgres-app): latest-backup restore on keycloak-db"
-  wait_externalsecret keycloak-db-credentials
+  echo "── smoke(postgres-app): latest-backup restore on zitadel-db"
+  wait_externalsecret zitadel-db-credentials
   wait_externalsecret cnpg-backup-credentials
-  use_cluster_credentials keycloak-db keycloak-db-credentials keycloak
+  use_cluster_credentials zitadel-db zitadel-db-credentials zitadel
   restore_user="$USERNAME"
   restore_pass="$PASSWORD"
   restore_db="$DATABASE"
   reset_smoke_table
   db_query "insert into platform_backup_smoke(marker) values ('${marker_a}')" >/dev/null
 
-  create_backup "$backup_a" keycloak-db
-  wait_backup "$backup_a" keycloak-db
+  create_backup "$backup_a" zitadel-db
+  wait_backup "$backup_a" zitadel-db
 
   db_query "insert into platform_backup_smoke(marker) values ('${marker_b}')" >/dev/null
 
-  create_backup "$backup_b" keycloak-db
-  wait_backup "$backup_b" keycloak-db
+  create_backup "$backup_b" zitadel-db
+  wait_backup "$backup_b" zitadel-db
 
-  create_restore_cluster "$restore" keycloak-db "$backup_b" keycloak-db-credentials
+  create_restore_cluster "$restore" zitadel-db "$backup_b" zitadel-db-credentials
 
   count="$(restore_marker_count "$restore" "$restore_user" "$restore_pass" "$restore_db" "$marker_a")"
   [ "$count" = "1" ] || { echo "FAIL: latest restore is missing marker A (count=${count})" >&2; exit 1; }
@@ -448,8 +448,7 @@ run_latest_restore_test() {
 
 verify_cluster postgres-app postgres-app-credentials app "app@app" "pg_stat_statements,vector" 1
 run_pitr_test
-verify_cluster keycloak-db keycloak-db-credentials keycloak "keycloak@keycloak"
 verify_cluster zitadel-db zitadel-db-credentials zitadel "zitadel@zitadel"
 run_latest_restore_test
 
-echo "[OK] smoke(postgres-app): postgres-app + keycloak-db + zitadel-db Ready, WAL archiving green, backups restored"
+echo "[OK] smoke(postgres-app): postgres-app + zitadel-db Ready, WAL archiving green, backups restored"

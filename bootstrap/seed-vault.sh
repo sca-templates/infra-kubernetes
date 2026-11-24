@@ -274,10 +274,7 @@ vault_exec write auth/kubernetes/role/vault-snapshot \
   ttl=1h >/dev/null
 
 echo "── Seeding local platform values (idempotent; SEED_ROTATE=1 to rotate)"
-kv_seed secret/keycloak/admin username=admin password="$(openssl rand -hex 24)"
-kv_seed "secret/keycloak/test-user/${ENV}" username=smoke password="$(openssl rand -hex 24)"
 kv_seed "secret/postgres-app/${ENV}" username=app password="$(openssl rand -hex 24)"
-kv_seed "secret/keycloak-db/${ENV}" username=keycloak password="$(openssl rand -hex 24)"
 # ADR-004 E1: Zitadel reads the DSN from the same path that seeds CNPG, so the
 # password must be generated once and reused verbatim. SEED_ROTATE=1 rotates
 # the masterkey and session secret too; do not use it on an initialized Zitadel.

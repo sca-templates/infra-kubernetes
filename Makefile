@@ -60,15 +60,13 @@ bootstrap: argocd-up ## Install ArgoCD and apply the Applications for ENV=$(ENV)
 	@[ -f "argocd/messaging-$(ENV).yaml" ] || { echo "argocd/messaging-$(ENV).yaml is missing"; exit 1; }
 	@[ -f "argocd/postgres-app-$(ENV).yaml" ] || { echo "argocd/postgres-app-$(ENV).yaml is missing"; exit 1; }
 	@[ -f "argocd/redis-$(ENV).yaml" ] || { echo "argocd/redis-$(ENV).yaml is missing"; exit 1; }
-	@[ -f "argocd/keycloak-$(ENV).yaml" ] || { echo "argocd/keycloak-$(ENV).yaml is missing"; exit 1; }
 	@[ -f "argocd/vault-backup-$(ENV).yaml" ] || { echo "argocd/vault-backup-$(ENV).yaml is missing"; exit 1; }
 	# The Makefile seeds the catalog wiring: argocd/apps-$(ENV).yaml (the platform
 	# ApplicationSet), argocd/messaging-$(ENV).yaml (the optional NATS/NACK
 	# ApplicationSet toggled by argocd/messaging/$(ENV)/*.yaml), and the dedicated
 	# Applications argocd/kong-$(ENV).yaml,
 	# argocd/postgres-app-$(ENV).yaml, argocd/redis-$(ENV).yaml,
-	# argocd/keycloak-$(ENV).yaml, argocd/zitadel-$(ENV).yaml and
-	# argocd/vault-backup-$(ENV).yaml are applied with
+	# argocd/zitadel-$(ENV).yaml and argocd/vault-backup-$(ENV).yaml are applied with
 	# {{GIT_REPO_URL}}/{{GIT_TARGET_BRANCH}} resolved here, so the generated
 	# children track the ref under test (the PR head in the CI smoke, main
 	# otherwise). The root Application owns only the services registry
@@ -81,7 +79,6 @@ bootstrap: argocd-up ## Install ArgoCD and apply the Applications for ENV=$(ENV)
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/kong-$(ENV).yaml" | kubectl apply -f -
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/postgres-app-$(ENV).yaml" | kubectl apply -f -
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/redis-$(ENV).yaml" | kubectl apply -f -
-	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/keycloak-$(ENV).yaml" | kubectl apply -f -
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/zitadel-$(ENV).yaml" | kubectl apply -f -
 	sed -e "s|{{GIT_REPO_URL}}|$(GIT_REPO_URL)|g" -e "s|{{GIT_TARGET_BRANCH}}|$(GIT_TARGET_BRANCH)|g" "argocd/vault-backup-$(ENV).yaml" | kubectl apply -f -
 	@if [ -f "argocd/root-app-$(ENV).yaml" ]; then \
@@ -169,7 +166,7 @@ cni-status: ## Report bootstrap-managed CNI DaemonSets, WireGuard config and nod
 
 .PHONY: smoke
 smoke: ## Smoke a deployed component: make smoke COMPONENT=cert-manager
-	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cni, cert-manager, vault, external-secrets, cloudnative-pg, redis-operator, kong, postgres-app, redis, nack, nats, keycloak, zitadel, velero, cloud, eks)'; exit 1; }
+	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cni, cert-manager, vault, external-secrets, cloudnative-pg, redis-operator, kong, postgres-app, redis, nack, nats, zitadel, velero, cloud, eks)'; exit 1; }
 	bootstrap/smoke-target.sh "$(COMPONENT)"
 
 ##@ Local Git serve
@@ -201,12 +198,11 @@ status: ## Cluster, ArgoCD apps and pod health overview
 	@kubectl get pods -A --no-headers | grep -vE 'Running|Completed' || echo 'all healthy'
 
 .PHONY: port-forward
-port-forward: ## Reach a platform UI/API locally: make port-forward APP=argocd|vault|keycloak|zitadel|grafana|prometheus|tempo|postgres|kong-admin
-	@[ -n "$(APP)" ] || { echo 'Usage: make port-forward APP=<name> (argocd, vault, keycloak, zitadel, grafana, prometheus, tempo, postgres, kong-admin)'; exit 1; }
+port-forward: ## Reach a platform UI/API locally: make port-forward APP=argocd|vault|zitadel|grafana|prometheus|tempo|postgres|kong-admin
+	@[ -n "$(APP)" ] || { echo 'Usage: make port-forward APP=<name> (argocd, vault, zitadel, grafana, prometheus, tempo, postgres, kong-admin)'; exit 1; }
 	@url=; case "$(APP)" in \
 		argocd)     ns=argocd;        svc=argocd-server;                   ports=8443:443; url=https://localhost:8443 ;; \
 		vault)      ns=vault;         svc=vault;                           ports=8200:8200 ;; \
-		keycloak)   ns=kong;          svc=kong-proxy;                      ports=8443:443; url=https://keycloak.local:8443 ;; \
 		zitadel)    ns=kong;          svc=kong-proxy;                      ports=18443:443; url=https://zitadel.local:18443 ;; \
 		grafana)    ns=observability; svc=kube-prometheus-stack-grafana;   ports=3000:80 ;; \
 		prometheus) ns=observability; svc=kube-prometheus-stack-prometheus; ports=9090:9090 ;; \
@@ -217,7 +213,6 @@ port-forward: ## Reach a platform UI/API locally: make port-forward APP=argocd|v
 	esac; \
 	url="$${url:-http://localhost:$${ports%%:*}}"; \
 	echo "Forwarding $$ns/$$svc → $$url"; \
-	[ "$(APP)" != keycloak ] || echo "Hint: add '127.0.0.1 keycloak.local' to /etc/hosts; the leaf is signed by the sca-ca ClusterIssuer"; \
 	[ "$(APP)" != zitadel ] || echo "Hint: add '127.0.0.1 zitadel.local' to /etc/hosts; the leaf is signed by the sca-ca ClusterIssuer"; \
 	kubectl -n "$$ns" port-forward "svc/$$svc" "$$ports"
 

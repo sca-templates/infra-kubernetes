@@ -150,9 +150,8 @@ and the deployed baseline is continuously monitored. See the
   reach `Synced` and the seed never runs (see the Velero + Floci S3 row in
   [architecture.md](architecture.md#deviations-log)). The backup smokes are
   part of the same gate: Velero creates a real `Backup`, deletes a scratch
-  namespace, restores it and verifies the marker; CNPG proves a PITR restore on
-  `postgres-app` and a latest-backup restore on `keycloak-db`, plus connectivity
-  on `zitadel-db`; Vault triggers
+   namespace, restores it and verifies the marker; CNPG proves a PITR restore on
+   `postgres-app` and a latest-backup restore on `zitadel-db`; Vault triggers
   its Raft snapshot CronJob and asserts the saved/inspected/uploaded markers.
   The `floci-buckets` Job creates `velero`, `cnpg-backups`, and
   `vault-snapshots` using Floci's fixed dummy credentials and therefore does
@@ -197,8 +196,8 @@ smoke instead of merging untested.
 Docker and load them into the EKS node (`bootstrap/preload-chart-images.sh`)
 before Helm runs — a **catalog-wide** preload (`--catalog <env>` resolves the
 images for every chart in the env's mandatory/optional ApplicationSets plus the
-dedicated apps, including the raw manifests of postgres-app and Redis,
-plus the Keycloak chart).
+   dedicated apps, including the raw manifests of postgres-app and Redis,
+   plus the Zitadel chart).
 A node-side pull on an ephemeral runner can stall behind registry throttling past
 a Deployment's `progressDeadlineSeconds`, surfacing as a flaky `argocd-up`
 failure that no Helm `--timeout` can fix; pre-pulling takes the registry off the
@@ -392,9 +391,9 @@ Floci's EKS backing, not ArgoCD-managed).
   app-of-apps wiring host-side (`make bootstrap ENV=local`, which resolves the
   ArgoCD manifests' `repoURL`/`targetRevision` to the PR head via the `sed` seam),
   after which ArgoCD reconciles the **real app-of-apps** (ApplicationSet
-  `platform-local` → the optional `messaging-local`, the dedicated `kong-local`,
-  `postgres-app-local`, `redis-local` and
-  `keycloak-local`), gates every platform Application (`<name>-local`, plus
+   `platform-local` → the optional `messaging-local`, the dedicated `kong-local`,
+   `postgres-app-local`, `redis-local` and
+   `zitadel-local`), gates every platform Application (`<name>-local`, plus
   NATS/NACK when their descriptors exist; Kong included), seeds Vault
   (it is born sealed, so
   it can only report `Healthy` once `seed-vault.sh` ran), then gates the whole
@@ -405,8 +404,8 @@ Floci's EKS backing, not ArgoCD-managed).
   substrate and installs the D3 CNI substrate, `make smoke COMPONENT=cni`
   verifies it before anything is rendered, `make bootstrap ENV=local` seeds the platform `ApplicationSet`, the
   optional `messaging-local` ApplicationSet and the dedicated
-  `kong-local`/`postgres-app-local`/
-  `redis-local`/`keycloak-local` apps from the PR head and applies the
+   `kong-local`/`postgres-app-local`/
+   `redis-local`/`zitadel-local` apps from the PR head and applies the
   catalog, the
   catalog is gated `Synced` → Vault seeded → `Synced/Healthy`, and the touched
   component smoke(s), the EKS check and the endpoint check run against it. The
@@ -428,26 +427,6 @@ Floci's EKS backing, not ArgoCD-managed).
 - **Pins** — Floci, the AWS CLI and the EKS/ECR coordinates (`FLOCI_EKS_*`,
   `FLOCI_AWS_*`) are pinned in `bootstrap/versions.sh`, covered by the pin guards
   ([security.md](security.md)), and overridable via `.env`.
-
-### Keycloak edge/OIDC smoke
-
-`make smoke COMPONENT=keycloak` (`bootstrap/smoke-keycloak.sh`) proves the
-identity plane, not just that the pod is up:
-
-- **Secrets** — all three ExternalSecrets (`keycloak-admin`,
-  `keycloak-db-credentials`, `keycloak-test-user`) reach `SecretSynced`; the DB
-  secret has type `kubernetes.io/basic-auth`.
-- **Rollout** — `StatefulSet/keycloak` is Ready; the realm ConfigMap and
-  admin/test secrets have their expected keys.
-- **Edge** — `Certificate/keycloak-tls` is Ready, `Ingress/keycloak` is served by
-  `ingressClassName: kong`, and the smoke port-forwards the Kong proxy on
-  `KEYCLOAK_SMOKE_PORT` (default `18443`) with the `sca-ca` chain.
-- **OIDC** — discovery `issuer` matches the StatefulSet's `KC_HOSTNAME`; a
-  PKCE S256 authorization request with `prompt=none` returns 302 with
-  `error=login_required`; the smoke user obtains a password-grant token and
-  `userinfo` accepts it. The smoke credential comes from
-  `secret/keycloak/test-user/<env>` (run `bootstrap/seed-vault.sh` once on an
-  older local cluster; it is idempotent).
 
 ### Zitadel smoke (E1/E2)
 

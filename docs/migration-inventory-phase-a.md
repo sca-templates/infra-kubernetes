@@ -1,20 +1,26 @@
 # Phase A Migration Inventory
 
-## 1. Keycloak References (403 total found)
+## 1. Keycloak References (historical E0 inventory, closed in E4)
 
-Keycloak components to remove and replace with Zitadel:
+> **Historical inventory (ADR-004 E0–E4).** The items below were the pre-migration
+> surfaces. E3 closed with no OIDC clients to cut over, and E4 removed every
+> runtime, secret, database and wiring surface. The list is kept as the migration
+> record; current state lives in [status.md](status.md).
 
-- **ArgoCD apps**: keycloak-*.yaml (4 envs)
-- **Infrastructure**: infrastructure/keycloak/
-- **Env configs**: envs/*/keycloak.yaml
-- **Database**: keycloak-db cluster in postgres-app (may be removable)
-- **Secrets**: secret/keycloak/*(admin, test-user), secret/keycloak-db/*
-- **Namespace**: keycloak
-- **Kong routes**: Routes to keycloak.local
-- **Service template**: May have OIDC integration
-- **Docs**: Extensive documentation to update
+Removed with E4:
 
-**Action**: Complete inventory of OIDC clients, must migrate to Zitadel or remove.
+- **ArgoCD apps**: `argocd/keycloak-*.yaml` (4 envs)
+- **Infrastructure**: `infrastructure/keycloak/`
+- **Env configs**: `envs/*/keycloak.yaml`
+- **Database**: `keycloak-db` CNPG clusters, credentials and backup schedules
+- **Secrets**: `secret/keycloak/*` (admin, test-user), `secret/keycloak-db/*`
+- **Namespace**: `keycloak`
+- **Kong routes**: routes to `keycloak.local`
+- **Smoke/CI**: `bootstrap/smoke-keycloak.sh`, smoke targets, Makefile and CI path filters
+- **Docs**: current-state catalog, status, architecture, roadmap and CI/CD rows
+
+**Action**: Closed in E4 — Zitadel is the sole identity plane; no service clients
+required migration.
 
 ## 2. Linkerd References (D0 static inventory, 2026-11-17)
 
@@ -80,8 +86,8 @@ Kafka/Strimzi; see [messaging.md](messaging.md) for the toggle procedure.
 
 ## 4. CNPG/Postgres References
 
-- postgres-app with app and keycloak-db clusters
-- Need to ensure backups/PITR for RDS replacement
+- postgres-app with app and zitadel-db clusters; keycloak-db was removed in E4
+- Backups/PITR are live-validated for RDS replacement (see [backups.md](backups.md))
 
 ## 5. Velero (done)
 
@@ -95,4 +101,4 @@ Kafka/Strimzi; see [messaging.md](messaging.md) for the toggle procedure.
 1. Keep statuses cross-linked from [status.md](status.md) and the global Work
    Log in [roadmap.md](roadmap.md); do not duplicate deployment state here
 2. D2 evidence is complete: the ADR-008 Cilium gate failed and the ADR-009 Calico gate passed; proceed with D3
-3. Inventory Keycloak/OIDC clients in E0 before any Zitadel cutover
+3. Keycloak/OIDC client inventory closed in E0; Zitadel retirement complete in E4

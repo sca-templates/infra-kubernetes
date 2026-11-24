@@ -1,14 +1,15 @@
 # Project: Implement postgres-app (CNPG)
 
-Area: Data · Wave 40 · Environments: local→dev→qa→prod (app DB + keycloak-db in all four)
+Area: Data · Wave 40 · Environments: local→dev→qa→prod (app DB + zitadel-db in all four)
 Depends on: cloudnative-pg (#10) — operator must be present.
-Project done when: `Cluster` `postgres-app` is `Ready` with its app schema;
-`keycloak-db` cluster `Ready` (consumed by Keycloak #18).
+Project done when: `Cluster` `postgres-app` is `Ready` with its app schema and
+`zitadel-db` is `Ready` (consumed by Zitadel, ADR-004). The former `keycloak-db`
+cluster was removed in E4 and is kept below only as milestone history.
 
 ## Milestone M1 — Application database cluster
 
 M1 done when: `Cluster postgres-app` `Ready` (1 replica local/dev, 3 qa/prod)
-and `keycloak-db` `Ready` in all four environments.
+and `zitadel-db` `Ready` in all four environments.
 
 - [x] Issue #15 · `Cluster` CRs `postgres-app` + `keycloak-db` (M1 issues #27 · #28)
   Depends on: cloudnative-pg (#10)

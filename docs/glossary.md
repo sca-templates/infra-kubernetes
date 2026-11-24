@@ -28,13 +28,13 @@ live in [architecture.md](architecture.md).
 | **cert-manager**              | Issues in-cluster TLS certificates (issuers, `Certificate` CR). Phase 1 (deployed) |
 | **Vault**                     | Secrets SSOT: KV-v2 + kubernetes auth; HA raft. Phase 2 (deployed) |
 | **External Secrets Operator** | Projects Vault KV → native `Secret`s. Phase 3 (deployed) |
-| **CloudNativePG (CNPG)**      | PostgreSQL operator (`Cluster` CR). Phase 5, `postgres-app`/`keycloak-db` Phase 10         |
+| **CloudNativePG (CNPG)**      | PostgreSQL operator (`Cluster` CR). Phase 5, `postgres-app`/`zitadel-db` Phase 10          |
 | **NATS JetStream**            | Event backbone (ADR-005); idle tier (no `Stream`/`Consumer` CRs), optional per env. NATS migration C1–C4; see [messaging.md](messaging.md) |
 | **NACK**                      | NATS Controller for Kubernetes: installs the `Stream`/`Consumer` CRDs and reconciles them. NATS migration C1–C4; see [messaging.md](messaging.md) |
 | **redis-operator**            | Redis operator (`Redis` CR). Phases 7/12                                                   |
 | **Kong**                      | API gateway (DB-less, dedicated `Application`, no SSA). Phase 8                            |
-| **Keycloak**                  | OIDC IdP (realm `sca`). Phase 13; being replaced per [ADR-004](adr/adr-004-keycloak-to-zitadel.md) |
-| **Zitadel**                   | OIDC IdP replacing Keycloak; internal h2c with `zitadel-db` and a Kong/TLS edge, service cutover tracked in E3 |
+| **Keycloak**                  | Former OIDC IdP (realm `sca`). Phase 13; retired in ADR-004 E4 and replaced by Zitadel |
+| **Zitadel**                   | Sole OIDC IdP; internal h2c with `zitadel-db` and a validated Kong/TLS edge (ADR-004 E1/E2) |
 | **kube-prometheus-stack**     | Prometheus + Grafana + Alertmanager + the `ServiceMonitor`/`PrometheusRule` CRDs. Phase 14 |
 | **Loki / Alloy / Tempo**      | Log aggregation / pod-log shipping / distributed tracing (OTLP). Phases 15/16              |
 | **Floci S3**                  | Local S3 emulator in the cloud/EKS tooling; Velero's local backup backend                   |

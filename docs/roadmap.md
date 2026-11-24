@@ -23,7 +23,7 @@ worked in parallel.
 [11b nats] ───────────▶ [06b nack]   (NATS migration, #105)
 [07 redis-operator] ──▶ [12 redis]
 [08 kong]
-[13 keycloak]
+[13 keycloak] ─╳ retired (ADR-004 E4; Zitadel is the sole IdP)
 [14 kube-prometheus-stack] ──┬─▶ [15 loki/alloy]
                              └─▶ [16 tempo]
 [18 velero]
@@ -34,9 +34,9 @@ worked in parallel.
 - **Wave 0/20**: `02` Vault, `08` Kong — sequential behind their dependencies.
 - **Wave 40**: datastores `10`, `11b` and `12` (clusters/CRs) behind their
   operators; `11b` NATS JetStream is the ADR-005 event backbone, deployed idle.
-- **Wave 50**: `13` Keycloak and the ADR-004 E1 Zitadel deployment behind their
-  DBs (`10`); `06b` NACK after the NATS
-  server it connects to (`11b`).
+- **Wave 50**: the ADR-004 E1 Zitadel deployment behind its DB (`10`); `06b` NACK
+  after the NATS server it connects to (`11b`). Phase `13` Keycloak was retired in
+  E4 and is kept only as timeline history.
 - **Wave 60**: observability `14`–`16` (parallel after data keys).
 - **Wave 80**: `18` Velero (local backend: Floci S3). Phase 17 (MinIO) is
   retired.
@@ -87,8 +87,8 @@ worked in parallel.
 | [nats](roadmap/nats.md) | Data | 40 | C1 idle tier · C2 toggle · C3 cutover · C4 docs | [#105](https://github.com/sca-templates/infra-kubernetes/issues/105) | deployed (NATS migration C1–C4, idle; optional per env) |
 | [nack](roadmap/nack.md) | Data | 50 | C1 controller · C2 toggle · C3 cutover · C4 docs | [#105](https://github.com/sca-templates/infra-kubernetes/issues/105) | deployed (NATS migration C1–C4; optional per env) |
 | [redis](roadmap/redis.md) | Data | 40 | — | [#17](https://github.com/sca-templates/infra-kubernetes/issues/17) | deployed (Phase 12) |
-| [keycloak](roadmap/keycloak.md) | Security & Identity | 50 | M1 deploy | [#18](https://github.com/sca-templates/infra-kubernetes/issues/18) | deployed (Phase 13) |
-| zitadel | Security & Identity | 50 | E1 internal · E2 edge · E3 no clients yet | — | deployed (E1/E2 validated) |
+| [keycloak](roadmap/keycloak.md) | Security & Identity | 50 | M1 deploy · E4 retirement | [#18](https://github.com/sca-templates/infra-kubernetes/issues/18) | removed (ADR-004 E4; replaced by Zitadel) |
+| zitadel | Security & Identity | 50 | E1 internal · E2 edge · E3 no clients · E4 sole IdP | — | deployed (E1/E2 validated) |
 | [kube-prometheus-stack](roadmap/kube-prometheus-stack.md) | Observability | 60 | M1 stack · M2 radar | [#19](https://github.com/sca-templates/infra-kubernetes/issues/19) · [#29](https://github.com/sca-templates/infra-kubernetes/issues/29) | pending |
 | [loki](roadmap/loki.md) | Observability | 60 | M1 loki · M2 alloy | [#20](https://github.com/sca-templates/infra-kubernetes/issues/20) | pending |
 | [tempo](roadmap/tempo.md) | Observability | 60 | — | [#21](https://github.com/sca-templates/infra-kubernetes/issues/21) | pending |
@@ -104,6 +104,7 @@ lands (see the Work Log below).
 
 | Date | Project | Gate | Commit | Issue |
 | --- | --- | --- | --- | --- |
+| 2026-11-24 | keycloak → zitadel | E4 retired Keycloak from the platform — removed the `keycloak-<env>` Applications, per-env overlays, chart/realm/TLS manifests, smoke, Vault seeds/paths, `keycloak-db` clusters/credentials/backups and the Makefile/CI/Velero wiring; the External Secrets smoke now projects `secret/postgres-app/<env>` and the CNPG latest-backup restore smoke uses `zitadel-db`. Catalog/status docs now record Zitadel as the sole IdP and CNPG with `postgres-app` + `zitadel-db` | branch (PR) | [#18](https://github.com/sca-templates/infra-kubernetes/issues/18) |
 | 2026-11-24 | keycloak → zitadel | E2 edge landed and E3 closed for the current platform — `Certificate/zitadel-tls` from `sca-ca`, `Ingress/zitadel-api` with route protocols `https,grpcs` and `konghq.com/protocol: grpc` on the h2c Service, plus `Ingress/zitadel-login` for `/ui/v2/login`; `bootstrap/smoke-zitadel.sh` now verifies TLS, discovery and the login UI through `kong-proxy`. The `Application` descriptor was reapplied with `GIT_TARGET_BRANCH=feature/decisions ENV=local make bootstrap` because ArgoCD `Application` resources are seeded by bootstrap, not self-managed. Live gate: 14/14 local Applications `Synced`/`Healthy` and `make smoke COMPONENT=zitadel` green with `discovery=https://zitadel.local`. E3 needs no action because there are no OIDC clients or service deployments; the cutover runbook is ready for the first service | `0ceeb7d` (PR) | — |
 | 2026-11-24 | keycloak → zitadel | E0 inventory closed and E1 internal deployment landed and live-validated — chart `zitadel/zitadel` 10.5.0 (`v4.19.2` API/Login) as a dedicated multi-source Application per env at wave 50 with no Ingress; new CNPG `zitadel-db` cluster, three Vault/ESO projections (`zitadel-masterkey`, `zitadel-db-credentials`, `zitadel-login-session`), internal h2c discovery smoke, Vault/CI/preload/Makefile/Velero wiring and current-state docs; live gate: 14/14 local Applications `Synced`/`Healthy`, `make smoke COMPONENT=postgres-app` green after scoping restore checks to their own cluster credentials, and `make smoke COMPONENT=zitadel` green with canonical issuer `https://zitadel.local` after de-hooking the runtime ConfigMap at wave `-6` and ordering ESO before init/setup; edge and service cutover deferred to E2/E3 | `44982e1`, `360ba3f`, `978907c`, `d149c76` (PR) | — |
 | 2026-11-20 | linkerd → CNI-native mTLS | D5 documentation closeout — ADR-008/ADR-009 marked implemented, ADR-001/ADR-002 reframed as history, `observability-radar.md` scoped to native targets, status/architecture/roadmap/inventory aligned with the D4 removal, and the 13/11-Application branch/main distinction recorded; no runtime change | branch (PR) | [#14](https://github.com/sca-templates/infra-kubernetes/issues/14) |
@@ -206,7 +207,7 @@ The following epics are planned for cost optimization:
 
 | Epic | Area | Priority | Status | Notes |
 | --- | --- | --- | --- | --- |
-| Replace Keycloak with Zitadel | Security & Identity | High | Done for the current platform (E1/E2 validated; E3 no clients yet) | E0 inventoried dependencies; E1 deployed Zitadel internally with its own CNPG database and E2 validated the Kong/TLS edge. There are no OIDC clients or service deployments, so E3 has no cutover to perform; the runbook is ready for the first service. See [ADR-004](adr/adr-004-keycloak-to-zitadel.md). |
+| Replace Keycloak with Zitadel | Security & Identity | High | Done (E1–E4) | E0 inventoried dependencies; E1 deployed Zitadel with its own CNPG database and E2 validated the Kong/TLS edge. E3 had no OIDC clients or service deployments to cut over; E4 removed Keycloak, `keycloak-db` and all platform wiring. Zitadel is the sole IdP; the [runbook](zitadel-cutover.md) remains as the historical per-client procedure. See [ADR-004](adr/adr-004-keycloak-to-zitadel.md). |
 | Replace Kafka/Strimzi with NATS JetStream | Data | Medium | Done (C1–C4) | NATS + NACK deployed idle behind the optional `messaging-<env>` ApplicationSet; remove the descriptors for SNS/SQS mode, contract in `secret/messaging/<env>`. Kafka/Strimzi removed in C3; the C4 runbook in [messaging.md](messaging.md) covers the toggle and service-owned topology. No consumers currently. |
 | Replace Linkerd with CNI-native mTLS | Edge & Mesh | High | Done (D0–D5) | [ADR-009](adr/adr-009-calico-wireguard-fallback.md) selected the [Calico PoC harness](../poc/calico-wireguard/README.md) after the Cilium gate failed; D3 landed the bootstrap-managed substrate, not a catalog Application; D4 removed Linkerd and D5 closed the docs with the loss of L7 features accepted. |
 | Prioritize Velero + Backups (CNPG + Vault) | Delivery & Resilience | **Critical** | Done | Live restore validation passed on 2026-11-14; see [backups.md](backups.md#validation-status). |

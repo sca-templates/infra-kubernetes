@@ -1,6 +1,6 @@
-# postgres-app-local — application + Keycloak databases, DEDICATED Application.
+# postgres-app-local — application + Zitadel databases, DEDICATED Application.
 #
-# `postgres-app` and `keycloak-db` are raw CloudNativePG `Cluster` CRs, so they
+# `postgres-app` and `zitadel-db` are raw CloudNativePG `Cluster` CRs, so they
 # cannot go through the platform ApplicationSet (which renders Helm charts).
 # They ship in every environment through this per-env Application, at wave 40:
 # after CloudNativePG (-10) and after the Vault/ESO chain that projects the

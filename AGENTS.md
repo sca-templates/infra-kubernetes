@@ -53,7 +53,7 @@ and qa ([docs/workflow.md](docs/workflow.md#services-app-repo-as-source)).
 
 ## 3. Component catalog
 
-**17 components + ArgoCD.** Status column is the source of truth
+**16 components + ArgoCD.** Status column is the source of truth
 (`planned (Phase N)` until the phase lands;
 `deployed` from then on). Chart and image pins are set inside each phase and
 live under `infrastructure/<component>/` + `envs/<env>/`.
@@ -66,12 +66,11 @@ live under `infrastructure/<component>/` + `envs/<env>/`.
 | CloudNativePG | `cloudnative-pg` | cloudnative-pg/cloudnative-pg | PostgreSQL operator | — | **deployed** (Phase 5) |
 | redis-operator | `data` | ot-container-kit/redis-operator | Redis operator | [infra-redis](https://github.com/sca-templates/infra-redis) | **deployed** (Phase 7) |
 | Kong | `kong` | kong/kong (DB-less) | Edge gateway, dedicated Application, no SSA | [infra-kong](https://github.com/sca-templates/infra-kong) | **deployed** (Phase 8) |
-| postgres-app (+ keycloak-db, zitadel-db) | `data` | CNPG `Cluster` CRs (raw) | App + Keycloak + Zitadel databases; all 4 envs | [infra-postgres](https://github.com/sca-templates/infra-postgres) | **deployed** (Phase 10 + ADR-004 E1) |
+| postgres-app (+ zitadel-db) | `data` | CNPG `Cluster` CRs (raw) | App + Zitadel databases; all 4 envs | [infra-postgres](https://github.com/sca-templates/infra-postgres) | **deployed** (Phase 10 + ADR-004 E1/E4) |
 | NATS JetStream | `data` | nats/nats (JetStream) | Event backbone (idle; no Stream/Consumer CRs); optional per env | — | **deployed** (NATS migration C1–C4) |
 | NACK | `nats` | nats/nack | JetStream controller (Stream/Consumer CRDs); optional per env | — | **deployed** (NATS migration C1–C4) |
 | Redis | `data` | `RedisReplication` CR | Cache | [infra-redis](https://github.com/sca-templates/infra-redis) | **deployed** (Phase 12) |
-| Keycloak | `keycloak` | codecentric/keycloakx | OIDC IdP, realm `sca` | [infra-keycloak](https://github.com/sca-templates/infra-keycloak) | **deployed** (Phase 13) |
-| Zitadel | `zitadel` | zitadel/zitadel (h2c behind Kong TLS) | OIDC IdP replacing Keycloak (ADR-004 E1/E2); edge validated | — | **deployed** (E1/E2 validated) |
+| Zitadel | `zitadel` | zitadel/zitadel (h2c behind Kong TLS) | OIDC IdP (ADR-004 E1/E2); edge validated | — | **deployed** (E1/E2 validated) |
 | kube-prometheus-stack | `observability` | prometheus-community/kube-prometheus-stack | Metrics + Grafana + Alertmanager | [infra-prometheus](https://github.com/sca-templates/infra-prometheus) | planned (Phase 14) |
 | Loki | `loki` | grafana/loki | Log aggregation | [infra-loki](https://github.com/sca-templates/infra-loki) | planned (Phase 15) |
 | Alloy | `observability` | grafana/alloy | Ships pod logs to Loki | — | planned (Phase 15) |
@@ -103,8 +102,8 @@ before CRs; Vault before ESO syncs; datastores before consumers.
 | 0 | Vault |
 | 10 | Vault seeded by `bootstrap/seed-vault.sh` after pod `Running` (CI/manual, not an ArgoCD hook) |
 | 20 | Kong |
-| 40 | Datastores: postgres-app, keycloak-db, zitadel-db (CNPG), nats (JetStream), redis CRs |
-| 50 | Consumers: keycloak, zitadel (after `zitadel-db` at 40); nack (JetStream controller, after `nats` at 40) |
+| 40 | Datastores: postgres-app, zitadel-db (CNPG), nats (JetStream), redis CRs |
+| 50 | Consumers: zitadel (after `zitadel-db` at 40); nack (JetStream controller, after `nats` at 40) |
 | 60 | Observability: kube-prometheus-stack, loki, alloy, tempo |
 | 60 | Service apps (registry `services-<env>.yaml`) — consumers of the catalog, wave set per service |
 | 80 | Velero (local: Floci S3) |
@@ -141,7 +140,7 @@ guards ([docs/security.md](docs/security.md)).
 | `make cni-up` | Install the bootstrap-managed Calico + WireGuard + kube-proxy substrate in the emulated EKS cluster (dev/CI tooling, not a component) |
 | `make cni-down` | Remove the bootstrap-managed CNI resources from the emulated EKS cluster |
 | `make cni-status` | Report bootstrap-managed CNI DaemonSets, WireGuard config and node keys |
-| `make port-forward APP=<name>` | Reach a platform UI/API locally (argocd, vault, keycloak, grafana, prometheus, …) |
+| `make port-forward APP=<name>` | Reach a platform UI/API locally (argocd, vault, zitadel, grafana, prometheus, …) |
 | `make clean` | Remove local state (`.env`, `.secrets/`, generated artifacts) |
 
 The Makefile is a **thin wrapper**: after bootstrap, deployments happen

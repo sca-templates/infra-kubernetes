@@ -157,14 +157,11 @@ jobs:
               'argocd/messaging/**/*.yaml',
               'argocd/kong-*.yaml',
               'argocd/redis-*.yaml',
-              'argocd/keycloak-*.yaml',
               'argocd/zitadel-*.yaml',
               'argocd/postgres-app-*.yaml',
               'envs/local/*.yaml',
               'infrastructure/*/values-base.yaml',
               'infrastructure/redis/manifests/*.yaml',
-              'infrastructure/keycloak/manifests/*.yaml',
-              'infrastructure/keycloak/shared/*.yaml',
               'infrastructure/zitadel/manifests/*.yaml',
               'infrastructure/postgres-app/manifests/*.yaml',
               'bootstrap/preload-chart-images.sh'
@@ -221,8 +218,8 @@ jobs:
 
           # 3. dedicated Applications argocd/<c>-<env>.yaml → <c> when the
           #    component owns an infrastructure/<c>/ directory. This runs before
-          #    the generic `argocd/` framework catch-all below, so a keycloak
-          #    Application change smokes keycloak in addition to the default.
+          #    the generic `argocd/` framework catch-all below, so a Zitadel
+          #    Application change smokes zitadel in addition to the default.
           while IFS= read -r f; do
             [ -n "$f" ] || continue
             c="$(printf '%s' "$f" | sed -E 's#^argocd/##; s#\.ya?ml$##; s#-(local|dev|qa|prod)$##')"

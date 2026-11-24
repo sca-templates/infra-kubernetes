@@ -6,7 +6,7 @@ Proposed
 
 ## Context
 
-Using managed RDS has ongoing costs. CloudNativePG is already deployed for postgres-app and keycloak-db. With proper backups and HA, it can replace RDS.
+Using managed RDS has ongoing costs. CloudNativePG is already deployed for `postgres-app` and `zitadel-db` (the former `keycloak-db` was removed in ADR-004 E4). With proper backups and HA, it can replace RDS.
 
 ## Decision
 
