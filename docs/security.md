@@ -231,7 +231,7 @@ the entries are gone rather than re-justified.
 
 ## PostgreSQL break-glass access
 
-The planned break-glass `Role` in `data` grants only `get,list` on `pods` and `create` on `pods/exec`, with `resourceNames` limited to `postgres-app-1` / `zitadel-db-1` in `local`/`dev` and `-1`/`-2`/`-3` in `qa`/`prod`; its `RoleBinding` will map `BREAKGLASS_SSO_GROUP` once that input is provided, at wave 0 with SSA merge and no `secrets` rule in any binding. The `db-access=true` label belongs to client namespaces and is unrelated to this RBAC: it only opens the CNPG `NetworkPolicy` on port 5432.
+The break-glass `Role` in `data` is declared in `breakglass-rbac-<env>.yaml`: it grants only `get` on `pods` and `create` on `pods/exec`, with `resourceNames` limited to `postgres-app-1` / `zitadel-db-1` in `local`/`dev` and `-1`/`-2`/`-3` in `qa`/`prod`, at wave 0 with SSA merge and no `secrets` rule in any binding. Its `RoleBinding` maps the conventional group `sca-db-breakglass` until the real SSO group is known, so no external identity is granted by default; replace that subject before enabling break-glass in `dev`/`qa`/`prod`. The `db-access=true` label belongs to client namespaces and is unrelated to this RBAC: it only opens the CNPG `NetworkPolicy` on port 5432.
 
 - Request break-glass access with a ticket naming the cluster, the pod and the reason; a second person approves before the session starts and the approval is recorded in the ticket.
 - Use `kubectl -n data exec -it <pod> -- psql ...` for the shortest window that completes the task, capture the session output, and hand back access when it ends.
@@ -239,7 +239,14 @@ The planned break-glass `Role` in `data` grants only `get,list` on `pods` and `c
 
 Second-person approval is a human procedure, not something RBAC can enforce: the Role narrows which pods an SSO group member can exec into, but it cannot require a different human to approve the request.
 
-Static audit of the repository manifests found no `Role` or `RoleBinding` granting `pods/exec` or `secrets` in `data`; the only `ClusterRoleBinding` in git is the CNI kube-proxy one, and chart-generated cluster RBAC (Vault, ESO and the operators) is provisioned outside this repository. The live audit (`kubectl get rolebindings,clusterrolebindings -A -o yaml`) and its conclusion must be attached to the PR before merge in `dev`/`qa`, so this section records the result rather than assuming it. If you are `cluster-admin`, namespace RBAC does not constrain you at all: the break-glass Role limits scoped operators, not administrators, and that is declared here instead of simulated.
+Static audit of the repository manifests found no `Role` or `RoleBinding` granting `pods/exec` or `secrets` in `data`; the only `ClusterRoleBinding` in git is the CNI kube-proxy one, and chart-generated cluster RBAC (Vault, ESO and the operators) is provisioned outside this repository. The live audit on the local emulated EKS cluster (`kubectl get rolebindings,clusterrolebindings -A -o wide`, 2026-11-25) found only the CNPG service-account bindings in `data` and no human group with `pods/exec` or `secrets`; `cluster-admin` is bound to `system:masters` and the Velero server holds a chart-generated `cluster-admin` binding, so namespace RBAC cannot constrain either. If you are `cluster-admin`, namespace RBAC does not constrain you at all: the break-glass Role limits scoped operators, not administrators, and that is declared here instead of simulated. The new binding must be audited again after merge in `dev`/`qa`.
+
+### CNPG NetworkPolicy test matrix
+
+- Use the pinned `ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie` image already present on the node as the netshoot-equivalent client: `kubectl run netshoot-pg -n <namespace> --image=ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie --restart=Never --command -- sleep 3600`.
+- From an unlabelled namespace, `psql` to `postgres-app-rw.data.svc.cluster.local:5432` must time out; from a namespace labelled `db-access=true`, the same connection with `sslmode=verify-full` must succeed.
+- From `data`, the pooler selectors must allow `5432` to both clusters; from `cloudnative-pg` port `8000` and from `observability` port `9187` must answer, while other ports are dropped.
+- Egress from CNPG pods must allow DNS, `443` to the API/S3 endpoint, peer `5432`, and nothing else; re-run `make smoke COMPONENT=postgres-app`, `make smoke COMPONENT=redis` and `make smoke COMPONENT=nats` after applying the policies.
 
 ## Baseline re-evaluation (Phase 18)
 
