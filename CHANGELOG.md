@@ -1,5 +1,16 @@
 # Changelog
 
+## [5.0.0](https://github.com/sca-templates/infra-kubernetes/compare/v4.0.0...v5.0.0) (2026-11-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* **data:** PostgreSQL access now requires db-access=true on the client namespace Closes #119, #120
+
+### Features
+
+* **data:** harden postgres-app and zitadel-db baseline ([#127](https://github.com/sca-templates/infra-kubernetes/issues/127)) ([120a671](https://github.com/sca-templates/infra-kubernetes/commit/120a67192c8bfffc96450b8509a2895669c2c8a5))
+
 ## [4.0.0](https://github.com/sca-templates/infra-kubernetes/compare/v3.3.1...v4.0.0) (2026-11-25)
 
 
