@@ -309,6 +309,14 @@ if ! make smoke COMPONENT=cni; then
   exit 1
 fi
 
+if [ "${CLOUD_ON}" = "1" ]; then
+  echo "── preflight cloud integration: make smoke COMPONENT=cloud"
+  if ! make smoke COMPONENT=cloud; then
+    diagnose
+    exit 1
+  fi
+fi
+
 # Wait for an Application to become Synced (any health). Health is deliberately
 # NOT a gate here: stateful components (e.g. Vault) are born sealed/uninitialized
 # and only become Healthy *after* their own smoke seeds them (smoke-vault.sh →

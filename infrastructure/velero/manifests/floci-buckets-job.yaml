@@ -24,7 +24,8 @@ metadata:
     ignore-check.kube-linter.io/unset-cpu-requirements: "bootstrap must schedule when the local node request budget is full"
     ignore-check.kube-linter.io/unset-memory-requirements: "bootstrap must schedule when the local node request budget is full"
 spec:
-  backoffLimit: 3
+  backoffLimit: 0
+  activeDeadlineSeconds: 300
   ttlSecondsAfterFinished: 600
   template:
     metadata:
@@ -80,7 +81,7 @@ spec:
               cpu: 0
               memory: 0
             limits:
-              cpu: 200m
+              cpu: "1"
               memory: 128Mi
           volumeMounts:
             - name: tmp
@@ -110,12 +111,14 @@ spec:
                 fi
               fi
               attempt=1
-              while [ "$attempt" -le 30 ]; do
-                if timeout 5 aws --endpoint-url "${AWS_ENDPOINT_URL}" s3api list-buckets >/dev/null 2>&1; then
+              last_error=""
+              while [ "$attempt" -le 10 ]; do
+                if last_error="$(timeout 20 aws --endpoint-url "${AWS_ENDPOINT_URL}" s3api list-buckets 2>&1)"; then
                   break
                 fi
-                if [ "$attempt" -eq 30 ]; then
+                if [ "$attempt" -eq 10 ]; then
                   echo "FAIL: Floci S3 endpoint ${AWS_ENDPOINT_URL} did not become ready" >&2
+                  printf '%s\n' "$last_error" >&2
                   exit 1
                 fi
                 attempt=$((attempt + 1))

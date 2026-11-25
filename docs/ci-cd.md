@@ -155,10 +155,12 @@ and the deployed baseline is continuously monitored. See the
   its Raft snapshot CronJob and asserts the saved/inspected/uploaded markers.
   The `floci-buckets` Job creates `velero`, `cnpg-backups`, and
   `vault-snapshots` using Floci's fixed dummy credentials and therefore does
-  not add a Vault dependency to the sync. `smoke-vault.sh` waits for that Job
-  before triggering the Raft snapshot, so the upload cannot race bucket
-  creation. The schedules, retention and restore runbooks live in
-  [backups.md](backups.md).
+  not add a Vault dependency to the sync. The Job runs with a 1 CPU limit and a
+  bounded retry loop that keeps the AWS CLI error, so a slow runner cannot
+  silently skip local bucket creation; when the local endpoint exists but never
+  answers it fails closed. `smoke-vault.sh` waits for that Job before triggering
+  the Raft snapshot, so the upload cannot race bucket creation. The schedules,
+  retention and restore runbooks live in [backups.md](backups.md).
 - **`workflow_dispatch`** (manual) — one-off smoke of a component/ref
   (`component` + `ref` inputs, defaults `cert-manager`/`main`) for testing
   without opening a PR. Nothing else triggers the workflow; there is no
@@ -291,7 +293,9 @@ rendered by ArgoCD — it exists only for the duration of a smoke run.
   runs the emulator as a **Docker container on the runner/host**, attaches it to
   the EKS substrate's own Docker network, and publishes it into the
   cluster through a **selector-less `Service` + `EndpointSlice`** in the `cloud`
-  namespace. In-cluster pods therefore reach it at the stable DNS name
+  namespace. The lifecycle waits for a real S3 `list-buckets` call before it
+  returns, so a published TCP port alone cannot pass as a ready endpoint.
+  In-cluster pods therefore reach it at the stable DNS name
   `http://floci.cloud.svc.cluster.local:4566` (host edge on `127.0.0.1:4566`).
 - **The check** — `bootstrap/smoke-cloud.sh` dispatches by provider to
   `bootstrap/smoke-cloud-<provider>.sh` (`aws` today). The `aws` check throws a
@@ -300,9 +304,10 @@ rendered by ArgoCD — it exists only for the duration of a smoke run.
   No IAM, no per-component configuration — just an endpoint plus the same dummy
   credentials. Driven by `make smoke COMPONENT=cloud` (or
   `workflow_dispatch` with `component=cloud`).
-- **Wiring** — `smoke-ci.sh` runs `make cloud-up` right after the cluster boots
-  and `make smoke COMPONENT=cloud` right after the component smoke, on **every**
-  smoke run (on by default). `--no-cloud` / `SMOKE_CLOUD=0` opts out. `cloud` is
+- **Wiring** — `make eks-up` starts and publishes the emulator right after the
+  cluster boots; `smoke-ci.sh` runs a cloud preflight before `make bootstrap` and
+  the full cloud smoke after the component smokes, on **every** smoke run (on by
+  default). `--no-cloud` / `SMOKE_CLOUD=0` opts out. `cloud` is
   a smoke target, not an ArgoCD Application: a `cloud` entry in the component
   list skips `smoke-app`/wait (it has nothing to converge) and only runs the
   cloud check. A PR that touches the cloud
