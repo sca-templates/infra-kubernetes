@@ -1,5 +1,16 @@
 # Changelog
 
+## [4.0.0](https://github.com/sca-templates/infra-kubernetes/compare/v3.3.1...v4.0.0) (2026-11-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* **platform:** Kafka and Strimzi are removed; NATS/NACK are the sole event backbone.
+
+### Features
+
+* **platform:** complete architecture decisions ([#116](https://github.com/sca-templates/infra-kubernetes/issues/116)) ([a97274f](https://github.com/sca-templates/infra-kubernetes/commit/a97274f701fc049d5d04a735122af2de126a33e3))
+
 ## [3.3.1](https://github.com/sca-templates/infra-kubernetes/compare/v3.3.0...v3.3.1) (2026-11-14)
 
 
