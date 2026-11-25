@@ -246,7 +246,7 @@ Static audit of the repository manifests found no `Role` or `RoleBinding` granti
 - Use the pinned `ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie` image already present on the node as the netshoot-equivalent client: `kubectl run netshoot-pg -n <namespace> --image=ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie --restart=Never --command -- sleep 3600`.
 - From an unlabelled namespace, `psql` to `postgres-app-rw.data.svc.cluster.local:5432` must time out; from a namespace labelled `db-access=true`, the same connection with `sslmode=verify-full` must succeed.
 - From `data`, the pooler selectors must allow `5432` to both clusters; from `cloudnative-pg` port `8000` and from `observability` port `9187` must answer, while other ports are dropped.
-- Egress from CNPG pods must allow DNS, `443` to the API/S3 endpoint, peer `5432`, and nothing else; re-run `make smoke COMPONENT=postgres-app`, `make smoke COMPONENT=redis` and `make smoke COMPONENT=nats` after applying the policies.
+- Egress from CNPG pods must allow DNS, `443` to the API/S3 endpoint, peer `5432`, and nothing else; `local` also allows `172.16.0.0/12:6443` because Calico enforces egress after kube-proxy DNAT to the k3s API endpoint, while `dev`/`qa`/`prod` keep the API on `443`; re-run `make smoke COMPONENT=postgres-app`, `make smoke COMPONENT=redis` and `make smoke COMPONENT=nats` after applying the policies.
 
 ## Baseline re-evaluation (Phase 18)
 
