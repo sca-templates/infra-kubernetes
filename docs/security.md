@@ -229,6 +229,18 @@ the entries are gone rather than re-justified.
 - **Sign-offs**: prod sync is manual with a human go/no-go in the deploy
   window; nothing is deployed by hand after bootstrap.
 
+## PostgreSQL break-glass access
+
+The planned break-glass `Role` in `data` grants only `get,list` on `pods` and `create` on `pods/exec`, with `resourceNames` limited to `postgres-app-1` / `zitadel-db-1` in `local`/`dev` and `-1`/`-2`/`-3` in `qa`/`prod`; its `RoleBinding` will map `BREAKGLASS_SSO_GROUP` once that input is provided, at wave 0 with SSA merge and no `secrets` rule in any binding. The `db-access=true` label belongs to client namespaces and is unrelated to this RBAC: it only opens the CNPG `NetworkPolicy` on port 5432.
+
+- Request break-glass access with a ticket naming the cluster, the pod and the reason; a second person approves before the session starts and the approval is recorded in the ticket.
+- Use `kubectl -n data exec -it <pod> -- psql ...` for the shortest window that completes the task, capture the session output, and hand back access when it ends.
+- Rotate any credential exposed during the session through Vault, the secrets SSOT; never write a token or dump into git or `.secrets/`.
+
+Second-person approval is a human procedure, not something RBAC can enforce: the Role narrows which pods an SSO group member can exec into, but it cannot require a different human to approve the request.
+
+Static audit of the repository manifests found no `Role` or `RoleBinding` granting `pods/exec` or `secrets` in `data`; the only `ClusterRoleBinding` in git is the CNI kube-proxy one, and chart-generated cluster RBAC (Vault, ESO and the operators) is provisioned outside this repository. The live audit (`kubectl get rolebindings,clusterrolebindings -A -o yaml`) and its conclusion must be attached to the PR before merge in `dev`/`qa`, so this section records the result rather than assuming it. If you are `cluster-admin`, namespace RBAC does not constrain you at all: the break-glass Role limits scoped operators, not administrators, and that is declared here instead of simulated.
+
 ## Baseline re-evaluation (Phase 18)
 
 The checkov baseline (`.github/checkov-baseline.json`) gates new findings from

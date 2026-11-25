@@ -287,6 +287,18 @@ create_restore_cluster() {
     echo "FAIL: could not read storage/image from Cluster ${source}" >&2
     exit 1
   }
+  scheduling_yaml=""
+  if [ "$(kubectl -n "$NAMESPACE" get cluster "$source" -o jsonpath='{.spec.podTemplate.spec.nodeSelector.workload}' 2>/dev/null)" = "database" ]; then
+    scheduling_yaml="  podTemplate:
+    spec:
+      nodeSelector:
+        workload: database
+      tolerations:
+        - key: workload
+          operator: Equal
+          value: database
+          effect: NoSchedule"
+  fi
   if [ -n "$target_time" ]; then
     target_yaml="      recoveryTarget:
         targetTime: \"${target_time}\""
@@ -314,6 +326,7 @@ spec:
       memory: 1Gi
   affinity:
     enablePodAntiAffinity: false
+${scheduling_yaml}
   bootstrap:
     recovery:
       backup:

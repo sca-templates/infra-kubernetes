@@ -7,6 +7,7 @@ metadata:
   name: postgres-app
   namespace: data
   annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
     # After the ExternalSecret (wave 0) that creates the bootstrap credentials.
     argocd.argoproj.io/sync-wave: "10"
 spec:
@@ -67,6 +68,25 @@ spec:
       archive_timeout: "60s"
   storage:
     size: 1Gi
+  podTemplate:
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+        - name: instance-manager
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
   resources:
     requests:
       cpu: 100m
