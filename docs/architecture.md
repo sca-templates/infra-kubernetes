@@ -91,12 +91,12 @@ both. This repository builds no images.
 
 ## Component catalog
 
-The catalog has **16 components** plus ArgoCD. Each row shows its intended
+The catalog has **17 components** plus ArgoCD. Each row shows its intended
 namespace, upstream chart, ArgoCD sync-wave and roadmap phase. Chart and image
 pins are set per component when that phase lands (values live under
 `infrastructure/<component>/` and `envs/<env>/` from Phase 1 on); in the table
 ArgoCD, cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3),
-cloudnative-pg (Phase 5), redis-operator (Phase 7),
+cloudnative-pg (Phase 5), plugin-barman-cloud (#121), redis-operator (Phase 7),
 Kong (Phase 8),
 postgres-app/zitadel-db (Phase 10 + ADR-004), Redis (Phase 12),
 Zitadel (ADR-004 E1/E2), NACK/NATS (NATS migration C1–C4) and Velero
@@ -114,6 +114,7 @@ their own repositories — see
 | vault | `vault` | hashicorp/vault | 0 | 2 | deployed (Phase 2) |
 | external-secrets | `external-secrets` | external-secrets/external-secrets | -10 | 3 | deployed (Phase 3) |
 | cloudnative-pg | `cloudnative-pg` | cloudnative-pg/cloudnative-pg | -10 | 5 | deployed (Phase 5) |
+| plugin-barman-cloud | `cloudnative-pg` | cloudnative-pg/plugin-barman-cloud | 10 | — (#121) | deployed (#121) |
 | redis-operator | `data` | ot-container-kit/redis-operator | -10 | 7 | deployed (Phase 7) |
 | kong | `kong` | kong/kong (DB-less) | 20 | 8 | deployed (Phase 8) |
 | postgres-app (+ zitadel-db) | `data` | CNPG `Cluster` CRs (raw) | 40 | 10 | deployed (Phase 10 + ADR-004 E1/E4) |
@@ -132,7 +133,7 @@ Notes:
 
 - **Status column** is the source of truth for "is it live?". ArgoCD,
   cert-manager (Phase 1), Vault (Phase 2), external-secrets (Phase 3),
-  cloudnative-pg (Phase 5),
+  cloudnative-pg (Phase 5), plugin-barman-cloud (#121),
   redis-operator (Phase 7), Kong (Phase 8),
   postgres-app/zitadel-db (Phase 10 + ADR-004), Redis (Phase 12),
   Zitadel (ADR-004 E1/E2), NACK/NATS (NATS migration C1–C4) and Velero (Phase 18)
@@ -142,6 +143,10 @@ Notes:
   [backups.md](backups.md) and tracked in `status.md`. The column is flipped
   to `deployed` inside the phase that lands the component, and `status.md` is
   updated in the same commit.
+- `plugin-barman-cloud` is an `ApplicationSet` element (wave 10, namespace
+  `cloudnative-pg`) installed from chart `plugin-barman-cloud` 0.9.0. It ships
+  the `ObjectStore` CRD and the pinned sidecar image referenced later by the
+  datastore `Cluster`s; no `ObjectStore` CR lives in this component.
 - `postgres-app` is a **dedicated raw `Application` per environment** (not in
   the `ApplicationSet` generator list) and owns two CNPG `Cluster`s in `data`:
   `postgres-app` (application database, `app`/`app`) and `zitadel-db`
@@ -194,7 +199,7 @@ Notes:
 ArgoCD applies resources in `sync-wave` order (`argocd.argoproj.io/sync-wave`),
 integers spaced ≥10 apart so dependencies are always satisfied. Wave -30 is
 the root app; the ApplicationSet and cert-manager sit at -20; the operators
-and CRDs at -10; then Vault and everything downstream.
+and CRDs at -10; then Vault, the Barman Cloud plugin and everything downstream.
 
 ```mermaid
 graph LR
@@ -215,6 +220,7 @@ graph LR
     end
     subgraph W10["10"]
         J[Vault seed - seed-vault.sh after pod Running]
+        P1[plugin-barman-cloud]
     end
     subgraph W20["20"]
         K[Kong]
@@ -243,8 +249,11 @@ graph LR
     B --> C
     C --> D
     D --> I
+    C --> P1
+    F --> P1
     J --> K
     K --> M
+    P1 --> M
     M --> P
     P --> Q
     D --> W

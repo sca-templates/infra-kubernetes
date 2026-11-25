@@ -53,7 +53,7 @@ and qa ([docs/workflow.md](docs/workflow.md#services-app-repo-as-source)).
 
 ## 3. Component catalog
 
-**16 components + ArgoCD.** Status column is the source of truth
+**17 components + ArgoCD.** Status column is the source of truth
 (`planned (Phase N)` until the phase lands;
 `deployed` from then on). Chart and image pins are set inside each phase and
 live under `infrastructure/<component>/` + `envs/<env>/`.
@@ -64,6 +64,7 @@ live under `infrastructure/<component>/` + `envs/<env>/`.
 | Vault | `vault` | hashicorp/vault | Secrets SSOT (KV-v2 + k8s auth) | [infra-vault](https://github.com/sca-templates/infra-vault) | **deployed** (Phase 2) |
 | External Secrets | `external-secrets` | external-secrets/external-secrets | Projects Vault KV → native Secrets | — | **deployed** (Phase 3) |
 | CloudNativePG | `cloudnative-pg` | cloudnative-pg/cloudnative-pg | PostgreSQL operator | — | **deployed** (Phase 5) |
+| Barman Cloud plugin | `cloudnative-pg` | cloudnative-pg/plugin-barman-cloud | CNPG-I backup/WAL archiving plugin (`ObjectStore`) | — | **deployed** (#121) |
 | redis-operator | `data` | ot-container-kit/redis-operator | Redis operator | [infra-redis](https://github.com/sca-templates/infra-redis) | **deployed** (Phase 7) |
 | Kong | `kong` | kong/kong (DB-less) | Edge gateway, dedicated Application, no SSA | [infra-kong](https://github.com/sca-templates/infra-kong) | **deployed** (Phase 8) |
 | postgres-app (+ zitadel-db) | `data` | CNPG `Cluster` CRs (raw) | App + Zitadel databases; all 4 envs | [infra-postgres](https://github.com/sca-templates/infra-postgres) | **deployed** (Phase 10 + ADR-004 E1/E4) |
@@ -101,6 +102,7 @@ before CRs; Vault before ESO syncs; datastores before consumers.
 | -10 | Pure operators/CRDs: external-secrets, cloudnative-pg, redis-operator |
 | 0 | Vault |
 | 10 | Vault seeded by `bootstrap/seed-vault.sh` after pod `Running` (CI/manual, not an ArgoCD hook) |
+| 10 | plugin-barman-cloud (CNPG-I backup plugin, after the operator at -10 and before datastores at 40) |
 | 20 | Kong |
 | 40 | Datastores: postgres-app, zitadel-db (CNPG), nats (JetStream), redis CRs |
 | 50 | Consumers: zitadel (after `zitadel-db` at 40); nack (JetStream controller, after `nats` at 40) |

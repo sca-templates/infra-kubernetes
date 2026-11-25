@@ -220,6 +220,7 @@ The following epics are planned for cost optimization:
 
 | Date | Change | PR/Commit | Notes |
 | --- | --- | --- | --- |
+| 2026-11-25 | Add Barman Cloud plugin as a platform component | branch (PR) | Chart `plugin-barman-cloud` 0.9.0 / images `v0.16.0` at wave 10 in all four environment ApplicationSets; `ObjectStore` CRD and both image pins verified by `make smoke COMPONENT=plugin-barman-cloud`. The datastore backup migration follows in the next PR. |
 | 2026-11-14 | Live restore validation | branch (PR) | `make smoke` passed for `velero`, `postgres-app`, and `vault`; the Velero schedule template re-ran to `Completed` (639 items, 0 errors; `velero-critical-namespaces-manual-20261114154830`); the manual Vault Raft restore drill recovered a canary KV and ESO stayed `SecretSynced`; ArgoCD apps re-pointed to `main` |
 | 2026-10-28 | Use Floci S3 for local Velero; retire MinIO | PR #109 | Floci is already up for every EKS smoke; no in-cluster S3 component; a `floci-buckets` Job creates the `velero` bucket |
 | 2026-10-28 | Deploy Velero with the AWS S3 plugin | PR #109 | Phase 18, wave 80, local only; smoke creates a real `Backup` that reaches `Completed` |

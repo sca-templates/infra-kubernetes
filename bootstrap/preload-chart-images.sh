@@ -162,8 +162,8 @@ render_images() {
     return 1
   }
   images="$(printf '%s\n' "${rendered}" \
-    | grep -oE 'image:[[:space:]]*[^[:space:]]+' \
-    | sed -E 's/^image:[[:space:]]*//' \
+    | grep -oE '(image|SIDECAR_IMAGE):[[:space:]]*[^[:space:]]+' \
+    | sed -E 's/^(image|SIDECAR_IMAGE):[[:space:]]*//' \
     | tr -d '"' \
     | sort -u || true)"
   while IFS= read -r img; do
