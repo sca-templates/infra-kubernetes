@@ -94,6 +94,24 @@ The secret flow is unchanged from [secrets.md](secrets.md):
 3. Pods mount the projected `Secret`; the raw value never appears in the
    manifest.
 
+## 3.1 Wire messaging (if any)
+
+Messaging uses the platform contract at Vault KV-v2
+`secret/messaging/<env>`. Switch backends from configuration, not code:
+
+- `mode: nats` — use `nats_url`
+  (`nats://nats.data.svc.cluster.local:4222` in-cluster) and declare
+  `Stream`/`Consumer` CRs in the service `deploy/` (NACK watches all
+  namespaces).
+- `mode: sns-sqs` — use the external `sns_topic_arn`, `sqs_queue_url` and
+  `aws_region` (plus endpoint/credentials where applicable); deploy no NATS
+  resources.
+
+The service projects the path with its own `ExternalSecret`; the platform never
+copies the contract into service namespaces. The data/environment values are
+seeded or provisioned out of band per [ADR-005](adr/adr-005-kafka-to-nats-jetstream.md)
+and the runbook in [messaging.md](messaging.md).
+
 ## 4. Environment promotion and releases
 
 Dev/qa deployment is an **ArgoCD sync** (service `promote` workflow); prod

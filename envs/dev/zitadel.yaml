@@ -1,0 +1,4 @@
+# zitadel dev — reduced profile; internal-only issuer on the canonical port.
+zitadel:
+  configmapConfig:
+    ExternalPort: 443

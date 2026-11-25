@@ -1,0 +1,39 @@
+# nack — base values (shared across environments; per-env tier overrides live
+# in envs/<env>/nack.yaml).
+# Official chart: nats/nack, served from https://nats-io.github.io/k8s/helm/charts.
+# The chart pin (targetRevision) is set in argocd/apps-<env>.yaml; the image is
+# pinned here to the chart appVersion (0.24.0), never `latest`.
+#
+# NACK is the JetStream controller for Kubernetes (wave 50): it installs the
+# `streams`/`consumers`/`streamtemplates`/`accounts`/`keyvalues`/`objectstores`
+# CRDs and reconciles `Stream`/`Consumer` CRs into the NATS server. Unlike the
+# pure operator/CRD apps at wave -10, it needs the NATS server it talks to
+# (wave 40) to answer, so it runs after the server and before any consumer CR
+# (wave 60). The platform Applications are not children of a root app, so
+# cross-Application waves are best-effort; the controller retries until the
+# server is reachable.
+#
+# The chart ships the CRDs in its `crds/` bundle; ArgoCD applies them with
+# `--include-crds` (same mechanism as Kong).
+#
+# Deployment name is `nack` and it lives in namespace `nats` — the element's
+# namespace in the ApplicationSet (`useLegacyNames` keeps `.Release.Name`).
+
+jetstream:
+  image:
+    repository: natsio/jetstream-controller
+    tag: 0.24.0
+    pullPolicy: IfNotPresent
+  nats:
+    # Cluster-internal service of the NATS server (release `nats`, ns `data`).
+    # No client auth in the ready-but-idle tier; the controller connects
+    # unauthenticated. Auth lands with the consumer wiring (ADR-005).
+    url: nats://nats.data.svc.cluster.local:4222
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 250m
+    memory: 128Mi

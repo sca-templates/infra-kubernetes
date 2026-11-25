@@ -1,0 +1,22 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: zitadel-login-session
+  namespace: zitadel
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  refreshInterval: 5m
+  secretStoreRef:
+    name: vault
+    kind: ClusterSecretStore
+  target:
+    name: zitadel-login-session
+    creationPolicy: Owner
+    template:
+      type: Opaque
+  data:
+    - secretKey: ZITADEL_SESSION_COOKIE_SECRET
+      remoteRef:
+        key: secret/zitadel/qa
+        property: session_cookie_secret

@@ -8,23 +8,22 @@ set -euo pipefail
 
 component="${1:-}"
 case "$component" in
+  cni) exec "$(dirname "$0")/smoke-cni.sh" ;;
   cert-manager) exec "$(dirname "$0")/smoke-cert-manager.sh" ;;
   vault) exec "$(dirname "$0")/smoke-vault.sh" ;;
   external-secrets) exec "$(dirname "$0")/smoke-external-secrets.sh" ;;
-  linkerd-crds) exec "$(dirname "$0")/smoke-linkerd-crds.sh" ;;
-  linkerd) exec "$(dirname "$0")/smoke-linkerd.sh" ;;
   cloudnative-pg) exec "$(dirname "$0")/smoke-cloudnative-pg.sh" ;;
   postgres-app) exec "$(dirname "$0")/smoke-postgres-app.sh" ;;
-  kafka) exec "$(dirname "$0")/smoke-kafka.sh" ;;
-  strimzi) exec "$(dirname "$0")/smoke-strimzi.sh" ;;
   redis-operator) exec "$(dirname "$0")/smoke-redis-operator.sh" ;;
   redis) exec "$(dirname "$0")/smoke-redis.sh" ;;
+  nack) exec "$(dirname "$0")/smoke-nack.sh" ;;
+  nats) exec "$(dirname "$0")/smoke-nats.sh" ;;
   kong) exec "$(dirname "$0")/smoke-kong.sh" ;;
-  keycloak) exec "$(dirname "$0")/smoke-keycloak.sh" ;;
+  zitadel) exec "$(dirname "$0")/smoke-zitadel.sh" ;;
   velero) exec "$(dirname "$0")/smoke-velero.sh" ;;
   cloud) exec "$(dirname "$0")/smoke-cloud.sh" ;;
   eks) exec "$(dirname "$0")/smoke-eks.sh" ;;
-  "") echo "usage: $0 <component> (cert-manager, vault, external-secrets, linkerd-crds, linkerd, cloudnative-pg, postgres-app, kafka, strimzi, redis-operator, kong, redis, keycloak, velero, cloud, eks)" >&2; exit 2 ;;
+  "") echo "usage: $0 <component> (cni, cert-manager, vault, external-secrets, cloudnative-pg, postgres-app, redis-operator, kong, redis, nack, nats, zitadel, velero, cloud, eks)" >&2; exit 2 ;;
   *,*) echo "ERROR: smoke-target.sh smokes one component; use smoke-ci.sh for a comma-separated list" >&2; exit 2 ;;
   *) echo "ERROR: no smoke command for component '$component'" >&2; exit 2 ;;
 esac

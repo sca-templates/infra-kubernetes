@@ -12,11 +12,12 @@ Kubernetes. ArgoCD reconciles this repository; **nothing is deployed by hand**.
 This is a clean restart after the previous `infra-kubernetes` churned in
 `fix(...)` commits — one component, one commit, one reviewed gate per phase.
 ArgoCD is deployed (Phase 0); cert-manager (Phase 1), Vault (Phase 2),
-external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg
-(Phase 5), strimzi (Phase 6), redis-operator (Phase 7), Kong (Phase 8), the
-Linkerd control plane (Phase 9), postgres-app/keycloak-db (Phase 10), Kafka
-(Phase 11), Redis (Phase 12) and Keycloak (Phase 13) are deployed; the
-remaining 6 components are `planned`. The delivery plan lives in
+external-secrets (Phase 3), cloudnative-pg
+(Phase 5), redis-operator (Phase 7), Kong (Phase 8),
+postgres-app/zitadel-db (Phase 10 + ADR-004), Redis (Phase 12), Zitadel
+(ADR-004; edge validated), NATS + NACK (the ADR-005 event backbone; idle) and
+Velero (Phase 18) are deployed; the four observability components (Phases
+14-16) are `planned`. The delivery plan lives in
 [docs/roadmap.md](docs/roadmap.md) and what is actually deployed lives in
 [docs/status.md](docs/status.md).
 
@@ -40,9 +41,9 @@ make status
   needs sudo). Linux/macOS/CI resolve it natively, and a real ECR registry uses
   DNS — no hosts entry is needed there.
 - `make bootstrap` installs ArgoCD, seeds the platform catalog wiring
-  (`argocd/apps-<env>.yaml` plus the dedicated `kong-<env>`, `linkerd-<env>`,
-  `postgres-app-<env>`, `kafka-<env>`, `redis-<env>` and `keycloak-<env>`
-  Applications) and applies the
+  (`argocd/apps-<env>.yaml`, the optional `argocd/messaging-<env>.yaml` plus
+  the dedicated `kong-<env>`, `postgres-app-<env>`,
+  `redis-<env>` and `zitadel-<env>` Applications) and applies the
   environment root Application (services registry). `GIT_REPO_URL` comes from
   `.env` (see `.env.example`); a live URL is a Phase 1 requirement. In `local`
   the component Applications can reconcile a fully-local in-cluster git serve
@@ -82,23 +83,24 @@ and qa. See
 
 ## Platform Components
 
-The catalog is **18 components** plus ArgoCD. `local` runs the full set;
-`dev`/`qa`/`prod` run the operator/security core plus the gateway and Keycloak.
+The catalog is **16 components** plus ArgoCD. `local` runs the full set;
+`dev`/`qa`/`prod` run the operator/security core, the gateway and Zitadel.
 **Currently deployed: ArgoCD (Phase 0), cert-manager (Phase 1), Vault
-(Phase 2), external-secrets (Phase 3), linkerd-crds (Phase 4), cloudnative-pg
-(Phase 5), strimzi (Phase 6), redis-operator (Phase 7), Kong (Phase 8), the
-Linkerd control plane (Phase 9), postgres-app/keycloak-db (Phase 10), Kafka
-(Phase 11), Redis (Phase 12) and Keycloak (Phase 13); every other component is
-`planned (Phase N)`.**
+(Phase 2), external-secrets (Phase 3), cloudnative-pg
+(Phase 5), redis-operator (Phase 7), Kong (Phase 8),
+postgres-app/zitadel-db (Phase 10 + ADR-004), Redis (Phase 12),
+Zitadel (ADR-004 E1/E2, edge validated), NATS + NACK
+(NATS migration C1/C2/C3, idle) and Velero (Phase 18);
+the four observability components (Phases 14-16) are `planned`.**
 The status column in
 [docs/architecture.md](docs/architecture.md) is the source of truth for what is
 live.
 
 | Area | Components |
 | --- | --- |
-| Security and identity | cert-manager (deployed), Vault (deployed), External Secrets Operator (deployed), Keycloak (deployed) |
-| Edge and mesh | linkerd-crds (deployed), Kong (deployed), Linkerd control plane (deployed) |
-| Data | CloudNativePG (deployed), Strimzi (deployed), redis-operator (deployed), postgres-app/keycloak-db (deployed), Kafka (deployed), Redis (deployed) |
+| Security and identity | cert-manager (deployed), Vault (deployed), External Secrets Operator (deployed), Zitadel (deployed; edge validated) |
+| Edge and mesh | Kong (deployed) |
+| Data | CloudNativePG (deployed), redis-operator (deployed), postgres-app/zitadel-db (deployed), NATS JetStream (deployed, idle), NACK (deployed), Redis (deployed) |
 | Observability | kube-prometheus-stack, Loki, Tempo, Alloy |
 | Delivery and resilience | Velero |
 
@@ -107,8 +109,7 @@ point Velero at external S3 via Vault/ESO credentials. All images and charts are
 pinned to explicit upstream versions — this repository builds no images.
 Services use app-repo-as-source (see
 [docs/onboarding-new-service.md](docs/onboarding-new-service.md)).
-Consul, Unleash, KafkaConnect/Debezium, kafka-ui and linkerd-viz are
-intentionally excluded.
+Consul, Unleash, KafkaConnect/Debezium and kafka-ui are intentionally excluded.
 
 ## Commands
 
@@ -119,7 +120,10 @@ intentionally excluded.
 | `make install-cli` | Symlink `bootstrap/sca.sh` → `~/.local/bin/sca` |
 | `make eks-up` | Start Floci in EKS mode: create the emulated EKS cluster and point kubectl at it |
 | `make eks-hosts` | WSL2 only: map the emulated ECR hostname to `127.0.0.1` in `/etc/hosts` |
-| `make eks-status` | Report the emulated EKS cluster status and its nodes |
+| `make eks-status` | Report the emulated EKS cluster status, its nodes and the CNI substrate |
+| `make cni-up` | Install the bootstrap-managed Calico + WireGuard + kube-proxy substrate in the emulated EKS cluster |
+| `make cni-down` | Remove the bootstrap-managed CNI resources from the emulated EKS cluster |
+| `make cni-status` | Report bootstrap-managed CNI DaemonSets, WireGuard config and node keys |
 | `make eks-down` | Delete the emulated EKS cluster, IAM user and kubeconfig context |
 | `make bootstrap` | Install ArgoCD, seed the catalog wiring and apply the root Application |
 | `make status` | Show nodes, ArgoCD Applications and pod health |
@@ -129,7 +133,7 @@ intentionally excluded.
 | `make local-git-up` | Stand up the fully-local git serve (local only) |
 | `make local-git-update` | Mirror local HEAD into the local git serve |
 | `make local-git-down` | Stop the local git serve |
-| `make port-forward APP=<name>` | Reach a platform UI/API locally (argocd, vault, keycloak, grafana, prometheus, …) |
+| `make port-forward APP=<name>` | Reach a platform UI/API locally (argocd, vault, zitadel, grafana, prometheus, …) |
 | `make clean` | Remove local state (`.env`, `.secrets/`, generated artifacts) |
 
 The Makefile is a thin wrapper: after bootstrap, deployments happen exclusively

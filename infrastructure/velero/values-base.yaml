@@ -57,7 +57,7 @@ schedules:
       includedNamespaces:
         - data
         - vault
-        - keycloak
+        - zitadel
         - kong
         - cert-manager
       ttl: 720h0m0s

@@ -1,0 +1,10 @@
+# nats — dev profile (shared integration, reduced footprint). Single node like
+# local, with a slightly larger JetStream store; declared for tier symmetry.
+
+config:
+  cluster:
+    enabled: false
+  jetstream:
+    fileStore:
+      pvc:
+        size: 2Gi

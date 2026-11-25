@@ -18,7 +18,7 @@ graph LR
     B --> C[External Secrets Operator]
     C --> D[K8s Secrets]
     D --> E[Application Pods]
-    D --> F[CNPG Clusters / Kafka / Keycloak]
+    D --> F[CNPG Clusters / Zitadel / NATS consumers]
 ```
 
 - **Vault**: KV-v2 secrets engine, HA raft storage, sealed/initialized by the
@@ -46,16 +46,19 @@ script adapts as components land).
 | `secret/external-secrets/k8s-auth` | Phase 2 | k8s auth role/SA binding |
 | `secret/kong/admin` | — (reserved) | **not consumed**: Kong runs DB-less with a plaintext `ClusterIP` admin listener, so no admin credential is projected; the path is reserved for a future admin-auth use |
 | `secret/postgres-app/<env>` | Phase 10 | postgres-app `Cluster` via CNPG |
-| `secret/keycloak-db/<env>` | Phase 10 | keycloak-db `Cluster` via CNPG; Keycloak DB credential via ESO |
-| `secret/kafka/<env>` | Phase 11 seed | Kafka SCRAM `scram-admin` (ESO → `kafka-scram-admin` → `KafkaUser`) |
+| `secret/zitadel/<env>` | ADR-004 E1 seed | Zitadel `masterkey` + Login `session_cookie_secret` via ESO; do not rotate an initialized masterkey in place |
+| `secret/zitadel-db/<env>` | ADR-004 E1 seed | `zitadel-db` `Cluster` via CNPG (basic-auth) and the Zitadel DSN (`dsn`) via ESO; the password is generated once and reused in both properties |
 | `secret/redis/<env>` | Phase 12 seed (`seed-vault.sh`) | Redis `Secret` auth via ESO → `redis-password` |
-| `secret/keycloak/admin` | Phase 13 seed | Keycloak bootstrap admin via ESO |
-| `secret/keycloak/test-user/<env>` | Phase 13 seed | Keycloak realm import + smoke user via ESO |
+| `secret/messaging/<env>` | NATS migration C2 seed (`local`); out of band elsewhere | Messaging contract: `mode` + `nats_url` or SNS/SQS coordinates, projected by each consumer via ESO; see [messaging.md](messaging.md) |
 | `secret/grafana/admin` | Phase 14 | Grafana admin |
 | `secret/velero/credentials` | Phase 18 seed | Velero object-store credentials; `local` pins Floci's dummy `test/test` pair |
 | `secret/cnpg/<env>` | Phase B seed (`local`); out of band elsewhere | CNPG backup credentials (Barman S3 access key, secret key, region) |
 | `secret/vault-snapshot/<env>` | Phase B seed (`local`); out of band elsewhere | Vault Raft snapshot S3 credentials (access key, secret key, region) |
 | `secret/platform/alertmanager` | Phase 14 | Alertmanager routing config (`useExistingSecret`) |
+
+Former Keycloak paths (`secret/keycloak/*` and `secret/keycloak-db/*`) were
+removed from the seed inventory in ADR-004 E4; any residual live paths are
+cluster cleanup, not part of this catalog.
 
 Nothing above is written by Vault itself yet — Vault arrives at Phase 2 and
 `bootstrap/seed-vault.sh` populates the catalog's placeholder secrets on the
@@ -101,12 +104,16 @@ Each phase that consumes secrets ships, next to the component, exactly one
    in a manifest.
 4. DoD for that phase includes `make status` showing `SecretSynced`.
 
-Keycloak is the first component with **three** projections: `keycloak-admin`
-(bootstrap admin), `keycloak-db-credentials` (`kubernetes.io/basic-auth`, the
-same Vault path as the CNPG cluster) and `keycloak-test-user` (smoke user,
-resolved by the realm import). See [roadmap/keycloak.md](roadmap/keycloak.md).
+Zitadel (ADR-004 E1) has **three** projections in the `zitadel` namespace:
+`zitadel-masterkey` (`masterkey`, immutable after first boot),
+`zitadel-login-session` (`ZITADEL_SESSION_COOKIE_SECRET`, Login UI v4.19.2+) and
+`zitadel-db-credentials` (`dsn`, paired with the `zitadel-db` basic-auth Secret
+in `data`). `bootstrap/seed-vault.sh` seeds `secret/zitadel/<env>` and
+`secret/zitadel-db/<env>` from one generated password so the DSN and CNPG
+credentials cannot drift. See [ADR-004](adr/adr-004-keycloak-to-zitadel.md).
 
-Velero diverges only in *target*: `local` uses Floci's S3 emulator, while
+Velero diverges only in *target*:
+ `local` uses Floci's S3 emulator, while
 `dev`/`qa`/`prod` use external S3 with credentials injected via Vault/ESO.
 In `local`, `bootstrap/seed-vault.sh` writes the dummy `test/test` pair to
 `secret/velero/credentials`, `secret/cnpg/local`, and

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 # smoke-external-secrets.sh — verify External Secrets projects Vault KV into a
 # native Kubernetes Secret: the ClusterSecretStore vault is Ready, a throwaway
-# ExternalSecret pulls a seeded path (secret/keycloak/admin) and reaches
+# ExternalSecret pulls a seeded path (secret/postgres-app/${ENV}) and reaches
 # condition Ready/reason SecretSynced, and the projected Secret holds the
 # expected data. Vault is the dependency: this smoke runs bootstrap/smoke-vault
 # first (idempotent) so a fresh cluster is initialized+seeded before the store
@@ -11,6 +11,7 @@
 # by `make smoke COMPONENT=external-secrets` (see docs/ci-cd.md).
 set -euo pipefail
 
+ENV="${ENV:-local}"
 NAMESPACE="${EXTERNAL_SECRETS_NS:-external-secrets}"
 SCRATCH_NS="external-secrets-smoke"
 TIMEOUT="${SMOKE_TIMEOUT:-120s}"
@@ -46,7 +47,7 @@ done
 
 echo "── smoke(external-secrets): projecting a KV secret via a throwaway ExternalSecret"
 kubectl create namespace "$SCRATCH_NS" >/dev/null
-kubectl -n "$SCRATCH_NS" apply -f - <<'EOF'
+kubectl -n "$SCRATCH_NS" apply -f - <<EOF
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -61,11 +62,11 @@ spec:
   data:
     - secretKey: username
       remoteRef:
-        key: secret/keycloak/admin
+        key: secret/postgres-app/${ENV}
         property: username
     - secretKey: password
       remoteRef:
-        key: secret/keycloak/admin
+        key: secret/postgres-app/${ENV}
         property: password
 EOF
 
@@ -90,8 +91,8 @@ done
 
 echo "── smoke(external-secrets): verifying the projected Secret data"
 username="$(kubectl -n "$SCRATCH_NS" get secret smoke-secret -o jsonpath='{.data.username}' | base64 -d)"
-[ "$username" = "admin" ] || {
-  echo "FAIL: projected Secret data mismatch (username='${username}', expected 'admin')" >&2
+[ "$username" = "app" ] || {
+  echo "FAIL: projected Secret data mismatch (username='${username}', expected 'app')" >&2
   exit 1
 }
 

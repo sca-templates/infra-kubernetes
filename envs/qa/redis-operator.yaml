@@ -2,8 +2,8 @@
 # anti-affinity keeps the overlay loadable on a single-node local cluster for
 # promote-test while still spreading replicas in real HA.
 #
-# No PodDisruptionBudget: this chart ships no PDB value (unlike Strimzi's and
-# CloudNativePG's), and the operator is stateless with leader election, so a
+# No PodDisruptionBudget: this chart ships no PDB value (unlike CloudNativePG's),
+# and the operator is stateless with leader election, so a
 # voluntary eviction simply re-elects a leader. The budget is deliberately left
 # out of the repo rather than bolted on as a raw manifest — see the deviations
 # log in docs/architecture.md.

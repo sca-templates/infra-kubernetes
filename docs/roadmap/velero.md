@@ -23,20 +23,25 @@ M1 done when: Velero pod `Running`, backup location available.
   - [x] docs: Work Log row + catalog Status → deployed
         Commits: `docs(velero): mark deployed`
   Issue done when: backup of a test namespace `Completed`.
+  Verified by: scheduled-template `Backup`
+  `velero-critical-namespaces-manual-20261114154830` `Completed` (639 items,
+  0 errors) on 2026-11-14; the earlier schedule-created backup failed with
+  `NoSuchBucket` after the Floci restart and was superseded by this run.
 
 ## Milestone M2 — Restore
 
 M2 done when: a `Restore` from the completed backup succeeds.
 
-- [ ] Issue #30 · Restore proof
+- [x] Issue #30 · Restore proof
   - [x] `velero restore` from the completed backup (implementation)
         `bootstrap/smoke-velero.sh` creates a `Restore` CR; the runbook lives in
         [backups.md](../backups.md#velero-backup-and-restore).
         Commits: `feat(velero): restore flow`
   - [x] smoke: restored namespace has its resources back (implementation)
         The smoke deletes a scratch namespace, restores it, and verifies the
-        marker; a live green run is still required.
+        marker; the live green run passed on 2026-11-14.
         Commits: `test(velero): restore smoke`
   - [x] docs: runbook/troubleshooting note in [backups.md](../backups.md)
         Commits: `docs(velero): restore runbook`
   Issue done when: restore round-trip succeeds on a live cluster.
+  Verified by: `make smoke COMPONENT=velero` on 2026-11-14.

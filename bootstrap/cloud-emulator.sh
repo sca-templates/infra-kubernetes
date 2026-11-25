@@ -68,6 +68,32 @@ wait_for_edge() {
   echo "  edge listening on 127.0.0.1:${port} (attempt ${i})"
 }
 
+wait_for_s3() {
+  local port="$1" timeout="${2:-30}" i=0 out
+  while :; do
+    if out="$(docker run --rm --network host \
+      -e AWS_ENDPOINT_URL="http://127.0.0.1:${port}" \
+      -e AWS_DEFAULT_REGION="${FLOCI_AWS_REGION:-us-east-1}" \
+      -e AWS_ACCESS_KEY_ID=test \
+      -e AWS_SECRET_ACCESS_KEY=test \
+      -e AWS_EC2_METADATA_DISABLED=true \
+      -e AWS_PAGER="" \
+      "${AWS_CLI_IMAGE}" --endpoint-url "http://127.0.0.1:${port}" \
+      --cli-connect-timeout 3 --cli-read-timeout 5 \
+      s3api list-buckets 2>&1)"; then
+      echo "  S3 API ready on 127.0.0.1:${port} (attempt ${i})"
+      return 0
+    fi
+    i=$((i + 1))
+    [ "$i" -lt "$timeout" ] || {
+      printf '%s\n' "$out" >&2
+      echo "ERROR: cloud emulator S3 API did not become ready on 127.0.0.1:${port} within ${timeout} attempts" >&2
+      return 1
+    }
+    sleep 1
+  done
+}
+
 aws_start() {
   echo "── cloud(${PROVIDER}): starting ${FLOCI_NAME} (${FLOCI_IMAGE})"
   docker rm -f "${FLOCI_NAME}" >/dev/null 2>&1 || true
@@ -83,6 +109,10 @@ aws_start() {
   # real EKS (no default class without a CSI driver), which leaves every PVC on
   # the smoke cluster Pending (vault dataStorage). All three are harmless
   # outside EKS.
+  #
+  # D3: pin the k3s image (Floci otherwise resolves rancher/k3s:latest) and
+  # disable Floci's bundled Flannel/kube-proxy. The bootstrap-managed Calico
+  # substrate installs its own pinned kube-proxy right after the node is Ready.
   docker network inspect "${CLOUD_NETWORK}" >/dev/null 2>&1 \
     || docker network create "${CLOUD_NETWORK}" >/dev/null
   local run_args=(
@@ -90,6 +120,8 @@ aws_start() {
     -e FLOCI_SERVICES_DOCKER_NETWORK="${CLOUD_NETWORK}"
     -e FLOCI_SERVICES_EKS_ECR_REGISTRY_MIRROR=true
     -e FLOCI_SERVICES_EKS_DEFAULT_STORAGE_CLASS=true
+    -e FLOCI_SERVICES_EKS_DEFAULT_IMAGE="${FLOCI_EKS_K3S_IMAGE}"
+    -e FLOCI_SERVICES_EKS_DISABLE_CNI="${FLOCI_SERVICES_EKS_DISABLE_CNI}"
   )
 
   docker run -d --name "${FLOCI_NAME}" \
@@ -98,6 +130,7 @@ aws_start() {
     -v /var/run/docker.sock:/var/run/docker.sock \
     "${FLOCI_IMAGE}" >/dev/null
   wait_for_edge "${FLOCI_PORT}"
+  wait_for_s3 "${FLOCI_PORT}"
 }
 
 resolve_network() {

@@ -12,10 +12,11 @@
 # every catalog Application, seeds Vault, and then runs the component smokes for
 # the touched components plus the EKS/ECR and cloud integration smokes.
 #
-# Ordering matters for convergence: Applications are gated on `Synced` first
-# (any health), then Vault is seeded/unsealed — it is born sealed, so it can
-# only report Healthy after `make smoke COMPONENT=vault` ran — and only then is
-# the whole platform gated on `Synced/Healthy`.
+# Ordering matters for convergence: Vault is seeded/unsealed as soon as its
+# Application is Synced — it is born sealed and its secrets are a bootstrap
+# prerequisite for consumers such as Zitadel — then every Application is gated
+# on `Synced` (any health), Vault is smoked, and the whole platform is gated on
+# `Synced/Healthy`.
 #
 # More than one component can be smoked in a single run: `<component>` is a
 # comma-separated list, the cluster is booted once, the cloud emulator is
@@ -85,7 +86,7 @@ HAS_CLOUD=0
 for c in "${COMPONENTS[@]}"; do
   case "$c" in
     cloud) HAS_CLOUD=1 ;;
-    eks) ;;
+    cni | eks) ;;
     *) APP_COMPONENTS+=("$c") ;;
   esac
 done
@@ -98,20 +99,26 @@ if [ "${HAS_CLOUD}" = "1" ] && [ "${CLOUD_ON}" != "1" ]; then
   exit 2
 fi
 
-# Platform Applications, read from the repo so a newly-landed component is
-# covered for free: infrastructure/<c> → <c>-local.
-CATALOG=()
-for d in infrastructure/*/; do
-  [ -d "$d" ] || continue
-  c="${d%/}"; c="${c##*/}"
-  CATALOG+=("$c")
-done
-
 STATE_DIR=".generated"
 TIMEOUT="${SMOKE_TIMEOUT:-600}"
 POLL="${SMOKE_POLL:-10}"
 APP_SUFFIX="local"
 APPSET_NAME="platform-local"
+MESSAGING_APPSET_NAME="messaging-local"
+
+# Platform Applications, read from the repo so a newly-landed component is
+# covered for free: infrastructure/<c> → <c>-local. NATS/NACK are optional:
+# their descriptor in argocd/messaging/<env>/ is the ADR-005 toggle, so they
+# only enter the convergence gate when the local environment is in NATS mode.
+CATALOG=()
+for d in infrastructure/*/; do
+  [ -d "$d" ] || continue
+  c="${d%/}"; c="${c##*/}"
+  case "$c" in
+    nats | nack) [ -f "argocd/messaging/${APP_SUFFIX}/${c}.yaml" ] || continue ;;
+  esac
+  CATALOG+=("$c")
+done
 
 mkdir -p "${STATE_DIR}"
 
@@ -171,6 +178,8 @@ diagnose() {
   done
   echo "── diagnose: ApplicationSet/${APPSET_NAME}"
   kubectl get applicationset "${APPSET_NAME}" -n argocd -o yaml 2>/dev/null | tee "${STATE_DIR}/${APPSET_NAME}-diagnose.yaml" || true
+  echo "── diagnose: ApplicationSet/${MESSAGING_APPSET_NAME}"
+  kubectl get applicationset "${MESSAGING_APPSET_NAME}" -n argocd -o yaml 2>/dev/null | tee "${STATE_DIR}/${MESSAGING_APPSET_NAME}-diagnose.yaml" || true
   echo "── diagnose: pods (all namespaces not Running/Completed)"
   kubectl get pods -A --no-headers 2>/dev/null | grep -vE 'Running|Completed' || true
   echo "── diagnose: recent events (all namespaces, last 100)"
@@ -291,6 +300,23 @@ fi
 . ".secrets/eks-admin.env"
 export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
 
+# CNI is substrate, not a catalog Application: verify it before ArgoCD renders
+# anything, so a broken dataplane fails the smoke without burning the platform
+# convergence timeout. This runs on every smoke, regardless of touched paths.
+echo "── verify bootstrap CNI substrate: make smoke COMPONENT=cni"
+if ! make smoke COMPONENT=cni; then
+  diagnose
+  exit 1
+fi
+
+if [ "${CLOUD_ON}" = "1" ]; then
+  echo "── preflight cloud integration: make smoke COMPONENT=cloud"
+  if ! make smoke COMPONENT=cloud; then
+    diagnose
+    exit 1
+  fi
+fi
+
 # Wait for an Application to become Synced (any health). Health is deliberately
 # NOT a gate here: stateful components (e.g. Vault) are born sealed/uninitialized
 # and only become Healthy *after* their own smoke seeds them (smoke-vault.sh →
@@ -362,8 +388,9 @@ wait_for_healthy() {
 
 # ── boot the platform COMPLETE (real app-of-apps) ───────────────────────────
 # `make bootstrap` is the single owner of the catalog wiring: it seeds the
-# platform ApplicationSet (argocd/apps-<env>.yaml) and the dedicated Kong
-# Application (argocd/kong-<env>.yaml) with GIT_TARGET_BRANCH resolved to the PR
+# platform/messaging ApplicationSets (argocd/apps-<env>.yaml,
+# argocd/messaging-<env>.yaml) and the dedicated Kong Application
+# (argocd/kong-<env>.yaml) with GIT_TARGET_BRANCH resolved to the PR
 # head, so the children track the ref under test. No git serve is involved: the
 # host seeds the objects directly (the runner cannot reach the EKS node's pod
 # network). `local` runs no services, so there is no root Application to apply.
@@ -379,15 +406,20 @@ if ! kubectl get namespace argocd >/dev/null 2>&1; then
   exit 1
 fi
 
+# Vault is born sealed and projected secrets are a prerequisite for consumers
+# whose sync hooks wait on them (Zitadel), so seed it before waiting for the
+# rest of the catalog. seed-vault.sh is idempotent.
+echo "── seed Vault (bootstrap prerequisite): bootstrap/seed-vault.sh"
+wait_for_synced "vault-${APP_SUFFIX}"
+"$(dirname "$0")/seed-vault.sh"
+kubectl annotate clustersecretstore vault force-sync="$(date +%s)" --overwrite >/dev/null 2>&1 || true
+
 echo "── waiting for ${#CATALOG[@]} platform Applications to converge: ${CATALOG[*]}"
 for c in "${CATALOG[@]}"; do
   wait_for_synced "${c}-${APP_SUFFIX}"
 done
 
-# Vault is born sealed: seed/unseal it before the health gate, unconditionally —
-# the platform cannot be Healthy without it regardless of which component the
-# PR touched. seed-vault.sh is idempotent.
-echo "── seed Vault (bootstrap prerequisite for the health gate): make smoke COMPONENT=vault"
+echo "── vault smoke (bootstrap prerequisite for the health gate): make smoke COMPONENT=vault"
 make smoke COMPONENT=vault
 
 for c in "${CATALOG[@]}"; do

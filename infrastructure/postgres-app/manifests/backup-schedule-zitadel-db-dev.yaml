@@ -1,0 +1,17 @@
+# Scheduled CNPG base backup for zitadel-db — dev.
+#
+# CloudNativePG uses a six-field cron expression (seconds first). The schedule
+# is staggered from postgres-app to avoid overlapping S3 writes.
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: zitadel-db-daily
+  namespace: data
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  schedule: "0 15 2 * * *"
+  backupOwnerReference: cluster
+  immediate: false
+  cluster:
+    name: zitadel-db

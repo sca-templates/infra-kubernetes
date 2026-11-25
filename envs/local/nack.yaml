@@ -1,0 +1,4 @@
+# nack — local profile. The controller is a singleton (the chart hardcodes one
+# replica); the base values already fit the local footprint, so this overlay is
+# empty by design. Declared for tier symmetry.
+{}

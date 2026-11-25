@@ -1,7 +1,12 @@
-# Project: Implement Keycloak
+# Project: Implement Keycloak (historical; retired in ADR-004 E4)
+
+> Historical project record. Keycloak, `keycloak-db` and their wiring were
+> removed in E4; Zitadel is the sole identity plane. Do not use this file as the
+> current deployment state — see [status.md](../status.md) and
+> [ADR-004](../adr/adr-004-keycloak-to-zitadel.md).
 
 Area: Security & Identity · Wave 50 · Environments: local→dev→qa→prod
-Depends on: postgres-app/keycloak-db (#15) — its database; cert-manager (#6) for TLS.
+Historically depended on: postgres-app/keycloak-db (#15) — its database; cert-manager (#6) for TLS.
 Project done when: Keycloak pod `Running`; realm `sca` exists with a test client;
 login/redirect works over TLS.
 

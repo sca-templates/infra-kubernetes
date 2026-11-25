@@ -1,6 +1,6 @@
-# Project: Implement linkerd-crds
+# Project: Implement linkerd-crds (removed in D4)
 
-Area: Edge & Mesh · Wave -10 · Environments: local→dev→qa→prod
+Area: Edge & Mesh · Wave -10 · Environments: local→dev→qa→prod · Historical record
 Depends on: — (CRDs install before the control plane, wave -10)
 Project done when: linkerd CRDs present in the cluster and amAlive; control
 plane (project #14) installs cleanly against them.
@@ -21,3 +21,11 @@ No natural phases → issues directly under the project.
   - [x] docs: Work Log row + catalog Status → deployed
         Commits: `docs(linkerd-crds): mark deployed`
   Issue done when: linkerd CRDs installed, control plane installs against them.
+
+## Retirement (D4)
+
+D4 removed `infrastructure/linkerd-crds/`, `envs/<env>/linkerd-crds.yaml`,
+`argocd/linkerd-crds-<env>` from the ApplicationSets and the CRD-only smoke after
+the Calico WireGuard D2/D3 gates. The CRDs remain in a long-lived local cluster
+until the one-time ArgoCD Application cleanup; the Work Log row records the
+rollback.

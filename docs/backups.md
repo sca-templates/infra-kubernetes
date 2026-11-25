@@ -6,7 +6,7 @@ things and are not interchangeable:
 | Layer | Protects | Mechanism | Source of truth |
 | --- | --- | --- | --- |
 | Velero | Kubernetes API objects (and PVs where a CSI driver exists) | Scheduled `Backup` to object storage | `infrastructure/velero/`, `envs/<env>/velero.yaml`, `argocd/apps-<env>.yaml` |
-| CloudNativePG | `postgres-app` and `keycloak-db` data | Barman base backups + WAL archiving; PITR | `infrastructure/postgres-app/manifests/` |
+| CloudNativePG | `postgres-app` and `zitadel-db` data | Barman base backups + WAL archiving; PITR | `infrastructure/postgres-app/manifests/` |
 | Vault | The Raft datastore (secrets SSOT) | `vault operator raft snapshot` CronJob to object storage | `infrastructure/vault/manifests/`, `infrastructure/vault/backup/manifests/` |
 
 The datastore-native layers are the authoritative restore path for their data.
@@ -66,7 +66,7 @@ backup jobs to run. See [secrets.md](secrets.md).
 | --- | --- | --- |
 | Velero critical namespaces | `Schedule/velero-critical-namespaces` | `0 2 * * *` |
 | `postgres-app` base backup | `ScheduledBackup/postgres-app-daily` | `0 30 1 * * *` (six-field CNPG cron) |
-| `keycloak-db` base backup | `ScheduledBackup/keycloak-db-daily` | `0 45 1 * * *` (six-field CNPG cron) |
+| `zitadel-db` base backup | `ScheduledBackup/zitadel-db-daily` | `0 15 2 * * *` (six-field CNPG cron) |
 | Vault Raft snapshot | `CronJob/vault-raft-snapshot` | `30 1 * * *` |
 
 Cron expressions are evaluated by the Kubernetes controller in its timezone
@@ -91,7 +91,7 @@ kubectl -n data get cluster postgres-app \
 
 ## Velero: backup and restore
 
-Velero's schedule covers `data`, `vault`, `keycloak`, `kong`, and
+Velero's schedule covers `data`, `vault`, `zitadel`, `kong`, and
 `cert-manager`. In `local` it backs up Kubernetes objects only
 (`snapshotVolumes: false`); on a CSI-capable cluster the environment overlay
 enables volume snapshots.
@@ -161,7 +161,7 @@ kubectl -n data get backup \
 
 Use this when the wanted base backup is present in the `data` namespace. Set
 `database` and `owner` to match the source (`app`/`app` for `postgres-app`,
-`keycloak`/`keycloak` for `keycloak-db`).
+`zitadel`/`zitadel` for `zitadel-db`).
 
 ```bash
 kubectl -n data apply -f - <<'EOF'
@@ -232,8 +232,8 @@ EOF
 ```
 
 For `local`, add the Floci `endpointURL` and use the `cnpg-backups` bucket.
-For `keycloak-db`, use `source: keycloak-db`, its bucket path, and
-`database: keycloak`/`owner: keycloak`.
+For `zitadel-db`, use `source: zitadel-db`, its bucket path, and
+`database: zitadel`/`owner: zitadel`.
 
 After the restore cluster is `Ready`, connect to its primary and verify the
 expected rows before switching consumers:
@@ -247,7 +247,7 @@ Remove the restore cluster and its PVCs when validation is complete. Never
 delete the source cluster or its object-store prefix as part of a test.
 
 `bootstrap/smoke-postgres-app.sh` automates both paths: a PITR round-trip on
-`postgres-app` and a latest-backup restore on `keycloak-db`. Set
+`postgres-app` and a latest-backup restore on `zitadel-db`. Set
 `SMOKE_CNPG_PITR=0` to skip the PITR half.
 
 ## Vault: Raft snapshot and restore
@@ -279,11 +279,15 @@ A Raft restore overwrites the cluster's data and is a full-cluster operation.
 Use a maintenance window, take a fresh snapshot first, and verify the target
 bucket/object before copying it into a pod.
 
-1. Confirm the target Vault pod is initialized, unsealed, and `active`.
-2. Download the chosen snapshot and copy it to the active pod:
-   `kubectl cp ./vault-<timestamp>.snap vault/vault-0:/tmp/vault.snap`.
+1. Confirm the target Vault pod is initialized, unsealed, and `active`
+   (`kubectl -n vault get pods -l vault-active=true`).
+2. Download the chosen snapshot, copy it to the active pod, and compare the
+   checksum on the host and in the pod before restoring:
+   `kubectl cp ./vault-<timestamp>.snap vault/<active-pod>:/tmp/vault.snap`.
+   Prefer `kubectl cp` over `kubectl exec -i … cat`; streamed copies can
+   truncate large snapshots.
 3. Run the restore with a privileged token:
-   `kubectl -n vault exec -it vault-0 -- env VAULT_ADDR=... VAULT_CACERT=... vault operator raft snapshot restore -force /tmp/vault.snap`.
+   `kubectl -n vault exec -it <active-pod> -- env VAULT_ADDR=... VAULT_CACERT=... vault operator raft snapshot restore -force /tmp/vault.snap`.
 4. Wait for the server logs to report `post-unseal setup complete` and
    `vault is unsealed`; the command returns before the background restore
    finishes.
@@ -315,6 +319,22 @@ markers. Set `SMOKE_KEEP_VAULT_JOB=1` to keep the Job for inspection.
 
 ## Validation status
 
-The manifests and smoke scripts are in git. A full live restore validation on
-the Floci emulated EKS substrate is still required before these procedures are
-treated as production-proven; `docs/status.md` records the current state.
+Live restore validation passed on the Floci emulated EKS substrate on
+2026-11-14:
+
+| Layer | Command | Result |
+| --- | --- | --- |
+| Velero | `make smoke COMPONENT=velero` | `Backup` and `Restore` `Completed`; the deleted namespace and its marker were recovered |
+| Velero schedule template | `Backup` from `Schedule/velero-critical-namespaces` | `Completed` (639 items, 0 errors) on 2026-11-14; backup `velero-critical-namespaces-manual-20261114154830` |
+| CNPG | `make smoke COMPONENT=postgres-app` | PITR with A/B markers on `postgres-app`, latest-backup restore on `zitadel-db`; the 2026-11-14 historical run also restored `keycloak-db`, which E4 later removed |
+| Vault snapshot | `make smoke COMPONENT=vault` | `VAULT_SNAPSHOT_OK` + `VAULT_SNAPSHOT_UPLOADED` |
+| Vault restore drill | manual, per the runbook above | Canary KV written, snapshot taken, canary deleted, Raft snapshot restored on the active node; the canary was recovered and ExternalSecrets stayed `SecretSynced` |
+
+The schedule-created backup `velero-critical-namespaces-20261114195950` failed
+only at the final S3 upload (`NoSuchBucket`) after the Floci restart; the bucket
+was recreated and the same template re-ran to `Completed` (639 items). The
+`Schedule` retains that failed reference as `status.lastBackup` until its next
+real run.
+
+`dev`/`qa`/`prod` still require their own external buckets and credentials
+before the same procedures can be exercised there.

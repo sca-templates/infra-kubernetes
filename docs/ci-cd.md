@@ -129,8 +129,9 @@ checks.
 cluster-smoke CI had become a stack of hacks (trimmed manifests, self-heal
 disabled) and burned a week in `fix` churn. It lands at **Phase 1** with
 cert-manager, so each subsequent component is validated incrementally on a
-live Floci emulated EKS substrate as it ships, and the deployed baseline is continuously
-monitored. See the [roadmap](roadmap.md) for the Phase 1 gate and its smoke.
+live Floci emulated EKS substrate with the bootstrap-managed CNI described below,
+and the deployed baseline is continuously monitored. See the
+[roadmap](roadmap.md) for the Phase 1 gate and its smoke.
 
 **Triggers:**
 
@@ -149,15 +150,17 @@ monitored. See the [roadmap](roadmap.md) for the Phase 1 gate and its smoke.
   reach `Synced` and the seed never runs (see the Velero + Floci S3 row in
   [architecture.md](architecture.md#deviations-log)). The backup smokes are
   part of the same gate: Velero creates a real `Backup`, deletes a scratch
-  namespace, restores it and verifies the marker; CNPG proves a PITR restore on
-  `postgres-app` and a latest-backup restore on `keycloak-db`; Vault triggers
+   namespace, restores it and verifies the marker; CNPG proves a PITR restore on
+   `postgres-app` and a latest-backup restore on `zitadel-db`; Vault triggers
   its Raft snapshot CronJob and asserts the saved/inspected/uploaded markers.
   The `floci-buckets` Job creates `velero`, `cnpg-backups`, and
   `vault-snapshots` using Floci's fixed dummy credentials and therefore does
-  not add a Vault dependency to the sync. `smoke-vault.sh` waits for that Job
-  before triggering the Raft snapshot, so the upload cannot race bucket
-  creation. The schedules, retention and restore runbooks live in
-  [backups.md](backups.md).
+  not add a Vault dependency to the sync. The Job runs with a 1 CPU limit and a
+  bounded retry loop that keeps the AWS CLI error, so a slow runner cannot
+  silently skip local bucket creation; when the local endpoint exists but never
+  answers it fails closed. `smoke-vault.sh` waits for that Job before triggering
+  the Raft snapshot, so the upload cannot race bucket creation. The schedules,
+  retention and restore runbooks live in [backups.md](backups.md).
 - **`workflow_dispatch`** (manual) — one-off smoke of a component/ref
   (`component` + `ref` inputs, defaults `cert-manager`/`main`) for testing
   without opening a PR. Nothing else triggers the workflow; there is no
@@ -180,9 +183,11 @@ component and smokes the whole set: `infrastructure/<c>/…` and
 `envs/<env>/<c>.yaml` → `<c>`; `argocd/<c>-<env>.yaml` → `<c>` when
 `infrastructure/<c>/` exists (so a dedicated app change smokes its component);
 `bootstrap/smoke-<c>*.sh` → `<c>` (the `smoke-cloud*` scripts → `cloud`;
-`smoke-eks.sh` → `cert-manager`, exercised by the always-on EKS step);
-`bootstrap/seed-vault.sh` → `vault`; `bootstrap/cloud-emulator.sh` → `cloud`;
-`bootstrap/eks-emulator.sh` → `cert-manager` (exercised by the EKS substrate). Changes to the smoke's own machinery — `bootstrap/smoke-ci.sh`,
+`smoke-eks.sh` → `cert-manager`, exercised by the always-on EKS step;
+`smoke-cni.sh` → `cni`); `envs/<env>/cni.yaml`, `bootstrap/cni-emulator.sh` and
+`bootstrap/cni/**` → `cni`; `bootstrap/seed-vault.sh` → `vault`;
+`bootstrap/cloud-emulator.sh` → `cloud`; `bootstrap/eks-emulator.sh` →
+`cert-manager` (exercised by the EKS substrate). Changes to the smoke's own machinery — `bootstrap/smoke-ci.sh`,
 `smoke-target.sh`, `render-served-apps.sh`, `sca.sh`, `versions.sh`,
 `local-git-*`, `preload-chart-images.sh`,
 `collect-argocd-diagnostics.sh`, `argocd/**` and the `Makefile` — resolve to
@@ -192,8 +197,9 @@ smoke instead of merging untested.
 `make argocd-up` and `make bootstrap` pre-pull the chart images with the host
 Docker and load them into the EKS node (`bootstrap/preload-chart-images.sh`)
 before Helm runs — a **catalog-wide** preload (`--catalog <env>` resolves the
-images for every chart in the env's ApplicationSet plus the dedicated apps, including
-the raw manifests of postgres-app, Kafka and Redis, plus the Keycloak chart).
+images for every chart in the env's mandatory/optional ApplicationSets plus the
+   dedicated apps, including the raw manifests of postgres-app and Redis,
+   plus the Zitadel chart).
 A node-side pull on an ephemeral runner can stall behind registry throttling past
 a Deployment's `progressDeadlineSeconds`, surfacing as a flaky `argocd-up`
 failure that no Helm `--timeout` can fix; pre-pulling takes the registry off the
@@ -287,7 +293,9 @@ rendered by ArgoCD — it exists only for the duration of a smoke run.
   runs the emulator as a **Docker container on the runner/host**, attaches it to
   the EKS substrate's own Docker network, and publishes it into the
   cluster through a **selector-less `Service` + `EndpointSlice`** in the `cloud`
-  namespace. In-cluster pods therefore reach it at the stable DNS name
+  namespace. The lifecycle waits for a real S3 `list-buckets` call before it
+  returns, so a published TCP port alone cannot pass as a ready endpoint.
+  In-cluster pods therefore reach it at the stable DNS name
   `http://floci.cloud.svc.cluster.local:4566` (host edge on `127.0.0.1:4566`).
 - **The check** — `bootstrap/smoke-cloud.sh` dispatches by provider to
   `bootstrap/smoke-cloud-<provider>.sh` (`aws` today). The `aws` check throws a
@@ -296,17 +304,19 @@ rendered by ArgoCD — it exists only for the duration of a smoke run.
   No IAM, no per-component configuration — just an endpoint plus the same dummy
   credentials. Driven by `make smoke COMPONENT=cloud` (or
   `workflow_dispatch` with `component=cloud`).
-- **Wiring** — `smoke-ci.sh` runs `make cloud-up` right after the cluster boots
-  and `make smoke COMPONENT=cloud` right after the component smoke, on **every**
-  smoke run (on by default). `--no-cloud` / `SMOKE_CLOUD=0` opts out. `cloud` is
+- **Wiring** — `make eks-up` starts and publishes the emulator right after the
+  cluster boots; `smoke-ci.sh` runs a cloud preflight before `make bootstrap` and
+  the full cloud smoke after the component smokes, on **every** smoke run (on by
+  default). `--no-cloud` / `SMOKE_CLOUD=0` opts out. `cloud` is
   a smoke target, not an ArgoCD Application: a `cloud` entry in the component
   list skips `smoke-app`/wait (it has nothing to converge) and only runs the
   cloud check. A PR that touches the cloud
   tooling (`bootstrap/cloud-emulator.sh`, `bootstrap/smoke-cloud*.sh`) resolves
   to the `cloud` component, so the tooling is self-validated in CI; `cloud` is
   also selectable via `workflow_dispatch`.
-- **Pins** — the emulator and CLI images are pinned in
-  `bootstrap/versions.sh` (`FLOCI_IMAGE`, `AWS_CLI_IMAGE`), covered by the
+- **Pins** — the emulator, CLI and bootstrap CNI images are pinned in
+  `bootstrap/versions.sh` (`FLOCI_IMAGE`, `AWS_CLI_IMAGE`,
+  `FLOCI_EKS_K3S_IMAGE`, `CALICO_VERSION`, `KUBE_PROXY_IMAGE`), covered by the
   pin guards ([security.md](security.md)), and overridable via `.env`.
 - **Adding a cloud** means a provider case in `cloud-emulator.sh` plus a
   `bootstrap/smoke-cloud-<provider>.sh` — nothing else changes.
@@ -348,6 +358,31 @@ Floci's EKS backing, not ArgoCD-managed).
    kubectl dump. On a node failure it dumps that kubectl dump, the emulator
    logs and the Docker container list (the k3s node included) to `.generated/`
    so the uploaded artifacts show what the substrate did.
+- **CNI substrate (D3)** — Floci is started with
+  `FLOCI_SERVICES_EKS_DISABLE_CNI=true` and a pinned
+  `FLOCI_SERVICES_EKS_DEFAULT_IMAGE` (`rancher/k3s:v1.34.1-k3s1`; the
+  `create-cluster --kubernetes-version` is derived as `1.34`, the last Floci
+  pin compatible with the cgroup v1 WSL2 host). Once the node object appears,
+  `bootstrap/cni-emulator.sh up` renders the checksum-verified Calico
+  `v3.31.7` VXLAN manifest (iptables dataplane, WireGuard, `MTU=1440`,
+  `interface=eth0`), installs a pinned `registry.k8s.io/kube-proxy:v1.34.1`
+  DaemonSet first with `--conntrack-max-per-core=0` (Floci's disable flag also
+  removes its bundled kube-proxy, which already used that flag for the read-only
+  host `/proc/sys`), probes `kubernetes.default.svc` before applying Calico,
+  then points Calico at the real API endpoint via the
+  `kubernetes-services-endpoint` ConfigMap so `install-cni` does not depend on
+  ClusterIP routing, applies the eBPF/securityfs substrate patches validated in
+  D2 and patches `FelixConfiguration/default` **before** the rollout.
+  `bootstrap/smoke-cni.sh` (`make smoke COMPONENT=cni`) runs before `make
+  bootstrap` and gates on both DaemonSets, WireGuard config, per-node public-key
+  annotations, Felix metrics scraped over `hostNetwork` (WireGuard interface
+  metrics only where peers exist), and pod-to-pod HTTP. A scratch namespace left
+  `Terminating` by a broken API endpoint is cleared by dropping its finalizers
+  before the next run. Profiles live in
+  `envs/<env>/cni.yaml` (`local` enforced, `dev`/`qa`/`prod` as an external
+  contract); the CNI is substrate, so it stays out of the catalog and has no
+  Application or sync-wave. Rollback is a revert of the D3 change plus
+  `make eks-down` (recreating with Floci's bundled CNI/kube-proxy).
 - **The check** — `bootstrap/smoke-eks.sh` (driven by `make smoke
   COMPONENT=eks`): asserts a `Ready` node on context `floci-eks`, pushes the
   pinned `AWS_CLI_IMAGE` to `${account}.dkr.ecr.${region}.localhost:4566` via
@@ -361,18 +396,21 @@ Floci's EKS backing, not ArgoCD-managed).
   app-of-apps wiring host-side (`make bootstrap ENV=local`, which resolves the
   ArgoCD manifests' `repoURL`/`targetRevision` to the PR head via the `sed` seam),
   after which ArgoCD reconciles the **real app-of-apps** (ApplicationSet
-  `platform-local` → the dedicated `kong-local` + `linkerd-local` +
-  `postgres-app-local` + `kafka-local` + `redis-local` + `keycloak-local`), gates every
-  platform Application (`<name>-local`, Kong and Linkerd included), seeds Vault
+   `platform-local` → the optional `messaging-local`, the dedicated `kong-local`,
+   `postgres-app-local`, `redis-local` and
+   `zitadel-local`), gates every platform Application (`<name>-local`, plus
+  NATS/NACK when their descriptors exist; Kong included), seeds Vault
   (it is born sealed, so
   it can only report `Healthy` once `seed-vault.sh` ran), then gates the whole
   catalog on `Synced/Healthy`, runs the touched component smoke(s), the EKS check
   and the endpoint check. It is the most complete test in the repo: the same
   GitOps path `dev`/`qa`/`prod` use, on an EKS-shaped cluster.
 - **Wiring** — `smoke-ci.sh` has a single path: `make eks-up` boots the EKS
-  substrate, `make bootstrap ENV=local` seeds the platform `ApplicationSet` and
-  the dedicated `kong-local`/`linkerd-local`/`postgres-app-local`/`kafka-local`/
-  `redis-local`/`keycloak-local` apps from the PR head and applies the
+  substrate and installs the D3 CNI substrate, `make smoke COMPONENT=cni`
+  verifies it before anything is rendered, `make bootstrap ENV=local` seeds the platform `ApplicationSet`, the
+  optional `messaging-local` ApplicationSet and the dedicated
+   `kong-local`/`postgres-app-local`/
+   `redis-local`/`zitadel-local` apps from the PR head and applies the
   catalog, the
   catalog is gated `Synced` → Vault seeded → `Synced/Healthy`, and the touched
   component smoke(s), the EKS check and the endpoint check run against it. The
@@ -395,59 +433,31 @@ Floci's EKS backing, not ArgoCD-managed).
   `FLOCI_AWS_*`) are pinned in `bootstrap/versions.sh`, covered by the pin guards
   ([security.md](security.md)), and overridable via `.env`.
 
-### Keycloak edge/OIDC smoke
+### Zitadel smoke (E1/E2)
 
-`make smoke COMPONENT=keycloak` (`bootstrap/smoke-keycloak.sh`) proves the
-identity plane, not just that the pod is up:
+`make smoke COMPONENT=zitadel` (`bootstrap/smoke-zitadel.sh`) proves the
+identity plane and the real Kong/TLS edge:
 
-- **Secrets** — all three ExternalSecrets (`keycloak-admin`,
-  `keycloak-db-credentials`, `keycloak-test-user`) reach `SecretSynced`; the DB
-  secret has type `kubernetes.io/basic-auth`.
-- **Rollout** — `StatefulSet/keycloak` is Ready; the realm ConfigMap and
-  admin/test secrets have their expected keys.
-- **Edge** — `Certificate/keycloak-tls` is Ready, `Ingress/keycloak` is served by
-  `ingressClassName: kong`, and the smoke port-forwards the Kong proxy on
-  `KEYCLOAK_SMOKE_PORT` (default `18443`) with the `sca-ca` chain.
-- **OIDC** — discovery `issuer` matches the StatefulSet's `KC_HOSTNAME`; a
-  PKCE S256 authorization request with `prompt=none` returns 302 with
-  `error=login_required`; the smoke user obtains a password-grant token and
-  `userinfo` accepts it. The smoke credential comes from
-  `secret/keycloak/test-user/<env>` (run `bootstrap/seed-vault.sh` once on an
-  older local cluster; it is idempotent).
-
-### Linkerd mesh smoke (data plane)
-
-`make smoke COMPONENT=linkerd` (`bootstrap/smoke-linkerd.sh`) proves the mesh
-carries traffic, not just that the control plane is up:
-
-- **Preflight (clock/TTL)** — before the rollout gate, it port-forwards each
-  control-plane proxy's admin endpoint (`:4191`) and reads
-  `identity_cert_expiration_timestamp_seconds`. A leaf with less than 1h left
-  fails with a pointer to the emulator clock. The controller containers are
-  distroless, so the read is a host-side port-forward, not an `exec`.
-- **Injected workload** — a throwaway namespace (`linkerd-smoke`, deleted on
-  exit; `LINKERD_SMOKE_KEEP=1` keeps it for debugging) is annotated
-  `linkerd.io/inject: enabled`; a pinned
-  `nginx-unprivileged` server (`:8080`) and a `curlimages/curl` Job exercise the
-  data plane. The smoke asserts both pods carry the `linkerd-proxy` container
-  and the `linkerd.io/created-by=linkerd/proxy-injector` /
-  `linkerd.io/proxy-version` annotations — a silently skipped injection
-  (`failurePolicy: Ignore`) is a hard failure.
-- **Real request** — the client `curl`s the server's Service through the mesh
-  (200 + a known body), checks `/ready` and its own live identity leaf, and both
-  proxies must report `response_total{classification="success"}` for `direction`
-  `outbound` and `inbound`. When the proxy exposes a `tls` label it is asserted
-  `tls="true"`; otherwise mTLS is proven by both proxies holding live leaves
-  and the request traversing both.
-- **Clock/TTL caveat** — the emulated EKS node's clock can advance past the
-  chart's 24h identity leaf lifetime, leaving new proxies with `Expired`
-  certificates (old pods keep serving, so ArgoCD still says `Healthy`). The
-  `local` overlay raises `identity.issuer.issuanceLifetime` to `168h0m0s`;
-  dev/qa/prod keep the default. CI always boots a fresh cluster (<24h), so it is
-  not affected. If it happens on a long-lived local cluster, delete the linkerd
-  pods to re-issue leaves.
-- **Pins** — `LINKERD_SMOKE_SERVER_IMAGE` and `LINKERD_SMOKE_CLIENT_IMAGE` live
-  in `bootstrap/versions.sh`, covered by the pin guards.
+- **Secrets** — the three ExternalSecrets (`zitadel-masterkey`,
+  `zitadel-db-credentials`, `zitadel-login-session`) reach `SecretSynced`; the
+  DSN names `dbname=zitadel` and the Login cookie secret is at least 32 bytes.
+- **Bootstrap** — `Job/zitadel-init` and `Job/zitadel-setup` complete, then both
+  `Deployment/zitadel` and `Deployment/zitadel-login` roll out.
+- **Edge TLS** — `Certificate/zitadel-tls` is Ready from `sca-ca`; the Kong
+  Ingresses `zitadel-api` and `zitadel-login` use class `kong` and bind that
+  Secret. `zitadel-api` advertises protocols `https,grpcs`, and the `zitadel`
+  Service advertises `konghq.com/protocol: grpc` so Kong reaches the h2c
+  upstream. The provider decision is in
+  [ADR-004](adr/adr-004-keycloak-to-zitadel.md).
+- **Discovery** — port-forward `kong-proxy` TLS to `ZITADEL_SMOKE_PORT`
+  (default `19443`), resolve `zitadel.local` locally and verify the served chain
+  with the CA from `secret/zitadel-tls`. The issuer must be canonical
+  `https://zitadel.local` (`ExternalPort: 443`; non-standard ports are ignored
+  by Zitadel `v4.19.2`, see the [Deviations log](architecture.md#deviations-log)),
+  and `authorization_endpoint`, `token_endpoint` and `jwks_uri` must be present.
+- **Login UI** — `/ui/v2/login/ready` returns through the dedicated
+  `zitadel-login` Ingress. Service-side OIDC client flows are covered by the
+  [E3 cutover runbook](zitadel-cutover.md).
 
 ### Environment profile: `local` (not `qa`)
 

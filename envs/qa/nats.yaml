@@ -1,0 +1,42 @@
+# nats — qa profile (HA: JetStream cluster, 3 replicas, PDB, soft anti-affinity).
+# `preferred` anti-affinity keeps the overlay schedulable on the single-node
+# promote substrate while still spreading replicas in real HA.
+
+config:
+  cluster:
+    enabled: true
+    replicas: 3
+  jetstream:
+    fileStore:
+      pvc:
+        size: 10Gi
+
+container:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+podDisruptionBudget:
+  # Chart default is a single `maxUnavailable: 1`; enable it for the 3-node tier.
+  enabled: true
+
+podTemplate:
+  # The chart has no top-level `podTemplate.affinity` value (it is silently
+  # ignored); `merge` merges into the StatefulSet pod template, so the affinity
+  # has to sit under `spec`.
+  merge:
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: topology.kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: nats
+                    app.kubernetes.io/instance: nats

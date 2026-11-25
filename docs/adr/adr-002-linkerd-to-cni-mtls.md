@@ -2,7 +2,12 @@
 
 ## Status
 
-Accepted
+Superseded by [ADR-008](adr-008-cni-native-mtls.md) and closed by the D4 removal
+(2026-11-20). This decision described the previously planned Linkerd CNI plugin,
+which was never enabled: its values set `cniEnabled: false`, so the removed mesh
+used the `proxy-init` init container. See ADR-008 for the accepted replacement
+and [ADR-009](adr-009-calico-wireguard-fallback.md) for the selected Calico
+fallback.
 
 ## Context
 

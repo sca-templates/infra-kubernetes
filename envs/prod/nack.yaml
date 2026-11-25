@@ -1,0 +1,10 @@
+# nack — prod profile. Singleton controller; mirrors the qa resource envelope.
+# The prod difference is the manual sync policy (ADR-003), not the footprint.
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi

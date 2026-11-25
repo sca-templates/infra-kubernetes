@@ -1,0 +1,10 @@
+# nats — local profile (developer cluster: single node, minimal resources).
+# Matches the base defaults; declared for tier symmetry.
+
+config:
+  cluster:
+    enabled: false
+  jetstream:
+    fileStore:
+      pvc:
+        size: 1Gi

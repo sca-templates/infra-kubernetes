@@ -12,11 +12,12 @@ repo.
   projections. Services do **not** live here — each service owns its `deploy/`
   in its own repo (app-repo-as-source, [docs/onboarding-new-service.md](docs/onboarding-new-service.md)).
 - ArgoCD app-of-apps: `make bootstrap` seeds the platform catalog
-  (`apps-<env>.yaml` ApplicationSet + the dedicated `kong-<env>.yaml`,
-  `linkerd-<env>.yaml`, `postgres-app-<env>.yaml` and `kafka-<env>.yaml`
-  Applications) with `{{GIT_REPO_URL}}`/`{{GIT_TARGET_BRANCH}}` resolved
-  host-side; the root Application (`root-app-<env>.yaml`, `dev`/`qa`/`prod`
-  only) owns the services registry (`services-<env>.yaml`, never `local`).
+  (`apps-<env>.yaml` ApplicationSet + the optional `messaging-<env>.yaml`
+  ApplicationSet + the dedicated `kong-<env>.yaml` and
+  `postgres-app-<env>.yaml` Applications) with
+  `{{GIT_REPO_URL}}`/`{{GIT_TARGET_BRANCH}}` resolved host-side; the root
+  Application (`root-app-<env>.yaml`, `dev`/`qa`/`prod` only) owns the services
+  registry (`services-<env>.yaml`, never `local`).
 - A **clean restart** of the previous `infra-kubernetes` (which churned in
   `fix` commits): a human-reviewed gate per logical change, rollback over
   forward-fix.
@@ -52,26 +53,24 @@ and qa ([docs/workflow.md](docs/workflow.md#services-app-repo-as-source)).
 
 ## 3. Component catalog
 
-**18 components + ArgoCD.** Status column is the source of truth
-(`planned (Phase N)` until the phase lands; `deployed` from then on). Chart
-and image pins are set inside each phase and live under
-`infrastructure/<component>/` + `envs/<env>/`.
+**16 components + ArgoCD.** Status column is the source of truth
+(`planned (Phase N)` until the phase lands;
+`deployed` from then on). Chart and image pins are set inside each phase and
+live under `infrastructure/<component>/` + `envs/<env>/`.
 
 | Component | Namespace | Upstream chart | Role | Provenance | Status |
 | --- | --- | --- | --- | --- | --- |
 | cert-manager | `cert-manager` | jetstack/cert-manager | In-cluster TLS issuers | — | **deployed** (Phase 1) |
 | Vault | `vault` | hashicorp/vault | Secrets SSOT (KV-v2 + k8s auth) | [infra-vault](https://github.com/sca-templates/infra-vault) | **deployed** (Phase 2) |
 | External Secrets | `external-secrets` | external-secrets/external-secrets | Projects Vault KV → native Secrets | — | **deployed** (Phase 3) |
-| linkerd-crds | `linkerd` | linkerd/linkerd-crds | Mesh CRDs | [infra-linkerd](https://github.com/sca-templates/infra-linkerd) | **deployed** (Phase 4) |
 | CloudNativePG | `cloudnative-pg` | cloudnative-pg/cloudnative-pg | PostgreSQL operator | — | **deployed** (Phase 5) |
-| Strimzi | `strimzi` | strimzi/strimzi-kafka-operator | Kafka operator (KRaft) | [infra-kafka](https://github.com/sca-templates/infra-kafka) | **deployed** (Phase 6) |
 | redis-operator | `data` | ot-container-kit/redis-operator | Redis operator | [infra-redis](https://github.com/sca-templates/infra-redis) | **deployed** (Phase 7) |
 | Kong | `kong` | kong/kong (DB-less) | Edge gateway, dedicated Application, no SSA | [infra-kong](https://github.com/sca-templates/infra-kong) | **deployed** (Phase 8) |
-| Linkerd control plane | `linkerd` | linkerd/linkerd-control-plane | mTLS identity, golden signals | [infra-linkerd](https://github.com/sca-templates/infra-linkerd) | **deployed** (Phase 9) |
-| postgres-app (+ keycloak-db) | `data` | CNPG `Cluster` CRs (raw) | App + Keycloak databases; all 4 envs | [infra-postgres](https://github.com/sca-templates/infra-postgres) | **deployed** (Phase 10) |
-| Kafka | `data` | `Kafka`/`KafkaNodePool` CRs | Event backbone, TLS + SCRAM | [infra-kafka](https://github.com/sca-templates/infra-kafka) | **deployed** (Phase 11) |
+| postgres-app (+ zitadel-db) | `data` | CNPG `Cluster` CRs (raw) | App + Zitadel databases; all 4 envs | [infra-postgres](https://github.com/sca-templates/infra-postgres) | **deployed** (Phase 10 + ADR-004 E1/E4) |
+| NATS JetStream | `data` | nats/nats (JetStream) | Event backbone (idle; no Stream/Consumer CRs); optional per env | — | **deployed** (NATS migration C1–C4) |
+| NACK | `nats` | nats/nack | JetStream controller (Stream/Consumer CRDs); optional per env | — | **deployed** (NATS migration C1–C4) |
 | Redis | `data` | `RedisReplication` CR | Cache | [infra-redis](https://github.com/sca-templates/infra-redis) | **deployed** (Phase 12) |
-| Keycloak | `keycloak` | codecentric/keycloakx | OIDC IdP, realm `sca` | [infra-keycloak](https://github.com/sca-templates/infra-keycloak) | **deployed** (Phase 13) |
+| Zitadel | `zitadel` | zitadel/zitadel (h2c behind Kong TLS) | OIDC IdP (ADR-004 E1/E2); edge validated | — | **deployed** (E1/E2 validated) |
 | kube-prometheus-stack | `observability` | prometheus-community/kube-prometheus-stack | Metrics + Grafana + Alertmanager | [infra-prometheus](https://github.com/sca-templates/infra-prometheus) | planned (Phase 14) |
 | Loki | `loki` | grafana/loki | Log aggregation | [infra-loki](https://github.com/sca-templates/infra-loki) | planned (Phase 15) |
 | Alloy | `observability` | grafana/alloy | Ships pod logs to Loki | — | planned (Phase 15) |
@@ -80,9 +79,8 @@ and image pins are set inside each phase and live under
 | ArgoCD | `argocd` | argoproj/argo-cd (Makefile) | GitOps engine | — | **deployed** (Phase 0.0) |
 
 **Intentional exclusions** (per the restart plan): no Consul in-cluster
-(ADR-001; native DNS + Linkerd replace it), no MinIO, no Unleash, no
-KafkaConnect/Debezium, no kafka-ui, no linkerd-viz in-cluster, no cloud
-in-cluster. No `latest` tags; this repo builds nothing. **Services are not part
+(ADR-001; native DNS replaces it), no MinIO, no Unleash, no
+KafkaConnect/Debezium, no kafka-ui, no cloud in-cluster. No `latest` tags; this repo builds nothing. **Services are not part
 of this catalog** — each service owns its `deploy/` and is registered in
 `argocd/services-<env>.yaml`
 ([docs/onboarding-new-service.md](docs/onboarding-new-service.md)). The cloud
@@ -100,18 +98,20 @@ before CRs; Vault before ESO syncs; datastores before consumers.
 | --- | --- |
 | -30 | Root Application per env |
 | -20 | ApplicationSet, namespaces, cert-manager (+CRDs) |
-| -10 | Pure operators/CRDs: external-secrets, linkerd-crds, cloudnative-pg, strimzi, redis-operator |
+| -10 | Pure operators/CRDs: external-secrets, cloudnative-pg, redis-operator |
 | 0 | Vault |
 | 10 | Vault seeded by `bootstrap/seed-vault.sh` after pod `Running` (CI/manual, not an ArgoCD hook) |
 | 20 | Kong |
-| 30 | Linkerd control plane (dedicated `linkerd-<env>` Application) |
-| 40 | Datastores: postgres-app, keycloak-db (CNPG), kafka, redis CRs |
-| 50 | Consumers: keycloak |
+| 40 | Datastores: postgres-app, zitadel-db (CNPG), nats (JetStream), redis CRs |
+| 50 | Consumers: zitadel (after `zitadel-db` at 40); nack (JetStream controller, after `nats` at 40) |
 | 60 | Observability: kube-prometheus-stack, loki, alloy, tempo |
 | 60 | Service apps (registry `services-<env>.yaml`) — consumers of the catalog, wave set per service |
 | 80 | Velero (local: Floci S3) |
 
-The normative map with rationale lives in `docs/architecture.md`.
+Platform Applications are not children of a root app, so `sync-wave` orders
+resources **inside one Application**; cross-Application waves are best-effort and
+the components must tolerate retries. The normative map with rationale lives in
+`docs/architecture.md`.
 
 ## 5. Image policy (strict)
 
@@ -136,8 +136,11 @@ guards ([docs/security.md](docs/security.md)).
 | `make eks-up` | Start Floci in EKS mode: create the emulated EKS cluster (k3s) and point kubectl at it — the only local cluster substrate (dev/CI tooling, not a component) |
 | `make eks-hosts` | WSL2 only: map the emulated ECR hostname to `127.0.0.1` in `/etc/hosts` (sudo; re-run after a WSL restart) |
 | `make eks-down` | Delete the emulated EKS cluster, IAM user and kubeconfig context |
-| `make eks-status` | Report the emulated EKS cluster status and its nodes |
-| `make port-forward APP=<name>` | Reach a platform UI/API locally (argocd, vault, keycloak, grafana, prometheus, …) |
+| `make eks-status` | Report the emulated EKS cluster status, its nodes and the CNI substrate |
+| `make cni-up` | Install the bootstrap-managed Calico + WireGuard + kube-proxy substrate in the emulated EKS cluster (dev/CI tooling, not a component) |
+| `make cni-down` | Remove the bootstrap-managed CNI resources from the emulated EKS cluster |
+| `make cni-status` | Report bootstrap-managed CNI DaemonSets, WireGuard config and node keys |
+| `make port-forward APP=<name>` | Reach a platform UI/API locally (argocd, vault, zitadel, grafana, prometheus, …) |
 | `make clean` | Remove local state (`.env`, `.secrets/`, generated artifacts) |
 
 The Makefile is a **thin wrapper**: after bootstrap, deployments happen
@@ -193,6 +196,7 @@ Base URL: `https://raw.githubusercontent.com/sca-templates/sca-docs/main/<path>`
 | ArgoCD app `OutOfSync` | Drift or failed sync-wave | `kubectl get application <name> -n argocd`; check `status.conditions`; sync manually if prod |
 | ExternalSecret `SecretSyncedError` | Vault path missing or k8s-auth role wrong | Check `ClusterSecretStore vault` Ready; verify path under `secret/<service>/<env>`; re-run `bootstrap/seed-vault.sh` (local) |
 | Pods CrashLoopBackOff after a wave bump | Dependency started before its datastore/operator | Re-check wave assignment; consumers must be ≥10 above their dependency |
+| `smoke COMPONENT=cni` fails | Calico/kube-proxy substrate did not converge on the Floci node | `make cni-status`; check `calico-node`/`kube-proxy` in `kube-system`, `FelixConfiguration/default` and node WireGuard annotations; revert D3 + `make eks-down` for rollback, do not flip dataplanes in place |
 | EKS node OOM | Host RAM exhausted | Stop the Compose stack before bootstrapping; 1-replica local profile |
 | EKS smoke: ECR hostname does not resolve | WSL2 does not resolve `*.localhost` | `make eks-hosts` (sudo; re-run after a WSL restart); Linux/macOS/CI resolve it natively |
 | `ImagePullBackOff` | Bad pin or unreachable registry | Verify the pinned tag exists upstream; check node images; never float `latest` |

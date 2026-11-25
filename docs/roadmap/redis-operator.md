@@ -45,13 +45,12 @@ Rollout notes:
   `https://` chart repo. The pin guards in `security.yml` are unaffected: they
   reject floating `targetRevision`/tags, not the host.
 - The operator is installed in the **`data` namespace**, sharing it with the
-  datastores it will manage, instead of a namespace of its own like Strimzi's
-  and CloudNativePG's — it is the first app to create `data` (via
+  datastores it will manage, instead of a namespace of its own like
+  CloudNativePG's — it is the first app to create `data` (via
   `CreateNamespace=true`). `redisOperator.watchNamespace: ""` is left empty on
   purpose: the chart then renders **no** `WATCH_NAMESPACE` env at all, which is
   its way of saying "every namespace", so the Phase 12 CRs can live wherever they
-  are meant to. Same reasoning as Strimzi's `watchAnyNamespace` and
-  CloudNativePG's `config.clusterWide`.
+  are meant to. Same reasoning as CloudNativePG's `config.clusterWide`.
 - **No PodDisruptionBudget** in the `qa`/`prod` overlays (2 replicas + soft
   anti-affinity each): this chart ships no PDB value, so a budget would mean a
   raw manifest in an env-agnostic `manifests/` directory that would also apply to
