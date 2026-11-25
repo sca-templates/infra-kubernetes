@@ -288,16 +288,14 @@ create_restore_cluster() {
     exit 1
   }
   scheduling_yaml=""
-  if [ "$(kubectl -n "$NAMESPACE" get cluster "$source" -o jsonpath='{.spec.podTemplate.spec.nodeSelector.workload}' 2>/dev/null)" = "database" ]; then
-    scheduling_yaml="  podTemplate:
-    spec:
-      nodeSelector:
-        workload: database
-      tolerations:
-        - key: workload
-          operator: Equal
-          value: database
-          effect: NoSchedule"
+  if [ "$(kubectl -n "$NAMESPACE" get cluster "$source" -o jsonpath='{.spec.affinity.nodeSelector.workload}' 2>/dev/null)" = "database" ]; then
+    scheduling_yaml="    nodeSelector:
+      workload: database
+    tolerations:
+      - key: workload
+        operator: Equal
+        value: database
+        effect: NoSchedule"
   fi
   if [ -n "$target_time" ]; then
     target_yaml="      recoveryTarget:

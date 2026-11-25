@@ -58,25 +58,6 @@ spec:
       archive_timeout: "60s"
   storage:
     size: 1Gi
-  podTemplate:
-    spec:
-      securityContext:
-        runAsNonRoot: true
-        seccompProfile:
-          type: RuntimeDefault
-      containers:
-        - name: postgres
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
-        - name: instance-manager
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
   resources:
     requests:
       cpu: 100m

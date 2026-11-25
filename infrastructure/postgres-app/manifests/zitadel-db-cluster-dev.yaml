@@ -52,32 +52,6 @@ spec:
       archive_timeout: "60s"
   storage:
     size: 2Gi
-  podTemplate:
-    spec:
-      nodeSelector:
-        workload: database
-      tolerations:
-        - key: workload
-          operator: Equal
-          value: database
-          effect: NoSchedule
-      securityContext:
-        runAsNonRoot: true
-        seccompProfile:
-          type: RuntimeDefault
-      containers:
-        - name: postgres
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
-        - name: instance-manager
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
   resources:
     requests:
       cpu: 100m
@@ -88,3 +62,10 @@ spec:
   affinity:
     # Reduced-HA dev profile: one instance, no anti-affinity constraint.
     enablePodAntiAffinity: false
+    nodeSelector:
+      workload: database
+    tolerations:
+      - key: workload
+        operator: Equal
+        value: database
+        effect: NoSchedule

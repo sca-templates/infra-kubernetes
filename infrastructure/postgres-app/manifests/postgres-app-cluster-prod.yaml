@@ -59,32 +59,6 @@ spec:
       pg_stat_statements.track: all
   storage:
     size: 20Gi
-  podTemplate:
-    spec:
-      nodeSelector:
-        workload: database
-      tolerations:
-        - key: workload
-          operator: Equal
-          value: database
-          effect: NoSchedule
-      securityContext:
-        runAsNonRoot: true
-        seccompProfile:
-          type: RuntimeDefault
-      containers:
-        - name: postgres
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
-        - name: instance-manager
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
   resources:
     requests:
       cpu: 500m
@@ -99,3 +73,10 @@ spec:
     enablePodAntiAffinity: true
     podAntiAffinityType: preferred
     topologyKey: kubernetes.io/hostname
+    nodeSelector:
+      workload: database
+    tolerations:
+      - key: workload
+        operator: Equal
+        value: database
+        effect: NoSchedule
