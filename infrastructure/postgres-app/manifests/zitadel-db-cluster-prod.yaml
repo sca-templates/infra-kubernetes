@@ -11,8 +11,8 @@ metadata:
   namespace: data
   annotations:
     argocd.argoproj.io/sync-options: Prune=false,Delete=false
-    # After the ExternalSecret (wave 0) that creates the bootstrap credentials.
-    argocd.argoproj.io/sync-wave: "10"
+    # After the ExternalSecret (wave 10) that creates the bootstrap credentials.
+    argocd.argoproj.io/sync-wave: "20"
 spec:
   instances: 3
   imageName: ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie
