@@ -180,8 +180,8 @@ diagnose() {
   kubectl get applicationset "${APPSET_NAME}" -n argocd -o yaml 2>/dev/null | tee "${STATE_DIR}/${APPSET_NAME}-diagnose.yaml" || true
   echo "── diagnose: ApplicationSet/${MESSAGING_APPSET_NAME}"
   kubectl get applicationset "${MESSAGING_APPSET_NAME}" -n argocd -o yaml 2>/dev/null | tee "${STATE_DIR}/${MESSAGING_APPSET_NAME}-diagnose.yaml" || true
-  echo "── diagnose: pods (all namespaces not Running/Completed)"
-  kubectl get pods -A --no-headers 2>/dev/null | grep -vE 'Running|Completed' || true
+  echo "── diagnose: pods (all namespaces not Running/Completed or not Ready)"
+  kubectl get pods -A --no-headers 2>/dev/null | awk '{split($3, a, "/"); if (($4 != "Running" && $4 !~ /^Completed/) || a[1] != a[2]) print}' || true
   echo "── diagnose: recent events (all namespaces, last 100)"
   kubectl get events -A --sort-by=.lastTimestamp 2>/dev/null | tail -n 100 | tee "${STATE_DIR}/events.txt" || true
   echo "── diagnose: node conditions / allocated resources"
@@ -405,6 +405,16 @@ if ! kubectl get namespace argocd >/dev/null 2>&1; then
   echo "ERROR: kubectl cannot reach the cluster; check the Floci EKS credentials and context" >&2
   exit 1
 fi
+
+echo "── wait for External Secrets webhook endpoints before credential waves"
+webhook_deadline=$(( $(date +%s) + TIMEOUT ))
+while : ; do
+  webhook_now="$(date +%s)"
+  [ "${webhook_now}" -lt "${webhook_deadline}" ] || { echo "FAIL: external-secrets-webhook endpoints never became Ready within ${TIMEOUT}s" >&2; diagnose; exit 1; }
+  webhook_endpoints="$(kubectl -n external-secrets get endpointslice -l kubernetes.io/service-name=external-secrets-webhook -o jsonpath='{.items[*].endpoints[*].addresses[*]}' 2>/dev/null || true)"
+  [ -n "${webhook_endpoints}" ] && break
+  sleep "${POLL}"
+done
 
 # Vault is born sealed and projected secrets are a prerequisite for consumers
 # whose sync hooks wait on them (Zitadel), so seed it before waiting for the

@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: List
+items:
+  - apiVersion: rbac.authorization.k8s.io/v1
+    kind: Role
+    metadata:
+      name: postgres-breakglass
+      namespace: data
+      annotations:
+        argocd.argoproj.io/sync-wave: "0"
+    rules:
+      - apiGroups:
+          - ""
+        resources:
+          - pods
+        verbs:
+          - get
+        resourceNames:
+          - postgres-app-1
+          - postgres-app-2
+          - postgres-app-3
+          - zitadel-db-1
+          - zitadel-db-2
+          - zitadel-db-3
+      - apiGroups:
+          - ""
+        resources:
+          - pods/exec
+        verbs:
+          - create
+        resourceNames:
+          - postgres-app-1
+          - postgres-app-2
+          - postgres-app-3
+          - zitadel-db-1
+          - zitadel-db-2
+          - zitadel-db-3
+  - apiVersion: rbac.authorization.k8s.io/v1
+    kind: RoleBinding
+    metadata:
+      name: postgres-breakglass
+      namespace: data
+      annotations:
+        argocd.argoproj.io/sync-wave: "0"
+    roleRef:
+      apiGroup: rbac.authorization.k8s.io
+      kind: Role
+      name: postgres-breakglass
+    subjects:
+      - apiGroup: rbac.authorization.k8s.io
+        kind: Group
+        name: sca-db-breakglass

@@ -112,6 +112,14 @@ copies the contract into service namespaces. The data/environment values are
 seeded or provisioned out of band per [ADR-005](adr/adr-005-kafka-to-nats-jetstream.md)
 and the runbook in [messaging.md](messaging.md).
 
+## 3.2 Wire PostgreSQL network access
+
+Every service namespace that connects to PostgreSQL must carry `db-access=true`; the CNPG `NetworkPolicy`s select client namespaces by that label together with `kubernetes.io/metadata.name`, so a connection from an unlabelled namespace is dropped.
+
+- Set `db-access=true` on the service namespace in the service's own `deploy/` or namespace manifest; this repo sets it only for `zitadel` because it consumes `zitadel-db`.
+- Services live in other repositories, so their namespaces and labels are not modified here; the platform grants no database access by default.
+- The pooler rules are forward-compatible: pods labelled `cnpg.io/cluster: <cluster>-pooler` will reach PostgreSQL on 5432 when the pooler lands, without a policy change here.
+
 ## 4. Environment promotion and releases
 
 Dev/qa deployment is an **ArgoCD sync** (service `promote` workflow); prod
