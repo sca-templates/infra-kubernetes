@@ -8,4 +8,4 @@ CNPG-I plugin that adds S3-compatible base backup and WAL archiving to CloudNati
 - Namespace: `cloudnative-pg`
 - Wave: 10
 - CRD: `objectstores.barmancloud.cnpg.io`
-- No `Cluster` or `ObjectStore` resources live here; the backup configuration migrates from the datastores in `infrastructure/postgres-app/manifests/` in the following change.
+- No `Cluster` resources live here; the per-environment `ObjectStore` resources live with the datastores in `infrastructure/postgres-app/manifests/`.

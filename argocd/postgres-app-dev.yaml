@@ -3,8 +3,9 @@
 # `postgres-app` and `zitadel-db` are raw CloudNativePG `Cluster` CRs, so they
 # cannot go through the platform ApplicationSet (which renders Helm charts).
 # They ship in every environment through this per-env Application, at wave 40:
-# after CloudNativePG (-10) and after the Vault/ESO chain that projects the
-# bootstrap credentials.
+# after CloudNativePG (-10), the Barman Cloud plugin (10) and the Vault/ESO
+# chain. Inside the Application: credentials (10), ObjectStores (20), Clusters
+# (30) and ScheduledBackups (40).
 #
 # The manifests live in per-environment files under
 # `infrastructure/postgres-app/manifests/`; `directory.include` selects only the

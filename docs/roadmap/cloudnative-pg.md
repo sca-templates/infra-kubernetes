@@ -26,7 +26,7 @@ The operator milestone is complete. The data-protection layer is a separate
 Phase B deliverable, tracked in [backups.md](../backups.md) and the global Work
 Log.
 
-- [x] `barmanObjectStore` + continuous WAL archiving on `postgres-app` and
+- [x] `ObjectStore` + plugin continuous WAL archiving on `postgres-app` and
       `zitadel-db` (all four envs; the former `keycloak-db` was removed in ADR-004 E4)
 - [x] daily `ScheduledBackup`s with environment retention (local `7d`,
       dev/qa `30d`, prod `90d`)
