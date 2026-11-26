@@ -1,5 +1,16 @@
 # Changelog
 
+## [6.0.0](https://github.com/sca-templates/infra-kubernetes/compare/v5.0.0...v6.0.0) (2026-11-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* **cnpg:** restores no longer reference a Backup object; recovery now uses the ObjectStore via the barman-cloud plugin and externalClusters
+
+### Features
+
+* **cnpg:** migrate backups to Barman Cloud plugin ([#129](https://github.com/sca-templates/infra-kubernetes/issues/129)) ([c899aeb](https://github.com/sca-templates/infra-kubernetes/commit/c899aeb6756dbf5a10ff13eb046e1abf1a24382c))
+
 ## [5.0.0](https://github.com/sca-templates/infra-kubernetes/compare/v4.0.0...v5.0.0) (2026-11-25)
 
 
