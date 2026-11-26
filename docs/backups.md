@@ -6,7 +6,7 @@ things and are not interchangeable:
 | Layer | Protects | Mechanism | Source of truth |
 | --- | --- | --- | --- |
 | Velero | Kubernetes API objects (and PVs where a CSI driver exists) | Scheduled `Backup` to object storage | `infrastructure/velero/`, `envs/<env>/velero.yaml`, `argocd/apps-<env>.yaml` |
-| CloudNativePG | `postgres-app` and `zitadel-db` data | Barman base backups + WAL archiving; PITR | `infrastructure/postgres-app/manifests/` |
+| CloudNativePG | `postgres-app` and `zitadel-db` data | Barman Cloud plugin base backups + WAL archiving; PITR | `infrastructure/postgres-app/manifests/` |
 | Vault | The Raft datastore (secrets SSOT) | `vault operator raft snapshot` CronJob to object storage | `infrastructure/vault/manifests/`, `infrastructure/vault/backup/manifests/` |
 
 The datastore-native layers are the authoritative restore path for their data.
@@ -28,18 +28,17 @@ are created by the `floci-buckets` Job in
 environment the Job probes the Floci endpoint, finds it unreachable, and exits
 successfully without changing anything.
 
-The CNPG `Cluster`s use `ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie`
-because the native `spec.backup.barmanObjectStore` path shells out to the
-`barman-cloud-*` binaries. CNPG's `minimal` and `standard` flavors do not ship
-them; the `system` flavor is `standard` plus the Barman Cloud package. The
-`system` images are deprecated and removed in CNPG 1.32, so migrating to the
-Barman Cloud Plugin is the follow-up before the operator upgrade.
-
-The local `Cluster`s also set `AWS_REQUEST_CHECKSUM_CALCULATION` and
-`AWS_RESPONSE_CHECKSUM_VALIDATION` to `when_required` via `spec.env` as a
-compatibility setting for Floci's S3 emulation; this is independent of the
-Barman binary requirement. The external-S3 environments keep the boto3 default
-checksum behaviour.
+CNPG 1.30 archives WAL and takes base backups through
+`barman-cloud.cloudnative-pg.io`. Each `Cluster` references one `ObjectStore`
+per environment; the `ObjectStore` carries the destination path, credentials,
+compression settings and retention policy that used to live under
+`spec.backup.barmanObjectStore`. The local `ObjectStore`s set
+`AWS_REQUEST_CHECKSUM_CALCULATION` and `AWS_RESPONSE_CHECKSUM_VALIDATION` to
+`when_required` in `instanceSidecarConfiguration.env` for Floci's S3 emulation;
+the external-S3 environments keep the boto3 default checksum behaviour. The
+`Cluster`s still use `18.4-system-trixie` from the earlier native-barman era;
+switching to the `standard` flavor is a separate change before the CNPG 1.32
+operator upgrade.
 
 External buckets must exist before the first scheduled backup. Create them out
 of band and grant the credentials write, list, and delete permissions on their
@@ -53,7 +52,7 @@ credential is stored in git.
 | Vault path | Projected Secret | Consumer |
 | --- | --- | --- |
 | `secret/velero/credentials` | `velero-credentials` | Velero |
-| `secret/cnpg/<env>` | `cnpg-backup-credentials` | both CNPG `Cluster`s |
+| `secret/cnpg/<env>` | `cnpg-backup-credentials` | both CNPG `ObjectStore`s |
 | `secret/vault-snapshot/<env>` | `vault-snapshot-credentials` | Vault snapshot CronJob |
 
 `bootstrap/seed-vault.sh` seeds the `local` dummy values. On `dev`/`qa`/`prod`,
@@ -76,7 +75,7 @@ Cron expressions are evaluated by the Kubernetes controller in its timezone
 
 ```bash
 kubectl -n velero get backupstoragelocation,schedule,backup
-kubectl -n data get cluster,backup,scheduledbackup
+kubectl -n data get cluster,backup,scheduledbackup,objectstore
 kubectl -n vault get cronjob,job
 kubectl -n vault get externalsecret vault-snapshot-credentials
 ```
@@ -157,10 +156,13 @@ kubectl -n data get backup \
   -o custom-columns='NAME:.metadata.name,CLUSTER:.spec.cluster.name,PHASE:.status.phase,BACKUPID:.status.backupId'
 ```
 
-### Restore from a `Backup` object
+### Restore from the object store
 
-Use this when the wanted base backup is present in the `data` namespace. Set
-`database` and `owner` to match the source (`app`/`app` for `postgres-app`,
+CNPG selects the latest recoverable base backup from the referenced
+`ObjectStore` and bootstraps a new `Cluster`. `serverName` is the source
+`Cluster` name; `barmanObjectName` is the per-environment `ObjectStore` from
+`infrastructure/postgres-app/manifests/objectstore-<service>-<env>.yaml`.
+Set `database` and `owner` to match the source (`app`/`app` for `postgres-app`,
 `zitadel`/`zitadel` for `zitadel-db`).
 
 ```bash
@@ -176,12 +178,18 @@ spec:
     size: 10Gi
   bootstrap:
     recovery:
-      backup:
-        name: postgres-app-daily-20261031
+      source: barman-cloud
       secret:
         name: postgres-app-credentials
       database: app
       owner: app
+  externalClusters:
+    - name: barman-cloud
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: postgres-app-prod
+          serverName: postgres-app
 EOF
 kubectl -n data wait --for=condition=Ready cluster/postgres-app-restore \
   --timeout=15m
@@ -189,10 +197,9 @@ kubectl -n data wait --for=condition=Ready cluster/postgres-app-restore \
 
 ### Point-in-time restore
 
-For PITR, point the recovery at the object store and set `targetTime` (RFC3339).
-This works even when the `Backup` object is gone but the base backup and WAL
-archive remain. `source` must match the folder name in the destination path
-(`s3://<bucket>/<cluster-name>`).
+For PITR, keep the same plugin reference and set `targetTime` (RFC3339). This
+works even when the `Backup` object is gone but the base backup and WAL archive
+remain in the object store.
 
 ```bash
 kubectl -n data apply -f - <<'EOF'
@@ -207,7 +214,7 @@ spec:
     size: 10Gi
   bootstrap:
     recovery:
-      source: postgres-app
+      source: barman-cloud
       secret:
         name: postgres-app-credentials
       database: app
@@ -215,25 +222,18 @@ spec:
       recoveryTarget:
         targetTime: "2026-10-31T12:00:00Z"
   externalClusters:
-    - name: postgres-app
-      barmanObjectStore:
-        destinationPath: s3://sca-prod-cnpg/postgres-app
-        s3Credentials:
-          accessKeyId:
-            name: cnpg-backup-credentials
-            key: ACCESS_KEY_ID
-          secretAccessKey:
-            name: cnpg-backup-credentials
-            key: ACCESS_SECRET_KEY
-          region:
-            name: cnpg-backup-credentials
-            key: AWS_REGION
+    - name: barman-cloud
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: postgres-app-prod
+          serverName: postgres-app
 EOF
 ```
 
-For `local`, add the Floci `endpointURL` and use the `cnpg-backups` bucket.
-For `zitadel-db`, use `source: zitadel-db`, its bucket path, and
-`database: zitadel`/`owner: zitadel`.
+For `local`, use `barmanObjectName: postgres-app-local`; the Floci `endpointURL`
+and checksum settings already live in the `ObjectStore`. For `zitadel-db`, use
+`zitadel-db-<env>` and `database: zitadel`/`owner: zitadel`.
 
 After the restore cluster is `Ready`, connect to its primary and verify the
 expected rows before switching consumers:
@@ -246,8 +246,9 @@ kubectl -n data get pods -l cnpg.io/cluster=postgres-app-pitr
 Remove the restore cluster and its PVCs when validation is complete. Never
 delete the source cluster or its object-store prefix as part of a test.
 
-`bootstrap/smoke-postgres-app.sh` automates both paths: a PITR round-trip on
-`postgres-app` and a latest-backup restore on `zitadel-db`. Set
+`bootstrap/smoke-postgres-app.sh` automates both paths through the plugin: a
+PITR round-trip on `postgres-app` and a latest-backup restore on `zitadel-db`.
+It also asserts the `Cluster` plugin and the referenced `ObjectStore`. Set
 `SMOKE_CNPG_PITR=0` to skip the PITR half.
 
 ## Vault: Raft snapshot and restore
@@ -311,8 +312,9 @@ markers. Set `SMOKE_KEEP_VAULT_JOB=1` to keep the Job for inspection.
 | --- | --- | --- |
 | Velero `BackupStorageLocation` unavailable | Wrong bucket/credentials/endpoint | `kubectl -n velero describe backupstoragelocation default`; confirm the bucket exists |
 | Velero `Backup` `PartiallyFailed` | A resource could not be backed up | `kubectl -n velero describe backup <name>`; inspect `status.errors` |
-| CNPG `ContinuousArchiving=False` | Missing bucket/credentials or unreachable endpoint | `kubectl -n data describe cluster <name>`; check the CNPG pod logs |
+| CNPG `ContinuousArchiving=False` | Missing `ObjectStore`, bucket/credentials, plugin sidecar or unreachable endpoint | `kubectl -n data describe cluster <name> objectstore <barmanObjectName>`; check the CNPG pod and plugin sidecar logs |
 | CNPG `Backup` `failed` | Barman or object-store error | `kubectl -n data describe backup <name>`; check `status.error` |
+| `NoSuchBucket` after a Floci restart | Local buckets were lost; the Velero `PreSync` Job already ran | re-sync `velero-local` so the `floci-buckets` Job recreates `velero`, `cnpg-backups` and `vault-snapshots` |
 | Vault Job `Init:Error` | `vault-snapshot` role/policy missing or TLS CA mismatch | re-run `bootstrap/seed-vault.sh`; check the init-container logs |
 | Vault upload fails | S3 credentials/bucket/endpoint wrong | check the `upload` container logs and `vault-snapshot-credentials` |
 | ExternalSecret not ready | Vault path missing or role wrong | `kubectl -n <ns> describe externalsecret <name>`; see [secrets.md](secrets.md) |
@@ -326,7 +328,7 @@ Live restore validation passed on the Floci emulated EKS substrate on
 | --- | --- | --- |
 | Velero | `make smoke COMPONENT=velero` | `Backup` and `Restore` `Completed`; the deleted namespace and its marker were recovered |
 | Velero schedule template | `Backup` from `Schedule/velero-critical-namespaces` | `Completed` (639 items, 0 errors) on 2026-11-14; backup `velero-critical-namespaces-manual-20261114154830` |
-| CNPG | `make smoke COMPONENT=postgres-app` | PITR with A/B markers on `postgres-app`, latest-backup restore on `zitadel-db`; the 2026-11-14 historical run also restored `keycloak-db`, which E4 later removed |
+| CNPG | `make smoke COMPONENT=postgres-app` | PITR with A/B markers on `postgres-app`, latest-backup restore on `zitadel-db`; the 2026-11-14 historical run also restored `keycloak-db`, which E4 later removed. Re-run green on 2026-11-25 after the Barman Cloud plugin migration, with `ContinuousArchiving=True` on both clusters |
 | Vault snapshot | `make smoke COMPONENT=vault` | `VAULT_SNAPSHOT_OK` + `VAULT_SNAPSHOT_UPLOADED` |
 | Vault restore drill | manual, per the runbook above | Canary KV written, snapshot taken, canary deleted, Raft snapshot restored on the active node; the canary was recovered and ExternalSecrets stayed `SecretSynced` |
 

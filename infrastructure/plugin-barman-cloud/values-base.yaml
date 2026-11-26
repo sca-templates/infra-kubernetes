@@ -1,0 +1,22 @@
+replicaCount: 1
+
+logLevel: info
+
+image:
+  registry: ghcr.io
+  repository: cloudnative-pg/plugin-barman-cloud
+  tag: "v0.16.0"
+  pullPolicy: IfNotPresent
+
+sidecarImage:
+  registry: ghcr.io
+  repository: cloudnative-pg/plugin-barman-cloud-sidecar
+  tag: "v0.16.0"
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi

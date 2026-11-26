@@ -8,10 +8,13 @@ metadata:
   name: zitadel-db-daily
   namespace: data
   annotations:
-    argocd.argoproj.io/sync-wave: "30"
+    argocd.argoproj.io/sync-wave: "40"
 spec:
   schedule: "0 15 2 * * *"
   backupOwnerReference: cluster
   immediate: false
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
   cluster:
     name: zitadel-db

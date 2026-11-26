@@ -1,17 +1,20 @@
 # Scheduled CNPG base backups — dev.
 #
 # CloudNativePG uses a six-field cron expression (seconds first). The schedules
-# follow the Clusters (wave 20) after the Vault-dependent credentials wave.
+# follow the Clusters (wave 30) after the Vault-dependent credentials wave.
 apiVersion: postgresql.cnpg.io/v1
 kind: ScheduledBackup
 metadata:
   name: postgres-app-daily
   namespace: data
   annotations:
-    argocd.argoproj.io/sync-wave: "30"
+    argocd.argoproj.io/sync-wave: "40"
 spec:
   schedule: "0 30 1 * * *"
   backupOwnerReference: cluster
   immediate: false
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
   cluster:
     name: postgres-app

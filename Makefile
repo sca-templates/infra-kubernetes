@@ -166,7 +166,7 @@ cni-status: ## Report bootstrap-managed CNI DaemonSets, WireGuard config and nod
 
 .PHONY: smoke
 smoke: ## Smoke a deployed component: make smoke COMPONENT=cert-manager
-	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cni, cert-manager, vault, external-secrets, cloudnative-pg, redis-operator, kong, postgres-app, redis, nack, nats, zitadel, velero, cloud, eks)'; exit 1; }
+	@[ -n "$(COMPONENT)" ] || { echo 'Usage: make smoke COMPONENT=<component> (cni, cert-manager, vault, external-secrets, cloudnative-pg, plugin-barman-cloud, redis-operator, kong, postgres-app, redis, nack, nats, zitadel, velero, cloud, eks)'; exit 1; }
 	bootstrap/smoke-target.sh "$(COMPONENT)"
 
 ##@ Local Git serve

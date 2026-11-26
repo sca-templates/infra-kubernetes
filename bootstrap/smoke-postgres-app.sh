@@ -69,6 +69,19 @@ wait_externalsecret() {
   done
 }
 
+wait_objectstore() {
+  local name="$1"
+  echo "── smoke(postgres-app): ObjectStore ${NAMESPACE}/${name} present"
+  for attempt in {1..60}; do
+    kubectl -n "$NAMESPACE" get objectstore "$name" --no-headers >/dev/null 2>&1 && return 0
+    [ "$attempt" -eq 60 ] && {
+      echo "FAIL: ObjectStore ${NAMESPACE}/${name} not found" >&2
+      exit 1
+    }
+    sleep "$POLL"
+  done
+}
+
 dump_continuous_archiving_diagnostics() {
   local cluster="$1" primary user pass
   echo "--- Cluster/${cluster} conditions" >&2
@@ -125,6 +138,11 @@ secret_value() {
   kubectl -n "$NAMESPACE" get secret "$1" -o jsonpath="{.data.$2}" | base64 -d
 }
 
+barman_object_for() {
+  kubectl -n "$NAMESPACE" get cluster "$1" \
+    -o jsonpath='{.spec.plugins[0].parameters.barmanObjectName}'
+}
+
 psql_in() {
   local pod="$1" user="$2" pass="$3" db="$4" sql="$5"
   kubectl -n "$NAMESPACE" exec "$pod" -- env PGPASSWORD="$pass" \
@@ -163,9 +181,21 @@ use_cluster_credentials() {
 verify_cluster() {
   local cluster="$1" secret="$2" database="$3" expected_identity="$4"
   local expected_extensions="${5:-}" check_wal="${6:-0}"
-  local identity wal_level extensions
+  local identity wal_level extensions store plugin
 
   wait_externalsecret "$secret"
+  plugin="$(kubectl -n "$NAMESPACE" get cluster "$cluster" \
+    -o jsonpath='{.spec.plugins[0].name}')"
+  [ "$plugin" = "barman-cloud.cloudnative-pg.io" ] || {
+    echo "FAIL: Cluster ${NAMESPACE}/${cluster} plugin='${plugin}', expected barman-cloud.cloudnative-pg.io" >&2
+    exit 1
+  }
+  store="$(barman_object_for "$cluster")"
+  [ -n "$store" ] || {
+    echo "FAIL: Cluster ${NAMESPACE}/${cluster} has no barman ObjectStore" >&2
+    exit 1
+  }
+  wait_objectstore "$store"
 
   echo "── smoke(postgres-app): Cluster ${NAMESPACE}/${cluster} Ready"
   kubectl -n "$NAMESPACE" wait --for=condition=Ready "cluster/${cluster}" --timeout="$TIMEOUT" >/dev/null
@@ -217,7 +247,9 @@ metadata:
 spec:
   cluster:
     name: ${cluster}
-  method: barmanObjectStore
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
 EOF
   BACKUPS+=("$name")
 }
@@ -275,16 +307,17 @@ wait_for_wal_archive() {
 }
 
 create_restore_cluster() {
-  local name="$1" source="$2" backup="$3" secret="$4" target_time="${5:-}"
-  local storage image database owner target_yaml=""
+  local name="$1" source="$2" secret="$3" target_time="${4:-}"
+  local storage image database owner barman_object target_yaml=""
   storage="$(kubectl -n "$NAMESPACE" get cluster "$source" -o jsonpath='{.spec.storage.size}')"
   image="$(kubectl -n "$NAMESPACE" get cluster "$source" -o jsonpath='{.spec.imageName}')"
   database="$(kubectl -n "$NAMESPACE" get cluster "$source" -o jsonpath='{.spec.bootstrap.initdb.database}')"
   owner="$(kubectl -n "$NAMESPACE" get cluster "$source" -o jsonpath='{.spec.bootstrap.initdb.owner}')"
+  barman_object="$(barman_object_for "$source")"
   database="${database:-app}"
   owner="${owner:-$database}"
-  [ -n "$storage" ] && [ -n "$image" ] || {
-    echo "FAIL: could not read storage/image from Cluster ${source}" >&2
+  [ -n "$storage" ] && [ -n "$image" ] && [ -n "$barman_object" ] || {
+    echo "FAIL: could not read backup configuration from Cluster ${source}" >&2
     exit 1
   }
   scheduling_yaml=""
@@ -303,7 +336,7 @@ create_restore_cluster() {
   fi
 
   RESTORE_CLUSTER="$name"
-  echo "── smoke(postgres-app): restore Cluster ${NAMESPACE}/${name} from ${backup}${target_time:+ at ${target_time}}"
+  echo "── smoke(postgres-app): restore Cluster ${NAMESPACE}/${name} from ${source} object store${target_time:+ at ${target_time}}"
   kubectl -n "$NAMESPACE" apply -f - >/dev/null <<EOF
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
@@ -327,13 +360,19 @@ spec:
 ${scheduling_yaml}
   bootstrap:
     recovery:
-      backup:
-        name: ${backup}
+      source: barman-cloud
       secret:
         name: ${secret}
       database: "${database}"
       owner: "${owner}"
 ${target_yaml}
+  externalClusters:
+  - name: barman-cloud
+    plugin:
+      name: barman-cloud.cloudnative-pg.io
+      parameters:
+        barmanObjectName: ${barman_object}
+        serverName: ${source}
 EOF
 
   kubectl -n "$NAMESPACE" wait --for=condition=Ready "cluster/${name}" --timeout="$TIMEOUT" >/dev/null
@@ -402,7 +441,7 @@ run_pitr_test() {
   sleep 1
   db_query "insert into platform_backup_smoke(marker) values ('${marker_c}')" >/dev/null
 
-  create_restore_cluster "$restore" postgres-app "$backup" postgres-app-credentials "$target_time"
+  create_restore_cluster "$restore" postgres-app postgres-app-credentials "$target_time"
 
   count="$(restore_marker_count "$restore" "$USERNAME" "$PASSWORD" "$DATABASE" "$marker_a")"
   [ "$count" = "1" ] || { echo "FAIL: PITR restore is missing marker A (count=${count})" >&2; exit 1; }
@@ -443,7 +482,7 @@ run_latest_restore_test() {
   create_backup "$backup_b" zitadel-db
   wait_backup "$backup_b" zitadel-db
 
-  create_restore_cluster "$restore" zitadel-db "$backup_b" zitadel-db-credentials
+  create_restore_cluster "$restore" zitadel-db zitadel-db-credentials
 
   count="$(restore_marker_count "$restore" "$restore_user" "$restore_pass" "$restore_db" "$marker_a")"
   [ "$count" = "1" ] || { echo "FAIL: latest restore is missing marker A (count=${count})" >&2; exit 1; }
@@ -462,4 +501,4 @@ run_pitr_test
 verify_cluster zitadel-db zitadel-db-credentials zitadel "zitadel@zitadel"
 run_latest_restore_test
 
-echo "[OK] smoke(postgres-app): postgres-app + zitadel-db Ready, WAL archiving green, backups restored"
+echo "[OK] smoke(postgres-app): postgres-app + zitadel-db Ready, plugin WAL archiving green, backups restored"

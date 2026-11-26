@@ -1,0 +1,26 @@
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: postgres-app-dev
+  namespace: data
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+spec:
+  retentionPolicy: "30d"
+  configuration:
+    destinationPath: s3://sca-dev-cnpg/postgres-app
+    s3Credentials:
+      accessKeyId:
+        name: cnpg-backup-credentials
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: cnpg-backup-credentials
+        key: ACCESS_SECRET_KEY
+      region:
+        name: cnpg-backup-credentials
+        key: AWS_REGION
+    wal:
+      compression: gzip
+      maxParallel: 2
+    data:
+      compression: gzip

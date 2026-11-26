@@ -13,6 +13,7 @@ case "$component" in
   vault) exec "$(dirname "$0")/smoke-vault.sh" ;;
   external-secrets) exec "$(dirname "$0")/smoke-external-secrets.sh" ;;
   cloudnative-pg) exec "$(dirname "$0")/smoke-cloudnative-pg.sh" ;;
+  plugin-barman-cloud) exec "$(dirname "$0")/smoke-plugin-barman-cloud.sh" ;;
   postgres-app) exec "$(dirname "$0")/smoke-postgres-app.sh" ;;
   redis-operator) exec "$(dirname "$0")/smoke-redis-operator.sh" ;;
   redis) exec "$(dirname "$0")/smoke-redis.sh" ;;
@@ -23,7 +24,7 @@ case "$component" in
   velero) exec "$(dirname "$0")/smoke-velero.sh" ;;
   cloud) exec "$(dirname "$0")/smoke-cloud.sh" ;;
   eks) exec "$(dirname "$0")/smoke-eks.sh" ;;
-  "") echo "usage: $0 <component> (cni, cert-manager, vault, external-secrets, cloudnative-pg, postgres-app, redis-operator, kong, redis, nack, nats, zitadel, velero, cloud, eks)" >&2; exit 2 ;;
+  "") echo "usage: $0 <component> (cni, cert-manager, vault, external-secrets, cloudnative-pg, plugin-barman-cloud, postgres-app, redis-operator, kong, redis, nack, nats, zitadel, velero, cloud, eks)" >&2; exit 2 ;;
   *,*) echo "ERROR: smoke-target.sh smokes one component; use smoke-ci.sh for a comma-separated list" >&2; exit 2 ;;
   *) echo "ERROR: no smoke command for component '$component'" >&2; exit 2 ;;
 esac
