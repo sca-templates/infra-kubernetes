@@ -229,8 +229,8 @@ verify_roles() {
 
 verify_tls() {
   local cluster="$1" secret="$2" database="$3"
-  local ns_ok="smoke-tls-ok-${SUFFIX}" ns_denied="smoke-tls-denied-${SUFFIX}"
-  local pod_ok="pg-client-ok-${SUFFIX}" pod_denied="pg-client-denied-${SUFFIX}"
+  local ns_ok="smoke-tls-ok-${cluster}-${SUFFIX}" ns_denied="smoke-tls-denied-${cluster}-${SUFFIX}"
+  local pod_ok="pg-client-ok-${cluster}-${SUFFIX}" pod_denied="pg-client-denied-${cluster}-${SUFFIX}"
   local image="ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie"
   local ca user pass result
 
