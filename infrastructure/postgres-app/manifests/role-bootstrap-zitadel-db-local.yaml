@@ -1,0 +1,50 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: role-bootstrap-zitadel-db-local
+  namespace: data
+  annotations:
+    argocd.argoproj.io/sync-wave: "40"
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: role-bootstrap-zitadel-db-local
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: role-bootstrap
+          image: ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie
+          env:
+            - name: PGHOST
+              value: zitadel-db-rw.data.svc.cluster.local
+            - name: PGPORT
+              value: "5432"
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: zitadel-db-credentials
+                  key: username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: zitadel-db-credentials
+                  key: password
+            - name: PGDATABASE
+              value: zitadel
+          command:
+            - /bin/sh
+            - -c
+            - |
+              psql -v ON_ERROR_STOP=1 <<'SQL'
+              REVOKE ALL ON DATABASE zitadel FROM PUBLIC;
+              CREATE SCHEMA IF NOT EXISTS app AUTHORIZATION zitadel;
+              GRANT CONNECT ON DATABASE zitadel TO app_migrator, app_rw, app_ro, vault_admin;
+              GRANT USAGE ON SCHEMA app TO app_migrator, app_rw, app_ro, vault_admin;
+              GRANT CREATE ON SCHEMA app TO app_migrator;
+              ALTER DEFAULT PRIVILEGES FOR USER zitadel IN SCHEMA app GRANT ALL ON TABLES TO app_migrator;
+              ALTER DEFAULT PRIVILEGES FOR USER zitadel IN SCHEMA app GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_rw;
+              ALTER DEFAULT PRIVILEGES FOR USER zitadel IN SCHEMA app GRANT SELECT ON TABLES TO app_ro;
+              SQL

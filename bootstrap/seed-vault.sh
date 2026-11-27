@@ -286,6 +286,12 @@ kv_seed "secret/zitadel-db/${ENV}" \
   username=zitadel \
   password="${ZITADEL_DB_PASSWORD}" \
   dsn="host=zitadel-db-rw.data.svc.cluster.local port=5432 user=zitadel password=${ZITADEL_DB_PASSWORD} dbname=zitadel sslmode=disable"
+for role in app_migrator app_rw app_ro vault_admin; do
+  kv_seed "secret/postgres-app/${ENV}/roles/${role}" \
+    username="${role}" password="$(openssl rand -hex 24)"
+  kv_seed "secret/zitadel-db/${ENV}/roles/${role}" \
+    username="${role}" password="$(openssl rand -hex 24)"
+done
 # ADR-005 messaging contract. Consumers project this path through ESO; `mode`
 # selects the backend. NATS is the local default; SNS/SQS coordinates and
 # credentials are provisioned out of band when that mode is enabled.

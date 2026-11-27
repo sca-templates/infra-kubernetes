@@ -61,9 +61,9 @@ identity PKI; both it and its CRDs were removed in D4. **Phase 10** lands the Po
 datastores: two CNPG `Cluster`s in `data` at wave 40 across **all four**
 environments — `postgres-app` (`app`/`app`) and `zitadel-db`
 (`zitadel`/`zitadel`, ADR-004 E1) on official
-`ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie` (the `system` flavor is
-retained from the native-barman era; the Barman Cloud Plugin migration is now
-live and switching to the `standard` flavor is a separate change).
+`ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie`; the deprecated
+`system` flavor is rejected by a CI guard and the plugin sidecar supplies the
+Barman Cloud binaries.
 They are raw CRs, so
 they ship through a **dedicated `Application` per environment**
 (`argocd/postgres-app-<env>.yaml`, `directory.include: "*-<env>.yaml"`) rather
@@ -71,12 +71,19 @@ than the Helm `ApplicationSet`; `local`/`dev` run 1 instance, `qa`/`prod` run 3
 with `preferred` anti-affinity (schedulable on the single-node promote
 substrate). ESO projects the bootstrap credentials from
 `secret/postgres-app/<env>` and `secret/zitadel-db/<env>`.
-`postgres-app` carries `pgvector` + `pg_stat_statements` (`pg_stat_statements.track:
-all`; CNPG manages `shared_preload_libraries`) and `wal_level=logical`;
-`zitadel-db` backs Zitadel (ADR-004 E1). The catalog preload resolves the CNPG image from the raw manifests, and
+`postgres-app` carries `pgvector` + `pg_stat_statements` + `pgaudit`
+(`pg_stat_statements.track: all`; `pgaudit.log: "ddl, role"`; CNPG manages
+`shared_preload_libraries`) and `wal_level=logical`; `zitadel-db` carries
+`pgaudit` and backs Zitadel (ADR-004 E1). Four Vault-backed `DatabaseRole`s
+(`app_migrator`, `app_rw`, `app_ro`, `vault_admin`) are reconciled on both
+running clusters, with idempotent wave-40 SQL Jobs granting schema privileges.
+`requests` equal `limits` in all four envs (`local`/`dev` 1 CPU/1Gi, `qa`
+1 CPU/1Gi, `prod` 2 CPU/2Gi) so the pods are `Guaranteed`; `local` keeps no
+`workload=database` selector because the emulated EKS has one unlabelled node.
+The catalog preload resolves the CNPG image from the raw manifests, and
 `make smoke COMPONENT=postgres-app` validates the clusters, projected users, the
-extensions, logical WAL, the plugin `ObjectStore`s, PITR and latest-backup
-restore.
+extensions, roles, QoS, `sslmode=verify-full`, logical WAL, the plugin
+`ObjectStore`s, PITR and latest-backup restore.
 
 **Phase 12** lands the Redis cache: a `RedisReplication` in `data` at wave 40 across all four
 environments — 1 replica in local/dev, 3 in qa/prod with embedded Sentinel 3 (quorum 2,
@@ -170,7 +177,7 @@ mTLS.
 | plugin-barman-cloud app | `plugin-barman-cloud-local` `Synced` + `Healthy` in namespace `cloudnative-pg` (chart 0.9.0 / images v0.16.0); Deployment `plugin-barman-cloud` Ready, `barman-cloud` Service present, `objectstores.barmancloud.cnpg.io` `Established`; `make smoke COMPONENT=plugin-barman-cloud` green |
 | redis-operator app | `redis-operator-local` `Synced` + `Healthy` in namespace `data`; operator Deployment `redis-operator` Ready (chart 0.26.1 / operator 0.26.0); watches all namespaces (no `WATCH_NAMESPACE` env); 4 `redis.redis.opstreelabs.in` CRDs present + `Established`; `make smoke COMPONENT=redis-operator` → throwaway `Redis` CR honored (StatefulSet ready + `PING` → `PONG`) |
 | kong app | `kong-local` `Synced` + `Healthy` in namespace `kong` (dedicated Application, **no SSA**); chart 3.4.1, gateway Deployment `kong` Ready (containers `ingress-controller` KIC 3.5.5 + `proxy` kong 3.9.4), DB-less (`KONG_DATABASE=off`); IngressClass `kong`; `configuration.konghq.com` CRDs `Established`; `Certificate/kong-proxy` Ready (leaf off `sca-ca`); declarative `Ingress kong-demo` + `KongPlugin demo-termination`; `make smoke COMPONENT=kong` → `GET https://kong.local/demo` → 200 |
-| postgres-app app | `postgres-app-local` `Synced` + `Healthy` (dedicated Application, raw CRs); CNPG `Cluster postgres-app` Ready (1 instance local; image `18.4-system-trixie`) and `zitadel-db` Ready (1 instance local); ESO `postgres-app-credentials` + `zitadel-db-credentials` `SecretSynced`; `pg_stat_statements` + `vector` + `wal_level=logical` verified through `app@app`; this PR adds PSA `enforce: baseline` with `warn`/`audit: restricted` on `data`, `Prune=false,Delete=false` and CNPG-native hardened defaults on both clusters with `workload=database` scheduling under `spec.affinity` in `dev`/`qa`/`prod`, internal waves credentials 10 → ObjectStore 20 → Cluster 30 → ScheduledBackup 40, WAL archiving through `barman-cloud.cloudnative-pg.io`, pod-scoped CNPG `NetworkPolicy`s and the `db-access=true` label on `zitadel` ); pod-scoped CNPG `NetworkPolicy`s and the `db-access=true` label on `zitadel` are declared for every environment, with break-glass RBAC for all four environments bound to the conventional `sca-db-breakglass` group; external egress stays on a single `0.0.0.0/0:443` rule until API/S3 CIDRs exist, with a `local`-only `172.16.0.0/12:6443` rule for the DNATed k3s API endpoint; `gp3-encrypted`/KMS and `walStorage` are deferred because there is no Terraform repo or external cluster yet, so `local` keeps `local-path`; `make smoke COMPONENT=postgres-app` green against the local git serve |
+| postgres-app app | `postgres-app-local` `Synced` + `Healthy` (dedicated Application, raw CRs); CNPG `Cluster postgres-app` Ready (1 instance local; image `18.4-standard-trixie`) and `zitadel-db` Ready (1 instance local); ESO `postgres-app-credentials` + `zitadel-db-credentials` and all eight role credentials `SecretSynced`; `pg_stat_statements` + `vector` + `pgaudit` + `wal_level=logical` verified through `app@app`; PSA `enforce: baseline` with `warn`/`audit: restricted` on `data`, `Prune=false,Delete=false` and CNPG-native hardened defaults on both clusters with `workload=database` scheduling under `spec.affinity` in `dev`/`qa`/`prod` and no selector in `local`; `app_migrator`/`app_rw`/`app_ro`/`vault_admin` `DatabaseRole`s with `retain`, four Vault passwords per service, bootstrap SQL Jobs and `requests=limits` (`Guaranteed`) in all four envs; internal waves credentials 10 → ObjectStore 20 → Cluster + DatabaseRole 30 → Job + ScheduledBackup 40, WAL archiving through `barman-cloud.cloudnative-pg.io`, pod-scoped CNPG `NetworkPolicy`s and the `db-access=true` label on `zitadel`, with break-glass RBAC for all four environments bound to the conventional `sca-db-breakglass` group; external egress stays on a single `0.0.0.0/0:443` rule until API/S3 CIDRs exist, with a `local`-only `172.16.0.0/12:6443` rule for the DNATed k3s API endpoint; `gp3-encrypted`/KMS and `walStorage` are deferred because there is no Terraform repo or external cluster yet, so `local` keeps `local-path`; `make smoke COMPONENT=postgres-app` green against the local git serve with `verify-full` accepted only from a labelled namespace |
 | CNPG plugin migration | `data` has one `ObjectStore` per service/environment at wave 20; both local `Cluster`s archive WAL through `barman-cloud.cloudnative-pg.io` at wave 30 and `ScheduledBackup`s use `method: plugin` at wave 40; `make smoke COMPONENT=postgres-app` re-validated PITR and latest restore after the migration |
 | nats app | `nats-local` `Synced` + `Healthy` (optional `messaging-local` ApplicationSet element); chart/appVersion `nats/nats` 2.15.2 with JetStream enabled and a file-store PVC (1 node local/dev, 3-node JetStream cluster qa/prod); no `Stream`/`Consumer` CRs; `make smoke COMPONENT=nats` → server Ready, JetStream enabled, zero streams |
 | nack app | `nack-local` `Synced` + `Healthy` (optional `messaging-local` ApplicationSet element, namespace `nats`); chart `nats/nack` 0.35.0 / controller 0.24.0; six `*.jetstream.nats.io` CRDs `Established`; watches all namespaces; `make smoke COMPONENT=nack` green |

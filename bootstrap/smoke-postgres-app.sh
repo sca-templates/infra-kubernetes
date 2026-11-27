@@ -10,7 +10,7 @@
 #     the latest backup must contain both markers.
 #
 # `postgres-app` must also carry the platform extensions (pgvector +
-# pg_stat_statements) and logical WAL.
+# pg_stat_statements + pgaudit) and logical WAL.
 #
 # Selective smoke for the postgres-app component; driven by
 # `make smoke COMPONENT=postgres-app` (see docs/ci-cd.md). Set
@@ -32,6 +32,7 @@ PASSWORD=""
 DATABASE=""
 RESTORE_CLUSTER=""
 BACKUPS=()
+TLS_NAMESPACES=()
 
 cleanup() {
   if [ -n "$RESTORE_CLUSTER" ]; then
@@ -44,6 +45,11 @@ cleanup() {
     for backup in "${BACKUPS[@]}"; do
       kubectl -n "$NAMESPACE" delete backup.postgresql.cnpg.io "$backup" \
         --ignore-not-found >/dev/null 2>&1 || true
+    done
+  fi
+  if [ "${#TLS_NAMESPACES[@]}" -gt 0 ]; then
+    for ns in "${TLS_NAMESPACES[@]}"; do
+      kubectl delete namespace "$ns" --ignore-not-found --wait=false >/dev/null 2>&1 || true
     done
   fi
 }
@@ -178,6 +184,125 @@ use_cluster_credentials() {
   }
 }
 
+verify_image_and_qos() {
+  local cluster="$1" image qos
+  echo "── smoke(postgres-app): ${cluster} standard image and Guaranteed QoS"
+  image="$(kubectl -n "$NAMESPACE" get cluster "$cluster" -o jsonpath='{.spec.imageName}')"
+  case "$image" in
+    *-system-*)
+      echo "FAIL: ${cluster} still pins deprecated image ${image}" >&2
+      exit 1
+      ;;
+  esac
+  qos="$(kubectl -n "$NAMESPACE" get pod -l "cnpg.io/cluster=${cluster}" \
+    -o jsonpath='{.items[0].status.qosClass}')"
+  [ "$qos" = "Guaranteed" ] || {
+    echo "FAIL: ${cluster} QoS='${qos}', expected Guaranteed" >&2
+    exit 1
+  }
+  echo "  ${cluster}: image=${image}, qos=${qos}"
+}
+
+verify_roles() {
+  local cluster="$1" secret="$2" database="$3" pod user pass roles bad role
+  echo "── smoke(postgres-app): ${cluster} least-privilege roles"
+  for role in app-migrator app-rw app-ro vault-admin; do
+    wait_externalsecret "${cluster}-${role}"
+  done
+  pod="$(primary_for "$cluster")"
+  user="$(secret_value "$secret" username)"
+  pass="$(secret_value "$secret" password)"
+  roles="$(psql_retry "$pod" "$user" "$pass" "$database" \
+    "select string_agg(rolname, ',' order by rolname) from pg_roles where rolname in ('app_migrator','app_ro','app_rw','vault_admin')")"
+  [ "$roles" = "app_migrator,app_ro,app_rw,vault_admin" ] || {
+    echo "FAIL: ${cluster} roles='${roles}', expected app_migrator,app_ro,app_rw,vault_admin" >&2
+    exit 1
+  }
+  bad="$(psql_retry "$pod" "$user" "$pass" "$database" \
+    "select string_agg(rolname, ',' order by rolname) from pg_roles where rolname in ('app_migrator','app_ro','app_rw','vault_admin') and (rolsuper or rolbypassrls)")"
+  [ -z "$bad" ] || {
+    echo "FAIL: ${cluster} roles with superuser or bypassrls: ${bad}" >&2
+    exit 1
+  }
+  echo "  ${cluster}: roles=${roles}, no superuser/bypassrls"
+}
+
+verify_tls() {
+  local cluster="$1" secret="$2" database="$3"
+  local ns_ok="smoke-tls-ok-${SUFFIX}" ns_denied="smoke-tls-denied-${SUFFIX}"
+  local pod_ok="pg-client-ok-${SUFFIX}" pod_denied="pg-client-denied-${SUFFIX}"
+  local image="ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie"
+  local ca user pass result
+
+  echo "── smoke(postgres-app): ${cluster} TLS verify-full and namespace isolation"
+  kubectl create namespace "$ns_ok" >/dev/null
+  kubectl label namespace "$ns_ok" db-access=true >/dev/null
+  kubectl create namespace "$ns_denied" >/dev/null
+  TLS_NAMESPACES+=("$ns_ok" "$ns_denied")
+
+  ca="$(kubectl -n "$NAMESPACE" get secret "${cluster}-ca" \
+    -o jsonpath='{.data.ca\.crt}' | base64 -d)"
+  [ -n "$ca" ] || { echo "FAIL: no ca.crt in ${NAMESPACE}/${cluster}-ca" >&2; exit 1; }
+  kubectl -n "$ns_ok" create secret generic "${cluster}-ca" \
+    --from-literal="ca.crt=${ca}" >/dev/null
+  user="$(secret_value "$secret" username)"
+  pass="$(secret_value "$secret" password)"
+
+  kubectl -n "$ns_ok" apply -f - >/dev/null <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${pod_ok}
+spec:
+  restartPolicy: Never
+  containers:
+    - name: psql
+      image: ${image}
+      command: ["/bin/sh", "-c", "sleep 600"]
+      volumeMounts:
+        - name: ca
+          mountPath: /tls
+          readOnly: true
+  volumes:
+    - name: ca
+      secret:
+        secretName: ${cluster}-ca
+        items:
+          - key: ca.crt
+            path: ca.crt
+EOF
+  kubectl -n "$ns_denied" apply -f - >/dev/null <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${pod_denied}
+spec:
+  restartPolicy: Never
+  containers:
+    - name: psql
+      image: ${image}
+      command: ["/bin/sh", "-c", "sleep 600"]
+EOF
+  kubectl -n "$ns_ok" wait --for=condition=Ready "pod/${pod_ok}" --timeout="$TIMEOUT" >/dev/null
+  kubectl -n "$ns_denied" wait --for=condition=Ready "pod/${pod_denied}" --timeout="$TIMEOUT" >/dev/null
+
+  result="$(kubectl -n "$ns_ok" exec "$pod_ok" -- env PGPASSWORD="$pass" psql \
+    "host=${cluster}-rw.${NAMESPACE}.svc port=5432 dbname=${database} user=${user} sslmode=verify-full sslrootcert=/tls/ca.crt connect_timeout=10" \
+    -tAc 'select 1')"
+  [ "$result" = "1" ] || {
+    echo "FAIL: verify-full connection from labelled namespace returned '${result}'" >&2
+    exit 1
+  }
+
+  if kubectl -n "$ns_denied" exec "$pod_denied" -- env PGPASSWORD="$pass" psql \
+    "host=${cluster}-rw.${NAMESPACE}.svc port=5432 dbname=${database} user=${user} sslmode=require connect_timeout=5" \
+    -tAc 'select 1' >/dev/null 2>&1; then
+    echo "FAIL: unlabelled namespace reached ${cluster}-rw despite NetworkPolicy" >&2
+    exit 1
+  fi
+  echo "  ${cluster}: verify-full accepted; unlabelled namespace denied"
+}
+
 verify_cluster() {
   local cluster="$1" secret="$2" database="$3" expected_identity="$4"
   local expected_extensions="${5:-}" check_wal="${6:-0}"
@@ -217,7 +342,7 @@ verify_cluster() {
 
   if [ -n "$expected_extensions" ]; then
     echo "── smoke(postgres-app): ${cluster} extensions ${expected_extensions}"
-    extensions="$(db_query "select string_agg(extname, ',' order by extname) from pg_extension where extname in ('vector','pg_stat_statements')")"
+    extensions="$(db_query "select string_agg(extname, ',' order by extname) from pg_extension where extname in ('vector','pg_stat_statements','pgaudit')")"
     [ "$extensions" = "$expected_extensions" ] || {
       echo "FAIL: expected ${expected_extensions}; got '${extensions}'" >&2
       exit 1
@@ -496,9 +621,15 @@ run_latest_restore_test() {
   echo "  latest: A=1 B=1"
 }
 
-verify_cluster postgres-app postgres-app-credentials app "app@app" "pg_stat_statements,vector" 1
+verify_cluster postgres-app postgres-app-credentials app "app@app" "pgaudit,pg_stat_statements,vector" 1
+verify_image_and_qos postgres-app
+verify_roles postgres-app postgres-app-credentials app
+verify_tls postgres-app postgres-app-credentials app
 run_pitr_test
-verify_cluster zitadel-db zitadel-db-credentials zitadel "zitadel@zitadel"
+verify_cluster zitadel-db zitadel-db-credentials zitadel "zitadel@zitadel" "pgaudit"
+verify_image_and_qos zitadel-db
+verify_roles zitadel-db zitadel-db-credentials zitadel
+verify_tls zitadel-db zitadel-db-credentials zitadel
 run_latest_restore_test
 
-echo "[OK] smoke(postgres-app): postgres-app + zitadel-db Ready, plugin WAL archiving green, backups restored"
+echo "[OK] smoke(postgres-app): postgres-app + zitadel-db Ready, pgaudit, least-privilege roles, Guaranteed QoS, TLS verified, plugin WAL archiving green, backups restored"
