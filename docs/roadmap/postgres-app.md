@@ -43,7 +43,8 @@ Notes:
   (wave 30) whose passwords come from Vault via ESO (wave 10); wave-40 Jobs
   apply schema grants to the already-running clusters, and `local` is the only
   env without the `workload=database` selector. `requests` equal `limits` in all
-  four envs so instance pods are `Guaranteed`.
+  four envs so instance pods are `Guaranteed`; `local` uses 100m/256Mi to fit the
+  single-node CPU budget while `dev`/`qa`/`prod` keep their larger profiles.
 - `qa`/`prod` use `podAntiAffinityType: preferred` so the 3-instance profile
   remains schedulable on the single-node promote-test substrate.
 - `postgres-app` is a dedicated raw `Application` per environment (not in the

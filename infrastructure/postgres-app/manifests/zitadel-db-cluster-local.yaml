@@ -45,11 +45,11 @@ spec:
     size: 1Gi
   resources:
     requests:
-      cpu: "1"
-      memory: 1Gi
+      cpu: 100m
+      memory: 256Mi
     limits:
-      cpu: "1"
-      memory: 1Gi
+      cpu: 100m
+      memory: 256Mi
   affinity:
     # Single-node local profile: never block scheduling on anti-affinity.
     enablePodAntiAffinity: false
