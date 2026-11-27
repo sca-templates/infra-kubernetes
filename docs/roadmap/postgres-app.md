@@ -48,7 +48,7 @@ Notes:
   four envs for instance and `plugin-barman-cloud` sidecar containers so pods are
   `Guaranteed`; instances use `local` 100m/256Mi to fit the single-node CPU budget
   while `dev`/`qa`/`prod` keep their larger profiles, and sidecars use `local`
-  50m/64Mi, `dev`/`qa` 100m/128Mi and `prod` 250m/256Mi through
+  50m/256Mi, `dev`/`qa` 100m/256Mi and `prod` 250m/256Mi through
   `ObjectStore.spec.instanceSidecarConfiguration.resources` because empty sidecar
   resources would downgrade the whole pod to `Burstable`.
 - `qa`/`prod` use `podAntiAffinityType: preferred` so the 3-instance profile
