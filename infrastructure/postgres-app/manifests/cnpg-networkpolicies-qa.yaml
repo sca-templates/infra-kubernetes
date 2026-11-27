@@ -37,6 +37,17 @@ items:
             - protocol: TCP
               port: 5432
         - from:
+            - podSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - role-bootstrap-postgres-app-qa
+                      - role-bootstrap-zitadel-db-qa
+          ports:
+            - protocol: TCP
+              port: 5432
+        - from:
             - namespaceSelector:
                 matchLabels:
                   kubernetes.io/metadata.name: cloudnative-pg

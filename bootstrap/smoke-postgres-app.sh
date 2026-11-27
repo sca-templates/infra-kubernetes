@@ -343,10 +343,13 @@ verify_cluster() {
   if [ -n "$expected_extensions" ]; then
     echo "── smoke(postgres-app): ${cluster} extensions ${expected_extensions}"
     extensions="$(db_query "select string_agg(extname, ',' order by extname) from pg_extension where extname in ('vector','pg_stat_statements','pgaudit')")"
-    [ "$extensions" = "$expected_extensions" ] || {
-      echo "FAIL: expected ${expected_extensions}; got '${extensions}'" >&2
+    actual_extensions="$(printf '%s\n' "$extensions" | tr ',' '\n' | LC_ALL=C sort | paste -sd, -)"
+    wanted_extensions="$(printf '%s\n' "$expected_extensions" | tr ',' '\n' | LC_ALL=C sort | paste -sd, -)"
+    [ "$actual_extensions" = "$wanted_extensions" ] || {
+      echo "FAIL: expected set ${wanted_extensions}; got '${actual_extensions}'" >&2
       exit 1
     }
+    extensions="$actual_extensions"
   fi
 
   if [ "$check_wal" = "1" ]; then
