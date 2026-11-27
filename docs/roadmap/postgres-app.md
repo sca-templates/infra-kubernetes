@@ -45,8 +45,12 @@ Notes:
   running clusters through an exact-`app` `podSelector` ingress exception (the
   Jobs run in `data`, which is not `db-access=true`), and `local` is the only
   env without the `workload=database` selector. `requests` equal `limits` in all
-  four envs so instance pods are `Guaranteed`; `local` uses 100m/256Mi to fit the
-  single-node CPU budget while `dev`/`qa`/`prod` keep their larger profiles.
+  four envs for instance and `plugin-barman-cloud` sidecar containers so pods are
+  `Guaranteed`; instances use `local` 100m/256Mi to fit the single-node CPU budget
+  while `dev`/`qa`/`prod` keep their larger profiles, and sidecars use `local`
+  50m/64Mi, `dev`/`qa` 100m/128Mi and `prod` 250m/256Mi through
+  `ObjectStore.spec.instanceSidecarConfiguration.resources` because empty sidecar
+  resources would downgrade the whole pod to `Burstable`.
 - `qa`/`prod` use `podAntiAffinityType: preferred` so the 3-instance profile
   remains schedulable on the single-node promote-test substrate.
 - `postgres-app` is a dedicated raw `Application` per environment (not in the
