@@ -38,6 +38,18 @@ spec:
             - /bin/sh
             - -c
             - |
+              attempt=0
+              count=""
+              while [ "$attempt" -lt 60 ]; do
+                count="$(psql -tAc "SELECT count(*) FROM pg_roles WHERE rolname IN ('app_migrator', 'app_rw', 'app_ro', 'vault_admin')" 2>/dev/null)"
+                [ "$count" = "4" ] && break
+                attempt=$((attempt + 1))
+                sleep 5
+              done
+              if [ "$count" != "4" ]; then
+                echo "ERROR: DatabaseRole roles are not present in Postgres" >&2
+                exit 1
+              fi
               psql -v ON_ERROR_STOP=1 <<'SQL'
               REVOKE ALL ON DATABASE zitadel FROM PUBLIC;
               CREATE SCHEMA IF NOT EXISTS app AUTHORIZATION zitadel;
