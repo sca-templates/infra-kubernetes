@@ -7,36 +7,73 @@ metadata:
     argocd.argoproj.io/sync-wave: "40"
 spec:
   backoffLimit: 3
+  ttlSecondsAfterFinished: 31536000
   template:
     metadata:
       labels:
         app: role-bootstrap-zitadel-db-dev
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       restartPolicy: OnFailure
       containers:
         - name: role-bootstrap
-          image: ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie
+          image: ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie@sha256:ebf3919504d7523a63e8e2fee9b051211de714644b36469275558c624afd50ec
+          imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
           env:
             - name: PGHOST
               value: zitadel-db-rw.data.svc.cluster.local
             - name: PGPORT
               value: "5432"
-            - name: PGUSER
-              valueFrom:
-                secretKeyRef:
-                  name: zitadel-db-credentials
-                  key: username
-            - name: PGPASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: zitadel-db-credentials
-                  key: password
             - name: PGDATABASE
               value: zitadel
+            - name: HOME
+              value: /work
+            - name: TMPDIR
+              value: /work/tmp
+            - name: PGPASSFILE
+              value: /work/.pgpass
+          volumeMounts:
+            - name: credentials
+              mountPath: /credentials
+              readOnly: true
+            - name: work
+              mountPath: /work
           command:
             - /bin/sh
             - -c
             - |
+              set -u
+              mkdir -p "${TMPDIR}"
+              PGUSER="$(cat /credentials/username)"
+              db_password="$(cat /credentials/password)"
+              [ -n "${PGUSER}" ] && [ -n "${db_password}" ] || {
+                echo "ERROR: role bootstrap credentials are empty" >&2
+                exit 1
+              }
+              printf '*:*:*:%s:%s\n' "${PGUSER}" "${db_password}" > "${PGPASSFILE}"
+              chmod 0600 "${PGPASSFILE}"
+              unset db_password
+              export PGUSER PGPASSFILE
               attempt=0
               count=""
               while [ "$attempt" -lt 60 ]; do
@@ -59,3 +96,15 @@ spec:
               ALTER DEFAULT PRIVILEGES FOR USER zitadel IN SCHEMA app GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_rw;
               ALTER DEFAULT PRIVILEGES FOR USER zitadel IN SCHEMA app GRANT SELECT ON TABLES TO app_ro;
               SQL
+      volumes:
+        - name: credentials
+          secret:
+            secretName: zitadel-db-credentials
+            defaultMode: 0440
+            items:
+              - key: username
+                path: username
+              - key: password
+                path: password
+        - name: work
+          emptyDir: {}
