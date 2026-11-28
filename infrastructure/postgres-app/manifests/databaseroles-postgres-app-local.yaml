@@ -1,0 +1,91 @@
+apiVersion: v1
+kind: List
+items:
+  - apiVersion: postgresql.cnpg.io/v1
+    kind: DatabaseRole
+    metadata:
+      name: postgres-app-app-migrator
+      namespace: data
+      annotations:
+        argocd.argoproj.io/sync-options: Prune=false,Delete=false
+        argocd.argoproj.io/sync-wave: "30"
+    spec:
+      cluster:
+        name: postgres-app
+      name: app_migrator
+      login: true
+      superuser: false
+      createdb: false
+      createrole: false
+      replication: false
+      bypassrls: false
+      inherit: true
+      databaseRoleReclaimPolicy: retain
+      passwordSecret:
+        name: postgres-app-app-migrator
+  - apiVersion: postgresql.cnpg.io/v1
+    kind: DatabaseRole
+    metadata:
+      name: postgres-app-app-rw
+      namespace: data
+      annotations:
+        argocd.argoproj.io/sync-options: Prune=false,Delete=false
+        argocd.argoproj.io/sync-wave: "30"
+    spec:
+      cluster:
+        name: postgres-app
+      name: app_rw
+      login: true
+      superuser: false
+      createdb: false
+      createrole: false
+      replication: false
+      bypassrls: false
+      inherit: true
+      databaseRoleReclaimPolicy: retain
+      passwordSecret:
+        name: postgres-app-app-rw
+  - apiVersion: postgresql.cnpg.io/v1
+    kind: DatabaseRole
+    metadata:
+      name: postgres-app-app-ro
+      namespace: data
+      annotations:
+        argocd.argoproj.io/sync-options: Prune=false,Delete=false
+        argocd.argoproj.io/sync-wave: "30"
+    spec:
+      cluster:
+        name: postgres-app
+      name: app_ro
+      login: true
+      superuser: false
+      createdb: false
+      createrole: false
+      replication: false
+      bypassrls: false
+      inherit: true
+      databaseRoleReclaimPolicy: retain
+      passwordSecret:
+        name: postgres-app-app-ro
+  - apiVersion: postgresql.cnpg.io/v1
+    kind: DatabaseRole
+    metadata:
+      name: postgres-app-vault-admin
+      namespace: data
+      annotations:
+        argocd.argoproj.io/sync-options: Prune=false,Delete=false
+        argocd.argoproj.io/sync-wave: "30"
+    spec:
+      cluster:
+        name: postgres-app
+      name: vault_admin
+      login: true
+      superuser: false
+      createdb: false
+      createrole: false
+      replication: false
+      bypassrls: false
+      inherit: true
+      databaseRoleReclaimPolicy: retain
+      passwordSecret:
+        name: postgres-app-vault-admin

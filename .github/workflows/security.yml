@@ -62,6 +62,10 @@ jobs:
             echo "ERROR: floating chart targetRevision detected" >&2
             fail=1
           fi
+          if grep -rnE 'imageName:[[:space:]]*ghcr\.io/cloudnative-pg/postgresql:[^[:space:]]*-system-' infrastructure; then
+            echo "ERROR: deprecated CNPG system flavor is pinned; use standard with the Barman Cloud plugin" >&2
+            fail=1
+          fi
           # Shell side of the same policy: a `:latest` / `:nightly` / `:edge`
           # reference on a non-comment line (docker run, image pin defaults).
           if grep -rnE '^[[:space:]]*[^#].*:(latest|nightly|edge)(["'\'']|[[:space:]]|$)' bootstrap; then

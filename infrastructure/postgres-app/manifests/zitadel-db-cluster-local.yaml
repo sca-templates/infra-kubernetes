@@ -15,7 +15,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "30"
 spec:
   instances: 1
-  imageName: ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie
   plugins:
     - name: barman-cloud.cloudnative-pg.io
       enabled: true
@@ -34,10 +34,13 @@ spec:
       encoding: UTF8
       localeCollate: C
       localeCType: C
+      postInitApplicationSQL:
+        - CREATE EXTENSION IF NOT EXISTS pgaudit;
   postgresql:
     parameters:
       # Bound the WAL archive lag for the restore smoke.
       archive_timeout: "60s"
+      pgaudit.log: "ddl, role"
   storage:
     size: 1Gi
   resources:
@@ -45,8 +48,8 @@ spec:
       cpu: 100m
       memory: 256Mi
     limits:
-      cpu: "1"
-      memory: 1Gi
+      cpu: 100m
+      memory: 256Mi
   affinity:
     # Single-node local profile: never block scheduling on anti-affinity.
     enablePodAntiAffinity: false

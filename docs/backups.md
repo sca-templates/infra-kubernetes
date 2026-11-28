@@ -35,10 +35,10 @@ compression settings and retention policy that used to live under
 `spec.backup.barmanObjectStore`. The local `ObjectStore`s set
 `AWS_REQUEST_CHECKSUM_CALCULATION` and `AWS_RESPONSE_CHECKSUM_VALIDATION` to
 `when_required` in `instanceSidecarConfiguration.env` for Floci's S3 emulation;
-the external-S3 environments keep the boto3 default checksum behaviour. The
-`Cluster`s still use `18.4-system-trixie` from the earlier native-barman era;
-switching to the `standard` flavor is a separate change before the CNPG 1.32
-operator upgrade.
+the external-S3 environments keep the boto3 default checksum behaviour. All
+`Cluster`s use `18.4-standard-trixie`: the plugin sidecar supplies the Barman
+Cloud binaries and `standard` also carries `pgaudit` and `pgvector`, so the
+deprecated `system` flavor is gone before the CNPG 1.32 operator upgrade.
 
 External buckets must exist before the first scheduled backup. Create them out
 of band and grant the credentials write, list, and delete permissions on their
@@ -173,7 +173,7 @@ metadata:
   name: postgres-app-restore
 spec:
   instances: 1
-  imageName: ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie
   storage:
     size: 10Gi
   bootstrap:
@@ -209,7 +209,7 @@ metadata:
   name: postgres-app-pitr
 spec:
   instances: 1
-  imageName: ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie
   storage:
     size: 10Gi
   bootstrap:

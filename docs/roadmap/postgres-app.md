@@ -15,9 +15,9 @@ and `zitadel-db` `Ready` in all four environments.
   Depends on: cloudnative-pg (#10)
   - [x] `infrastructure/postgres-app/` raw `Cluster` CRs for 4 envs
         - [x] local/dev: 1 replica; qa/prod: 3 replicas
-        - [x] PostgreSQL `18.4-system-trixie` (official CNPG image; `system`
-              is `standard` plus Barman Cloud, required by the native
-              `barmanObjectStore`; no `latest`)
+        - [x] PostgreSQL `18.4-standard-trixie` (official CNPG image; includes
+              `pgaudit` and `pgvector`, and works with the Barman Cloud Plugin;
+              no `latest`)
         - [x] credentials projected by ESO from `secret/postgres-app/<env>`
               and `secret/keycloak-db/<env>` (`kubernetes.io/basic-auth`)
         - Commits: `feat(db): add postgres-app cnpg deployment and smoke test`
@@ -37,15 +37,29 @@ Notes:
 - `pg_stat_statements` is enabled with `pg_stat_statements.track: all`; CNPG
   then manages `shared_preload_libraries` and creates the extension itself.
   Setting the library directly in `spec.postgresql.parameters` is rejected as a
-  fixed parameter.
+  fixed parameter. `pgaudit` is created through `postInitApplicationSQL` in
+  every env with `pgaudit.log: "ddl, role"`.
+- `app_migrator`, `app_rw`, `app_ro` and `vault_admin` are `DatabaseRole` CRs
+  (wave 30) whose passwords come from Vault via ESO (wave 10); wave-40 Jobs
+  wait for those roles to exist before applying schema grants to the already
+  running clusters through an exact-`app` `podSelector` ingress exception (the
+  Jobs run in `data`, which is not `db-access=true`), and `local` is the only
+  env without the `workload=database` selector. `requests` equal `limits` in all
+  four envs for instance and `plugin-barman-cloud` sidecar containers so pods are
+  `Guaranteed`; instances use `local` 100m/256Mi to fit the single-node CPU budget
+  while `dev`/`qa`/`prod` keep their larger profiles, and sidecars use `local`
+  50m/256Mi, `dev`/`qa` 100m/256Mi and `prod` 250m/256Mi through
+  `ObjectStore.spec.instanceSidecarConfiguration.resources` because empty sidecar
+  resources would downgrade the whole pod to `Burstable`.
 - `qa`/`prod` use `podAntiAffinityType: preferred` so the 3-instance profile
   remains schedulable on the single-node promote-test substrate.
 - `postgres-app` is a dedicated raw `Application` per environment (not in the
   Helm `ApplicationSet`) because the CNPG `Cluster` is a CR, not a chart. The
   catalog preload resolves the CNPG image from the raw manifests too.
-- The `system` CNPG images are deprecated and removed in operator 1.32. Native
-  `barmanObjectStore` needs them because `standard`/`minimal` omit the
-  `barman-cloud-*` binaries; migrate to the Barman Cloud Plugin before the
-  operator upgrade.
+- The `system` CNPG images are deprecated and removed in operator 1.32. They
+  were only needed by the retired native `barmanObjectStore` path; the Barman
+  Cloud Plugin now supplies the `barman-cloud-*` binaries, so all clusters use
+  `18.4-standard-trixie` and the security workflow rejects any `-system-` pin
+  under `infrastructure/`.
 
 No natural further phases → issues stay under M1.

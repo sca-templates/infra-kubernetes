@@ -12,7 +12,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "30"
 spec:
   instances: 1
-  imageName: ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie
   plugins:
     - name: barman-cloud.cloudnative-pg.io
       enabled: true
@@ -37,6 +37,7 @@ spec:
       # Runs as the superuser in the application database after initdb.
       postInitApplicationSQL:
         - CREATE EXTENSION IF NOT EXISTS vector;
+        - CREATE EXTENSION IF NOT EXISTS pgaudit;
   postgresql:
     parameters:
       # Logical decoding is the CDC foundation for downstream consumers.
@@ -45,6 +46,7 @@ spec:
       # soon as a `pg_stat_statements.*` parameter is present; setting the
       # library directly is rejected as a fixed parameter.
       pg_stat_statements.track: all
+      pgaudit.log: "ddl, role"
       # Bound the WAL archive lag; the backup smoke waits for the WAL segment
       # that contains its marker to reach object storage before running PITR.
       archive_timeout: "60s"
@@ -55,8 +57,8 @@ spec:
       cpu: 100m
       memory: 256Mi
     limits:
-      cpu: "1"
-      memory: 1Gi
+      cpu: 100m
+      memory: 256Mi
   affinity:
     # Single-node local profile: never block scheduling on anti-affinity.
     enablePodAntiAffinity: false
