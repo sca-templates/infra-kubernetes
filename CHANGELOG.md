@@ -1,5 +1,16 @@
 # Changelog
 
+## [7.0.0](https://github.com/sca-templates/infra-kubernetes/compare/v6.0.0...v7.0.0) (2026-11-28)
+
+
+### ⚠ BREAKING CHANGES
+
+* **db:** Database PUBLIC privileges are revoked; clients must use the new least-privilege roles.
+
+### Features
+
+* **db:** harden CNPG clusters with pgaudit and least-privilege roles ([#131](https://github.com/sca-templates/infra-kubernetes/issues/131)) ([0095f0a](https://github.com/sca-templates/infra-kubernetes/commit/0095f0a2205dc3d5c621b9dc45c9afedc6eafe60))
+
 ## [6.0.0](https://github.com/sca-templates/infra-kubernetes/compare/v5.0.0...v6.0.0) (2026-11-26)
 
 
